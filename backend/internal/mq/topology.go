@@ -57,6 +57,12 @@ type QueueSpec struct {
 	BindingKeys  []string
 }
 
+func QueueSpecs() []QueueSpec {
+	specs := make([]QueueSpec, len(queueSpecs))
+	copy(specs, queueSpecs)
+	return specs
+}
+
 // queueSpecs 定义每个业务域的主队列与死信队列配对关系。
 var queueSpecs = []QueueSpec{
 	{

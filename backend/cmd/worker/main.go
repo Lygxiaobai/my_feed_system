@@ -94,7 +94,7 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
-	errCh := make(chan error, 5)
+	errCh := make(chan error, 16)
 
 	start := func(queue string, suffix string, handler mq.HandlerFunc) {
 		wg.Add(1)
@@ -115,6 +115,21 @@ func main() {
 	start(mq.QueueSocialWrite, "social", socialWorker.Handle)
 	start(mq.QueuePopularityUpdate, "popularity", popularityWorker.Handle)
 	start(mq.QueueTimelineUpdate, "timeline", timelineConsumer.Handle)
+
+	for _, spec := range mq.QueueSpecs() {
+		spec := spec
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			tag := fmt.Sprintf("%s-dlq-%s", consumerTagPrefix, spec.Queue)
+			consumer := mq.NewDeadLetterConsumer(rabbitConn, database, spec.DLQ, tag, cfg.RabbitMQ.PrefetchCount)
+			log.Printf("dlq consumer started: queue=%s source_queue=%s tag=%s", spec.DLQ, spec.Queue, tag)
+			if err := consumer.Run(ctx); err != nil && ctx.Err() == nil {
+				errCh <- fmt.Errorf("run dlq consumer queue=%s: %w", spec.DLQ, err)
+			}
+		}()
+	}
 
 	if popularityService != nil {
 		wg.Add(1)

@@ -56,6 +56,7 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		&comment.VideoComment{},
 		&social.SocialRelation{},
 		&mq.ProcessedMessage{},
+		&mq.DeadLetterMessage{},
 		&idempotency.Key{},
 		&outbox.Message{},
 		&popularity.Projection{},

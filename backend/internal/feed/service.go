@@ -317,28 +317,7 @@ func (s *Service) ListByPopularity(req ListByPopularityRequest) (*ListByPopulari
 	startedAt := time.Now()
 
 	if s.popularity == nil {
-		// Redis 热度服务不可用时，退化为读 MySQL 持久化热度字段。
-		videos, err := s.repo.ListByPopularity(req.Limit+1, req.Offset)
-		if err != nil {
-			return nil, err
-		}
-		rawVideos, hasMore := trimVideoPage(videos, req.Limit)
-		videos = s.mediaValidator.FilterPlayable(rawVideos)
-
-		scores, err := s.loadScores(ctx, videos, time.Time{})
-		if err != nil {
-			return nil, err
-		}
-
-		result := &ListByPopularityResult{
-			Videos:     buildFeedVideos(videos, scores),
-			AsOf:       0,
-			NextOffset: req.Offset + int64(len(rawVideos)),
-			HasMore:    hasMore,
-		}
-		s.setHotCaches(ctx, req, result)
-		observability.ObserveCacheLoadSeconds(observability.CacheFeedHot, time.Since(startedAt).Seconds())
-		return result, nil
+		return s.listByPersistedPopularity(ctx, req)
 	}
 
 	var asOf time.Time
@@ -348,7 +327,11 @@ func (s *Service) ListByPopularity(req ListByPopularityRequest) (*ListByPopulari
 
 	videoIDs, scores, snapshotAsOf, err := s.popularity.ListHot(ctx, asOf, req.Limit+1, req.Offset)
 	if err != nil {
-		return nil, err
+		log.Printf("feed service: read popularity ranking failed, fallback to MySQL: %v", err)
+		return s.listByPersistedPopularity(ctx, req)
+	}
+	if len(videoIDs) == 0 {
+		return s.listByPersistedPopularity(ctx, req)
 	}
 	pageVideoIDs, hasMore := trimUint64Page(videoIDs, req.Limit)
 
@@ -396,6 +379,33 @@ func (s *Service) ListByPopularity(req ListByPopularityRequest) (*ListByPopulari
 	}
 	result.NextOffset += int64(len(pageVideoIDs))
 
+	s.setHotCaches(ctx, req, result)
+	observability.ObserveCacheLoadSeconds(observability.CacheFeedHot, time.Since(startedAt).Seconds())
+	return result, nil
+}
+
+// listByPersistedPopularity 在 Redis 热度不可用或当前没有可用热度数据时提供稳定兜底。
+func (s *Service) listByPersistedPopularity(ctx context.Context, req ListByPopularityRequest) (*ListByPopularityResult, error) {
+	startedAt := time.Now()
+	videos, err := s.repo.ListByPopularity(req.Limit+1, req.Offset)
+	if err != nil {
+		return nil, err
+	}
+
+	rawVideos, hasMore := trimVideoPage(videos, req.Limit)
+	videos = s.mediaValidator.FilterPlayable(rawVideos)
+
+	scores := make(map[uint64]int64, len(videos))
+	for _, item := range videos {
+		scores[item.ID] = item.Popularity
+	}
+
+	result := &ListByPopularityResult{
+		Videos:     buildFeedVideos(videos, scores),
+		AsOf:       0,
+		NextOffset: req.Offset + int64(len(rawVideos)),
+		HasMore:    hasMore,
+	}
 	s.setHotCaches(ctx, req, result)
 	observability.ObserveCacheLoadSeconds(observability.CacheFeedHot, time.Since(startedAt).Seconds())
 	return result, nil

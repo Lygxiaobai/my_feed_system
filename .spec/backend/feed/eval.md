@@ -15,3 +15,8 @@ scenarios:
     expected: The second page uses the same ranking snapshot boundary as the first page.
     tags:
       - backend-api
+  - name: popularity-mysql-fallback
+    description: When Redis has no usable popularity entries or cannot be read, the popularity feed returns playable videos ordered by persisted MySQL popularity.
+    expected: The response is non-empty when MySQL has playable videos, returned popularity values match MySQL, and as_of is zero.
+    tags:
+      - backend-api

@@ -20,3 +20,5 @@ The web application exposes like, comment, follow, and unfollow actions from fee
 
 ## expanded spec
 Repeated actions remain understandable and do not produce contradictory local state. Loading, success, and failure feedback is visible at the action's surface, and a successful mutation updates the relevant video or profile view.
+
+Like mutations remain pending until the visible state is confirmed by the server. Comment requests are applied only when their response still belongs to the open video, and comment loading, refresh, submit, and delete states do not incorrectly block one another.

@@ -1,9 +1,10 @@
-﻿<script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppShell from '../components/AppShell.vue'
 import UserAvatar from '../components/UserAvatar.vue'
+import VideoPlayer, { type VideoPlayerHandle } from '../components/VideoPlayer.vue'
 import { ApiError } from '../api/client'
 import * as commentApi from '../api/comment'
 import * as likeApi from '../api/like'
@@ -31,11 +32,16 @@ const state = reactive({
 })
 
 const muted = ref(true)
-const videoEl = ref<HTMLVideoElement | null>(null)
+const player = ref<VideoPlayerHandle | null>(null)
+let tapTimer: number | undefined
+let videoLoadRequestId = 0
 
 const drawer = reactive({
   open: false,
-  loading: false,
+  commentsLoading: false,
+  commentsRefreshing: false,
+  commentSubmitting: false,
+  commentDeletingId: 0,
   error: '',
   comments: [] as Comment[],
   content: '',
@@ -51,6 +57,8 @@ async function needLogin() {
 }
 
 async function loadVideo() {
+  const requestId = ++videoLoadRequestId
+  const requestedVideoId = id.value
   if (!Number.isFinite(id.value) || id.value <= 0) {
     state.error = '无效的 video id'
     return
@@ -58,48 +66,65 @@ async function loadVideo() {
   state.loading = true
   state.error = ''
   try {
-    state.video = await videoApi.getDetail(id.value)
+    const video = await videoApi.getDetail(requestedVideoId)
+    if (requestId !== videoLoadRequestId || requestedVideoId !== id.value) return
+    state.video = video
   } catch (e) {
+    if (requestId !== videoLoadRequestId || requestedVideoId !== id.value) return
     state.error = e instanceof ApiError ? e.message : String(e)
   } finally {
-    state.loading = false
+    if (requestId === videoLoadRequestId) state.loading = false
   }
 }
 
 async function loadIsLiked() {
+  const requestedVideoId = id.value
   if (!auth.isLoggedIn) {
     state.isLiked = null
     return
   }
   try {
-    const res = await likeApi.isLiked(id.value)
+    const res = await likeApi.isLiked(requestedVideoId)
+    if (requestedVideoId !== id.value) return
     state.isLiked = res.is_liked
   } catch {
-    state.isLiked = null
+    if (requestedVideoId === id.value) state.isLiked = null
   }
 }
 
 async function play() {
-  if (!videoEl.value) return
-  videoEl.value.muted = muted.value
-  try {
-    await videoEl.value.play()
-  } catch {
-    // ignore
-  }
+  await player.value?.play()
 }
 
 function toggleMute() {
   muted.value = !muted.value
-  if (videoEl.value) videoEl.value.muted = muted.value
+  player.value?.setMuted(muted.value)
+  try {
+    window.localStorage.setItem('feed.muted', String(muted.value))
+  } catch {
+    // 某些隐私模式会禁用 localStorage，静音功能本身仍需正常工作。
+  }
   toast.info(muted.value ? '已静音' : '已取消静音')
 }
 
 function togglePlayPause() {
-  const v = videoEl.value
-  if (!v) return
-  if (v.paused) void v.play()
-  else v.pause()
+  void player.value?.toggle()
+}
+
+function onStageClick() {
+  if (tapTimer !== undefined) window.clearTimeout(tapTimer)
+  tapTimer = window.setTimeout(() => {
+    tapTimer = undefined
+    togglePlayPause()
+  }, 240)
+}
+
+function onStageDoubleClick() {
+  if (tapTimer !== undefined) {
+    window.clearTimeout(tapTimer)
+    tapTimer = undefined
+  }
+  void toggleLike()
 }
 
 async function toggleLike() {
@@ -107,18 +132,19 @@ async function toggleLike() {
   if (!auth.isLoggedIn) return needLogin()
   if (state.busy) return
 
+  const videoId = state.video.id
+  const previousLiked = !!state.isLiked
+  const nextLiked = !previousLiked
   state.busy = true
+  state.isLiked = nextLiked
+  state.video.likes_count = Math.max(0, state.video.likes_count + (nextLiked ? 1 : -1))
   try {
-    if (state.isLiked) {
-      await likeApi.unlike(id.value)
-      state.isLiked = false
-      state.video.likes_count = Math.max(0, state.video.likes_count - 1)
-    } else {
-      await likeApi.like(id.value)
-      state.isLiked = true
-      state.video.likes_count += 1
-    }
+    await likeApi.setLikedAndConfirm(videoId, nextLiked)
   } catch (e) {
+    if (state.video?.id === videoId) {
+      state.isLiked = previousLiked
+      state.video.likes_count = Math.max(0, state.video.likes_count + (previousLiked ? 1 : -1))
+    }
     const msg = e instanceof ApiError ? e.message : String(e)
     toast.error(msg)
   } finally {
@@ -180,6 +206,10 @@ function wait(ms: number) {
 
 function closeDrawer() {
   drawer.open = false
+  drawer.commentsLoading = false
+  drawer.commentsRefreshing = false
+  drawer.commentSubmitting = false
+  drawer.commentDeletingId = 0
   drawer.comments = []
   drawer.content = ''
   drawer.error = ''
@@ -188,15 +218,27 @@ function closeDrawer() {
 
 async function loadComments() {
   if (!state.video) return
-  drawer.loading = true
+  const videoId = state.video.id
+  drawer.commentsLoading = drawer.comments.length === 0
+  drawer.commentsRefreshing = drawer.comments.length > 0
   drawer.error = ''
   try {
-    applyComments(await commentApi.listAll(state.video.id))
+    const comments = await commentApi.listAll(videoId)
+    if (!drawer.open || state.video?.id !== videoId) return
+    applyComments(comments)
   } catch (e) {
+    if (!drawer.open || state.video?.id !== videoId) return
     drawer.error = e instanceof ApiError ? e.message : String(e)
   } finally {
-    drawer.loading = false
+    if (state.video?.id === videoId) {
+      drawer.commentsLoading = false
+      drawer.commentsRefreshing = false
+    }
   }
+}
+
+function isDrawerBusy() {
+  return drawer.commentsLoading || drawer.commentsRefreshing || drawer.commentSubmitting || drawer.commentDeletingId !== 0
 }
 
 async function openComments() {
@@ -244,20 +286,23 @@ async function publishComment() {
   const content = drawer.content.trim()
   if (!content) return
 
-  drawer.loading = true
+  const videoId = state.video.id
+  drawer.commentSubmitting = true
   drawer.error = ''
   try {
-    const res = await commentApi.publish(state.video.id, content, drawer.replyTarget?.id)
+    const res = await commentApi.publish(videoId, content, drawer.replyTarget?.id)
+    if (!drawer.open || state.video?.id !== videoId) return
     drawer.content = ''
     clearReplyTarget()
     applyComments(insertPublishedComment(drawer.comments, res.comment))
     void syncCommentsUntil(res.comment.id, true)
     toast.success('评论已发布')
   } catch (e) {
+    if (!drawer.open || state.video?.id !== videoId) return
     drawer.error = e instanceof ApiError ? e.message : String(e)
     toast.error(drawer.error)
   } finally {
-    drawer.loading = false
+    if (state.video?.id === videoId) drawer.commentSubmitting = false
   }
 }
 
@@ -271,26 +316,30 @@ async function deleteComment(commentId: number) {
   if (!auth.isLoggedIn) return needLogin()
   if (!window.confirm('确认删除这条评论？')) return
 
-  drawer.loading = true
+  const videoId = state.video.id
+  drawer.commentDeletingId = commentId
   drawer.error = ''
   try {
     await commentApi.remove(commentId)
+    if (!drawer.open || state.video?.id !== videoId) return
     const nextComments = removeCommentByID(drawer.comments, commentId)
     applyComments(nextComments)
     if (drawer.replyTarget && !hasCommentID(nextComments, drawer.replyTarget.id)) clearReplyTarget()
     void syncCommentsUntil(commentId, false)
     toast.info('评论已删除')
   } catch (e) {
+    if (!drawer.open || state.video?.id !== videoId) return
     drawer.error = e instanceof ApiError ? e.message : String(e)
     toast.error(drawer.error)
   } finally {
-    drawer.loading = false
+    if (state.video?.id === videoId) drawer.commentDeletingId = 0
   }
 }
 
 watch(
   () => id.value,
   async () => {
+    player.value?.pause()
     closeDrawer()
     await loadVideo()
     await loadIsLiked()
@@ -307,10 +356,21 @@ watch(
 )
 
 onMounted(async () => {
+  try {
+    const saved = window.localStorage.getItem('feed.muted')
+    if (saved !== null) muted.value = saved === 'true'
+  } catch {
+    // 某些隐私模式会禁用 localStorage，默认静音仍可保证自动播放。
+  }
   await loadVideo()
   await loadIsLiked()
   await nextTick()
   await play()
+})
+
+onBeforeUnmount(() => {
+  if (tapTimer !== undefined) window.clearTimeout(tapTimer)
+  player.value?.pause()
 })
 </script>
 
@@ -330,15 +390,13 @@ onMounted(async () => {
         <div v-if="state.loading" class="center-hint">加载中…</div>
         <div v-else-if="state.error" class="center-hint bad">{{ state.error }}</div>
 
-        <div v-else-if="state.video" class="stage" @click="togglePlayPause">
-          <video
-            ref="videoEl"
-            class="video"
+        <div v-else-if="state.video" class="stage" @click="onStageClick" @dblclick.prevent="onStageDoubleClick">
+          <VideoPlayer
+            ref="player"
             :src="state.video.play_url"
             :poster="state.video.cover_url"
-            playsinline
-            preload="metadata"
-            loop
+            :active="true"
+            :muted="muted"
           />
           <div class="grad" />
 
@@ -398,7 +456,7 @@ onMounted(async () => {
           </div>
 
           <div class="drawer-body">
-            <div v-if="drawer.loading && drawer.comments.length === 0" class="drawer-hint">加载中…</div>
+            <div v-if="drawer.commentsLoading && drawer.comments.length === 0" class="drawer-hint">加载中…</div>
             <div v-else-if="drawer.error" class="drawer-hint bad">{{ drawer.error }}</div>
             <div v-else-if="drawer.comments.length === 0" class="drawer-hint">暂无评论</div>
 
@@ -409,8 +467,8 @@ onMounted(async () => {
               </div>
               <div class="comment-content">{{ c.content }}</div>
               <div class="comment-actions comment-actions-left">
-                <button class="chip" type="button" :disabled="drawer.loading" @click="startReply(c)">回复</button>
-                <button v-if="canDeleteComment(c)" class="chip danger" type="button" :disabled="drawer.loading" @click="deleteComment(c.id)">
+                <button class="chip" type="button" :disabled="isDrawerBusy()" @click="startReply(c)">回复</button>
+                <button v-if="canDeleteComment(c)" class="chip danger" type="button" :disabled="isDrawerBusy()" @click="deleteComment(c.id)">
                   删除
                 </button>
               </div>
@@ -425,8 +483,8 @@ onMounted(async () => {
                     <span v-if="reply.reply_to_username" class="reply-prefix">回复 @{{ reply.reply_to_username }}：</span>{{ reply.content }}
                   </div>
                   <div class="comment-actions comment-actions-left">
-                    <button class="chip" type="button" :disabled="drawer.loading" @click="startReply(reply)">回复</button>
-                    <button v-if="canDeleteComment(reply)" class="chip danger" type="button" :disabled="drawer.loading" @click="deleteComment(reply.id)">
+                    <button class="chip" type="button" :disabled="isDrawerBusy()" @click="startReply(reply)">回复</button>
+                    <button v-if="canDeleteComment(reply)" class="chip danger" type="button" :disabled="isDrawerBusy()" @click="deleteComment(reply.id)">
                       删除
                     </button>
                   </div>
@@ -438,12 +496,12 @@ onMounted(async () => {
           <div class="drawer-foot">
             <div v-if="drawer.replyTarget" class="reply-banner">
               <span>回复 @{{ drawer.replyTarget.username }}</span>
-              <button class="chip" type="button" :disabled="drawer.loading" @click="clearReplyTarget">取消</button>
+              <button class="chip" type="button" :disabled="isDrawerBusy()" @click="clearReplyTarget">取消</button>
             </div>
-            <textarea v-model="drawer.content" :placeholder="drawer.replyTarget ? `回复 @${drawer.replyTarget.username}…` : '说点什么…'" :disabled="drawer.loading" />
+            <textarea v-model="drawer.content" :placeholder="drawer.replyTarget ? `回复 @${drawer.replyTarget.username}…` : '说点什么…'" :disabled="isDrawerBusy()" />
             <div class="row" style="justify-content: space-between; margin-top: 8px">
-              <button class="chip" type="button" :disabled="drawer.loading" @click="loadComments">刷新</button>
-              <button class="chip primary" type="button" :disabled="drawer.loading || !drawer.content.trim()" @click="publishComment">
+              <button class="chip" type="button" :disabled="isDrawerBusy()" @click="loadComments">刷新</button>
+              <button class="chip primary" type="button" :disabled="isDrawerBusy() || !drawer.content.trim()" @click="publishComment">
                 发送
               </button>
             </div>

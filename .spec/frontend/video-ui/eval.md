@@ -6,3 +6,10 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
+  - name: video-playback-lifecycle
+    description: The active feed or detail video can autoplay muted, pause when inactive, and expose loading, buffering, failure, and retry states.
+    expected: Only the active feed video plays, immediate neighbors may preload, failed playback is visible and recoverable, and leaving the view releases playback resources.
+    tags:
+      - frontend-e2e
+      - desktop
+      - mobile

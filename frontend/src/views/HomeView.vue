@@ -1,9 +1,10 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppShell from '../components/AppShell.vue'
 import UserAvatar from '../components/UserAvatar.vue'
+import VideoPlayer, { type VideoPlayerHandle } from '../components/VideoPlayer.vue'
 import { ApiError } from '../api/client'
 import * as commentApi from '../api/comment'
 import * as feedApi from '../api/feed'
@@ -61,7 +62,19 @@ const followBusy = reactive<Record<string, boolean>>({})
 
 const muted = ref(true)
 const activeIndex = ref(0)
-const videoMap = new Map<number, HTMLVideoElement>()
+const playerMap = new Map<number, VideoPlayerHandle>()
+let slideObserver: IntersectionObserver | null = null
+let tapTimer: number | undefined
+let playRequestId = 0
+
+function readMutedPreference() {
+  try {
+    const saved = window.localStorage.getItem('feed.muted')
+    return saved === null ? true : saved === 'true'
+  } catch {
+    return true
+  }
+}
 
 const currentState = computed(() => {
   if (tab.value === 'hot') return hot
@@ -120,12 +133,12 @@ const filteredItems = computed(() => {
 const activeItem = computed(() => filteredItems.value[activeIndex.value] ?? null)
 const myAccountId = computed(() => auth.claims?.account_id ?? 0)
 
-function setVideoRef(id: number, el: HTMLVideoElement | null) {
+function setPlayerRef(id: number, el: VideoPlayerHandle | null) {
   if (el) {
-    el.muted = muted.value
-    videoMap.set(id, el)
+    el.setMuted(muted.value)
+    playerMap.set(id, el)
   } else {
-    videoMap.delete(id)
+    playerMap.delete(id)
   }
 }
 
@@ -144,6 +157,7 @@ function scrollToIndex(idx: number) {
 
 let scrollRaf = 0
 function onScroll() {
+  if (slideObserver) return
   if (!scroller.value) return
   if (scrollRaf) return
   scrollRaf = window.requestAnimationFrame(() => {
@@ -157,39 +171,71 @@ function onScroll() {
   })
 }
 
+function setupSlideObserver() {
+  slideObserver?.disconnect()
+  slideObserver = null
+  if (!scroller.value || typeof IntersectionObserver === 'undefined') return
+
+  slideObserver = new IntersectionObserver(
+    (entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
+      if (!visible || visible.intersectionRatio < 0.65) return
+
+      const nextIndex = Number((visible.target as HTMLElement).dataset.index)
+      if (Number.isInteger(nextIndex) && nextIndex !== activeIndex.value) {
+        activeIndex.value = nextIndex
+      }
+    },
+    {
+      root: scroller.value,
+      threshold: [0.25, 0.5, 0.65, 0.8, 1],
+    },
+  )
+
+  scroller.value.querySelectorAll<HTMLElement>('.slide').forEach((slide) => {
+    slideObserver?.observe(slide)
+  })
+}
+
+function pauseAllPlayers() {
+  for (const player of playerMap.values()) player.pause()
+}
+
 async function playActive() {
+  const requestId = ++playRequestId
   const item = activeItem.value
   if (!item) return
-  for (const [id, v] of videoMap.entries()) {
-    if (id === item.id) continue
-    v.pause()
-  }
-  const video = videoMap.get(item.id)
-  if (!video) return
-  video.muted = muted.value
-  try {
-    await video.play()
-  } catch {
-    // ignore autoplay errors
-  }
+  pauseAllPlayers()
+  await nextTick()
+  if (requestId !== playRequestId) return
+  await playerMap.get(item.id)?.play()
 }
 
 function toggleMute() {
   muted.value = !muted.value
-  for (const v of videoMap.values()) v.muted = muted.value
+  try {
+    window.localStorage.setItem('feed.muted', String(muted.value))
+  } catch {
+    // 某些隐私模式会禁用 localStorage，静音功能本身仍需正常工作。
+  }
+  for (const player of playerMap.values()) player.setMuted(muted.value)
   toast.info(muted.value ? '已静音' : '已取消静音')
 }
 
 function togglePlayPause() {
   const item = activeItem.value
   if (!item) return
-  const video = videoMap.get(item.id)
-  if (!video) return
-  if (video.paused) {
-    void video.play()
-  } else {
-    video.pause()
-  }
+  void playerMap.get(item.id)?.toggle()
+}
+
+function onStageClick() {
+  if (tapTimer !== undefined) window.clearTimeout(tapTimer)
+  tapTimer = window.setTimeout(() => {
+    tapTimer = undefined
+    togglePlayPause()
+  }, 240)
 }
 
 async function needLogin() {
@@ -211,7 +257,7 @@ async function loadRecommend(reset: boolean) {
     recommend.asOf = res.as_of
     recommend.nextOffset = res.next_offset
     recommend.items = reset ? res.video_list : recommend.items.concat(res.video_list)
-    await syncLikedState(recommend.items)
+    await syncLikedState(res.video_list)
   } catch (e) {
     recommend.error = e instanceof ApiError ? e.message : String(e)
   } finally {
@@ -233,7 +279,7 @@ async function loadHot(reset: boolean) {
     hot.nextLikesCountBefore = res.next_likes_count_before
     hot.nextIdBefore = res.next_id_before
     hot.items = reset ? res.video_list : hot.items.concat(res.video_list)
-    await syncLikedState(hot.items)
+    await syncLikedState(res.video_list)
   } catch (e) {
     hot.error = e instanceof ApiError ? e.message : String(e)
   } finally {
@@ -259,7 +305,7 @@ async function loadFollowing(reset: boolean) {
     following.nextTime = res.next_time
     following.nextId = res.next_id
     following.items = reset ? res.video_list : following.items.concat(res.video_list)
-    await syncLikedState(following.items)
+    await syncLikedState(res.video_list)
   } catch (e) {
     following.error = e instanceof ApiError ? e.message : String(e)
   } finally {
@@ -289,12 +335,15 @@ async function toggleLike(item: FeedVideoItem) {
   const key = String(item.id)
   if (likeBusy[key]) return
   likeBusy[key] = true
+  const previousLiked = item.is_liked
+  const nextLiked = !previousLiked
+  item.is_liked = nextLiked
+  item.likes_count = Math.max(0, item.likes_count + (nextLiked ? 1 : -1))
   try {
-    if (item.is_liked) await likeApi.unlike(item.id)
-    else await likeApi.like(item.id)
-    item.is_liked = !item.is_liked
-    item.likes_count = Math.max(0, item.likes_count + (item.is_liked ? 1 : -1))
+    await likeApi.setLikedAndConfirm(item.id, nextLiked)
   } catch (e) {
+    item.is_liked = previousLiked
+    item.likes_count = Math.max(0, item.likes_count + (previousLiked ? 1 : -1))
     const msg = e instanceof ApiError ? e.message : String(e)
     toast.error(msg)
   } finally {
@@ -337,7 +386,10 @@ async function share(item: FeedVideoItem) {
 const drawer = reactive({
   open: false,
   video: null as FeedVideoItem | null,
-  loading: false,
+  commentsLoading: false,
+  commentsRefreshing: false,
+  commentSubmitting: false,
+  commentDeletingId: 0,
   error: '',
   comments: [] as Comment[],
   content: '',
@@ -367,6 +419,10 @@ function wait(ms: number) {
 function closeDrawer() {
   drawer.open = false
   drawer.video = null
+  drawer.commentsLoading = false
+  drawer.commentsRefreshing = false
+  drawer.commentSubmitting = false
+  drawer.commentDeletingId = 0
   drawer.comments = []
   drawer.content = ''
   drawer.error = ''
@@ -374,6 +430,9 @@ function closeDrawer() {
 }
 
 async function openComments(item: FeedVideoItem) {
+  if (drawer.video?.id !== item.id) {
+    drawer.comments = []
+  }
   drawer.open = true
   drawer.video = item
   drawer.content = ''
@@ -383,15 +442,27 @@ async function openComments(item: FeedVideoItem) {
 
 async function loadComments() {
   if (!drawer.video) return
-  drawer.loading = true
+  const videoId = drawer.video.id
+  drawer.commentsLoading = drawer.comments.length === 0
+  drawer.commentsRefreshing = drawer.comments.length > 0
   drawer.error = ''
   try {
-    applyComments(await commentApi.listAll(drawer.video.id))
+    const comments = await commentApi.listAll(videoId)
+    if (!drawer.open || drawer.video?.id !== videoId) return
+    applyComments(comments)
   } catch (e) {
+    if (!drawer.open || drawer.video?.id !== videoId) return
     drawer.error = e instanceof ApiError ? e.message : String(e)
   } finally {
-    drawer.loading = false
+    if (drawer.video?.id === videoId) {
+      drawer.commentsLoading = false
+      drawer.commentsRefreshing = false
+    }
   }
+}
+
+function isDrawerBusy() {
+  return drawer.commentsLoading || drawer.commentsRefreshing || drawer.commentSubmitting || drawer.commentDeletingId !== 0
 }
 
 function startReply(target: Comment | CommentReply) {
@@ -431,20 +502,23 @@ async function publishComment() {
   if (!auth.isLoggedIn) return needLogin()
   const content = drawer.content.trim()
   if (!content) return
-  drawer.loading = true
+  const videoId = drawer.video.id
+  drawer.commentSubmitting = true
   drawer.error = ''
   try {
-    const res = await commentApi.publish(drawer.video.id, content, drawer.replyTarget?.id)
+    const res = await commentApi.publish(videoId, content, drawer.replyTarget?.id)
+    if (!drawer.open || drawer.video?.id !== videoId) return
     drawer.content = ''
     clearReplyTarget()
     applyComments(insertPublishedComment(drawer.comments, res.comment))
     void syncCommentsUntil(res.comment.id, true)
     toast.success('评论已发布')
   } catch (e) {
+    if (!drawer.open || drawer.video?.id !== videoId) return
     drawer.error = e instanceof ApiError ? e.message : String(e)
     toast.error(drawer.error)
   } finally {
-    drawer.loading = false
+    if (drawer.video?.id === videoId) drawer.commentSubmitting = false
   }
 }
 
@@ -457,20 +531,23 @@ async function deleteComment(commentId: number) {
   if (!drawer.video) return
   if (!auth.isLoggedIn) return needLogin()
   if (!window.confirm('确认删除这条评论？')) return
-  drawer.loading = true
+  const videoId = drawer.video.id
+  drawer.commentDeletingId = commentId
   drawer.error = ''
   try {
     await commentApi.remove(commentId)
+    if (!drawer.open || drawer.video?.id !== videoId) return
     const nextComments = removeCommentByID(drawer.comments, commentId)
     applyComments(nextComments)
     if (drawer.replyTarget && !hasCommentID(nextComments, drawer.replyTarget.id)) clearReplyTarget()
     void syncCommentsUntil(commentId, false)
     toast.info('评论已删除')
   } catch (e) {
+    if (!drawer.open || drawer.video?.id !== videoId) return
     drawer.error = e instanceof ApiError ? e.message : String(e)
     toast.error(drawer.error)
   } finally {
-    drawer.loading = false
+    if (drawer.video?.id === videoId) drawer.commentDeletingId = 0
   }
 }
 
@@ -500,6 +577,10 @@ async function onKeydown(e: KeyboardEvent) {
 }
 
 function onStageDoubleClick(item: FeedVideoItem) {
+  if (tapTimer !== undefined) {
+    window.clearTimeout(tapTimer)
+    tapTimer = undefined
+  }
   if (!auth.isLoggedIn) return
   void toggleLike(item)
 }
@@ -514,10 +595,12 @@ watch(
   () => tab.value,
   async () => {
     activeIndex.value = 0
-    videoMap.clear()
+    pauseAllPlayers()
+    playerMap.clear()
     if (scroller.value) scroller.value.scrollTop = 0
     await ensureTabLoaded()
     await nextTick()
+    setupSlideObserver()
     await playActive()
   },
 )
@@ -528,15 +611,18 @@ watch(
     activeIndex.value = 0
     if (scroller.value) scroller.value.scrollTop = 0
     await nextTick()
+    setupSlideObserver()
     await playActive()
   },
 )
 
 watch(
   () => filteredItems.value.length,
-  (len) => {
+  async (len) => {
     if (len === 0) activeIndex.value = 0
     else if (activeIndex.value > len - 1) activeIndex.value = len - 1
+    await nextTick()
+    setupSlideObserver()
   },
 )
 
@@ -566,13 +652,20 @@ watch(
 )
 
 onMounted(async () => {
+  muted.value = readMutedPreference()
   await ensureTabLoaded()
   await nextTick()
+  setupSlideObserver()
   await playActive()
   window.addEventListener('keydown', onKeydown)
 })
 
 onBeforeUnmount(() => {
+  if (tapTimer !== undefined) window.clearTimeout(tapTimer)
+  slideObserver?.disconnect()
+  slideObserver = null
+  pauseAllPlayers()
+  playerMap.clear()
   window.removeEventListener('keydown', onKeydown)
 })
 </script>
@@ -602,17 +695,17 @@ onBeforeUnmount(() => {
           v-for="(item, idx) in filteredItems"
           :key="`${tab}-${item.id}`"
           class="slide"
+          :data-index="idx"
           :class="{ active: idx === activeIndex }"
         >
-          <div class="stage" @click="togglePlayPause" @dblclick.prevent="onStageDoubleClick(item)">
-            <video
-              class="video"
-              :ref="(el) => setVideoRef(item.id, el as HTMLVideoElement | null)"
+          <div class="stage" @click="onStageClick" @dblclick.prevent="onStageDoubleClick(item)">
+            <VideoPlayer
+              :ref="(el) => setPlayerRef(item.id, el as VideoPlayerHandle | null)"
               :src="item.play_url"
               :poster="item.cover_url"
-              playsinline
-              preload="metadata"
-              loop
+              :active="idx === activeIndex"
+              :enabled="Math.abs(idx - activeIndex) <= 1"
+              :muted="muted"
             />
             <div class="grad" />
 
@@ -686,7 +779,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="drawer-body">
-            <div v-if="drawer.loading && drawer.comments.length === 0" class="drawer-hint">加载中…</div>
+            <div v-if="drawer.commentsLoading && drawer.comments.length === 0" class="drawer-hint">加载中…</div>
             <div v-else-if="drawer.error" class="drawer-hint bad">{{ drawer.error }}</div>
             <div v-else-if="drawer.comments.length === 0" class="drawer-hint">暂无评论</div>
 
@@ -697,8 +790,8 @@ onBeforeUnmount(() => {
               </div>
               <div class="comment-content">{{ c.content }}</div>
               <div class="comment-actions comment-actions-left">
-                <button class="chip" type="button" :disabled="drawer.loading" @click="startReply(c)">回复</button>
-                <button v-if="canDeleteComment(c)" class="chip danger" type="button" :disabled="drawer.loading" @click="deleteComment(c.id)">
+                <button class="chip" type="button" :disabled="isDrawerBusy()" @click="startReply(c)">回复</button>
+                <button v-if="canDeleteComment(c)" class="chip danger" type="button" :disabled="isDrawerBusy()" @click="deleteComment(c.id)">
                   删除
                 </button>
               </div>
@@ -713,8 +806,8 @@ onBeforeUnmount(() => {
                     <span v-if="reply.reply_to_username" class="reply-prefix">回复 @{{ reply.reply_to_username }}：</span>{{ reply.content }}
                   </div>
                   <div class="comment-actions comment-actions-left">
-                    <button class="chip" type="button" :disabled="drawer.loading" @click="startReply(reply)">回复</button>
-                    <button v-if="canDeleteComment(reply)" class="chip danger" type="button" :disabled="drawer.loading" @click="deleteComment(reply.id)">
+                    <button class="chip" type="button" :disabled="isDrawerBusy()" @click="startReply(reply)">回复</button>
+                    <button v-if="canDeleteComment(reply)" class="chip danger" type="button" :disabled="isDrawerBusy()" @click="deleteComment(reply.id)">
                       删除
                     </button>
                   </div>
@@ -726,12 +819,12 @@ onBeforeUnmount(() => {
           <div class="drawer-foot">
             <div v-if="drawer.replyTarget" class="reply-banner">
               <span>回复 @{{ drawer.replyTarget.username }}</span>
-              <button class="chip" type="button" :disabled="drawer.loading" @click="clearReplyTarget">取消</button>
+              <button class="chip" type="button" :disabled="isDrawerBusy()" @click="clearReplyTarget">取消</button>
             </div>
-            <textarea v-model="drawer.content" :placeholder="drawer.replyTarget ? `回复 @${drawer.replyTarget.username}…` : '说点什么…'" :disabled="drawer.loading" />
+            <textarea v-model="drawer.content" :placeholder="drawer.replyTarget ? `回复 @${drawer.replyTarget.username}…` : '说点什么…'" :disabled="isDrawerBusy()" />
             <div class="row" style="justify-content: space-between; margin-top: 8px">
-              <button class="chip" type="button" :disabled="drawer.loading" @click="loadComments">刷新</button>
-              <button class="chip primary" type="button" :disabled="drawer.loading || !drawer.content.trim()" @click="publishComment">
+              <button class="chip" type="button" :disabled="isDrawerBusy()" @click="loadComments">刷新</button>
+              <button class="chip primary" type="button" :disabled="isDrawerBusy() || !drawer.content.trim()" @click="publishComment">
                 发送
               </button>
             </div>

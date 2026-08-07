@@ -7,6 +7,7 @@ related:
   - frontend/src/api/feed.ts
   - frontend/src/api/types.ts
   - frontend/src/components/FeedVideoCard.vue
+  - frontend/src/components/VideoPlayer.vue
   - frontend/src/views/HotView.vue
   - frontend/src/router/index.ts
   - frontend/src/stores/auth.ts

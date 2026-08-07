@@ -18,3 +18,10 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
+  - name: feed-playback-navigation
+    description: A user can move between full-screen feed items using scroll or keyboard navigation.
+    expected: The active item follows visibility, old items pause, only nearby items keep media sources enabled, and a single tap does not fire together with a double-tap like.
+    tags:
+      - frontend-e2e
+      - desktop
+      - mobile

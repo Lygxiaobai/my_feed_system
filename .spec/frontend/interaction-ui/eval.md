@@ -12,3 +12,9 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
+  - name: interaction-race-protection
+    description: A user rapidly changes video context while comments or a like mutation is still settling.
+    expected: A stale comment response is discarded, the like action remains pending until confirmation or failure, and the final visible state is not replaced by an older request.
+    tags:
+      - frontend-e2e
+      - desktop

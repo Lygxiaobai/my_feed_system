@@ -490,7 +490,7 @@ onMounted(async () => {
 
 .stage {
   width: min(980px, calc(100vw - 28px));
-  height: calc(100vh - 56px - 52px - 36px);
+  height: min(100%, calc(var(--app-height, 100dvh) - var(--topbar-h, 56px) - 52px - 36px - var(--bottom-nav-h, 0px)));
   position: relative;
   border-radius: 18px;
   overflow: hidden;
@@ -782,21 +782,65 @@ onMounted(async () => {
 }
 
 @media (max-width: 900px) {
-  .stage {
-    width: calc(100vw - 28px);
-    height: calc(100vh - 56px - 52px - 36px);
+  .top {
+    height: 48px;
+    padding: 0 10px;
+    gap: 8px;
   }
+
+  .wrap {
+    padding: 0;
+  }
+
+  .stage {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+
+  .meta {
+    left: 12px;
+    right: 84px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    max-width: none;
+  }
+
+  .actions {
+    right: 8px;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    gap: 10px;
+  }
+
+  .act {
+    width: 64px;
+    padding: 8px 6px;
+  }
+
+  .hint {
+    left: 10px;
+    top: 10px;
+  }
+
   .drawer-backdrop {
     justify-items: center;
     align-items: end;
+    padding-bottom: var(--bottom-nav-h, 56px);
   }
+
   .drawer {
-    width: calc(100vw - 16px);
-    height: min(72vh, 560px);
+    width: 100%;
+    max-width: 100vw;
+    height: min(70dvh, 560px);
     border-left: none;
     border-top: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 18px 18px 0 0;
     overflow: hidden;
+  }
+
+  .drawer-foot {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
 }
 </style>

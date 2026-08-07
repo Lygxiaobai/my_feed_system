@@ -16,7 +16,7 @@ const toast = useToastStore()
 <style scoped>
 .toast-wrap {
   position: fixed;
-  top: 16px;
+  top: calc(16px + env(safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%);
   display: grid;
@@ -24,6 +24,13 @@ const toast = useToastStore()
   z-index: 200;
   width: min(520px, calc(100vw - 24px));
   pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .toast-wrap {
+    top: calc(var(--topbar-h, 52px) + env(safe-area-inset-top, 0px) + 8px);
+    width: calc(100vw - 20px);
+  }
 }
 
 .toast {

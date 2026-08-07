@@ -665,10 +665,12 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="hint">
-              <span class="chip mono">↑ ↓ 切换</span>
-              <span class="chip mono">空格 暂停</span>
-              <span class="chip mono">M 静音</span>
-              <span class="chip mono">C 评论</span>
+              <span class="chip mono desktop-hint">↑ ↓ 切换</span>
+              <span class="chip mono desktop-hint">空格 暂停</span>
+              <span class="chip mono desktop-hint">M 静音</span>
+              <span class="chip mono desktop-hint">C 评论</span>
+              <span class="chip mono mobile-hint">上滑切换</span>
+              <span class="chip mono mobile-hint">点按暂停</span>
               <span v-if="canInteractWithLike" class="chip mono">双击 点赞</span>
               <span v-else class="chip mono">登录后可点赞/关注</span>
             </div>
@@ -807,8 +809,10 @@ onBeforeUnmount(() => {
 
 .slide {
   height: 100%;
+  min-height: 100%;
   box-sizing: border-box;
   scroll-snap-align: start;
+  scroll-snap-stop: always;
   padding: 18px 14px;
   display: grid;
   place-items: center;
@@ -816,7 +820,7 @@ onBeforeUnmount(() => {
 
 .stage {
   width: min(980px, calc(100vw - 28px));
-  height: calc(100vh - 56px - 52px - 36px);
+  height: min(100%, calc(var(--app-height, 100dvh) - var(--topbar-h, 56px) - 52px - 36px - var(--bottom-nav-h, 0px)));
   position: relative;
   border-radius: 18px;
   overflow: hidden;
@@ -939,6 +943,11 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  pointer-events: none;
+}
+
+.mobile-hint {
+  display: none;
 }
 
 .chip {
@@ -1115,21 +1124,98 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 900px) {
-  .stage {
-    width: calc(100vw - 28px);
-    height: calc(100vh - 56px - 52px - 36px);
+  .tabs {
+    height: 48px;
+    gap: 6px;
+    padding: 0 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
   }
+
+  .tab {
+    flex: 0 0 auto;
+    padding: 7px 12px;
+    font-size: 13px;
+  }
+
+  .tabs-right {
+    gap: 6px;
+  }
+
+  .chip {
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+
+  .slide {
+    padding: 0;
+  }
+
+  .stage {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+
+  .meta {
+    left: 12px;
+    right: 84px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    max-width: none;
+  }
+
+  .actions {
+    right: 8px;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    gap: 10px;
+  }
+
+  .act {
+    width: 64px;
+    padding: 8px 6px;
+    border-radius: 14px;
+  }
+
+  .icon {
+    font-size: 22px;
+  }
+
+  .hint {
+    left: 10px;
+    right: 10px;
+    top: 10px;
+  }
+
+  .desktop-hint {
+    display: none;
+  }
+
+  .mobile-hint {
+    display: inline-flex;
+  }
+
   .drawer-backdrop {
     justify-items: center;
     align-items: end;
+    padding-bottom: var(--bottom-nav-h, 56px);
   }
+
   .drawer {
-    width: calc(100vw - 16px);
-    height: min(72vh, 560px);
+    width: 100%;
+    max-width: 100vw;
+    height: min(70dvh, 560px);
     border-left: none;
     border-top: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 18px 18px 0 0;
     overflow: hidden;
+  }
+
+  .drawer-foot {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
 }
 </style>

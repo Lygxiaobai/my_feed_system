@@ -106,5 +106,23 @@ function formatPopularity(value?: number) {
   .feed-card {
     grid-template-columns: 1fr;
   }
+
+  .content {
+    padding: 12px;
+  }
+
+  .content .row {
+    align-items: flex-start;
+  }
+
+  .content .row > .row {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .pill,
+  button {
+    font-size: 12px;
+  }
 }
 </style>

@@ -1,0 +1,7 @@
+{
+  "lint": {
+    "governedRoots": ["backend", "frontend/src"],
+    "sourceExtensions": ["go", "vue", "ts", "tsx", "css"],
+    "scenarioTags": ["backend-api", "frontend-e2e", "desktop", "mobile"]
+  }
+}

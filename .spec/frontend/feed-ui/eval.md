@@ -1,0 +1,20 @@
+---
+scenarios:
+  - name: feed-mode-navigation
+    description: A user can switch between recommendation, likes-count, and following feed modes and load the next page.
+    expected: The selected mode, loading state, cursor, and returned cards stay consistent across navigation.
+    tags:
+      - frontend-e2e
+      - desktop
+  - name: hot-feed-navigation
+    description: A user can open the hot-ranking view and load the next page of popularity-ranked videos.
+    expected: The ranking snapshot and pagination state remain consistent while the view loads more results.
+    tags:
+      - frontend-e2e
+      - desktop
+  - name: feed-api-error
+    description: A failed feed request is visible to the user and does not render as an empty successful feed.
+    expected: The page shows an error state with a retry path and preserves the selected feed mode.
+    tags:
+      - frontend-e2e
+      - desktop

@@ -1,43 +1,44 @@
+# 容器内配置。敏感项由 docker compose 从 .env 注入，缺失时启动即失败。
 server:
-  port: 8080
+  port: ${SERVER_PORT:-8080}
 
 database:
-  host: mysql
-  port: 3306
-  user: root
+  host: ${MYSQL_HOST:-mysql}
+  port: ${MYSQL_PORT:-3306}
+  user: ${MYSQL_USER:-root}
   password: ${MYSQL_PASSWORD}
-  dbname: my_feed_system
+  dbname: ${MYSQL_DATABASE:-my_feed_system}
 
 redis:
-  host: redis
-  port: 6379
-  password: ""
-  db: 0
+  host: ${REDIS_HOST:-redis}
+  port: ${REDIS_PORT:-6379}
+  password: ${REDIS_PASSWORD:-}
+  db: ${REDIS_DB:-0}
 
 rabbitmq:
-  host: rabbitmq
-  port: 5672
-  username: admin
+  host: ${RABBITMQ_HOST:-rabbitmq}
+  port: ${RABBITMQ_PORT:-5672}
+  username: ${RABBITMQ_USER:-admin}
   password: ${RABBITMQ_PASSWORD}
-  vhost: /
-  prefetch_count: 16
-  consumer_tag: feed-worker
+  vhost: ${RABBITMQ_VHOST:-/}
+  prefetch_count: ${RABBITMQ_PREFETCH:-16}
+  consumer_tag: ${RABBITMQ_CONSUMER_TAG:-feed-worker}
 
 jwt:
   secret: ${JWT_SECRET}
 
 upload:
-  dir: /app/.run/uploads
-  max_video_bytes: 268435456
+  dir: ${UPLOAD_DIR:-/app/.run/uploads}
+  max_video_bytes: ${MAX_VIDEO_BYTES:-268435456}
 
 pprof:
   api:
-    enabled: false
-    addr: 0.0.0.0:6060
+    enabled: ${PPROF_API_ENABLED:-false}
+    addr: ${PPROF_API_ADDR:-0.0.0.0:6060}
   worker:
-    enabled: false
-    addr: 0.0.0.0:6061
+    enabled: ${PPROF_WORKER_ENABLED:-false}
+    addr: ${PPROF_WORKER_ADDR:-0.0.0.0:6061}
 
 log:
-  level: info
-  format: json
+  level: ${LOG_LEVEL:-info}
+  format: ${LOG_FORMAT:-json}

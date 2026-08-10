@@ -54,6 +54,13 @@ API 负责同步请求和公开 HTTP 接口，Worker 独立消费异步任务。
 ```bash
 git clone git@github.com:Lygxiaobai/my_feed_sytem.git
 cd my_feed_sytem
+
+# 准备凭据：仓库中不含任何真实密钥，必须先生成
+cp .env.example .env
+# 编辑 .env 填入 MYSQL_ROOT_PASSWORD / RABBITMQ_PASSWORD / JWT_SECRET
+# JWT_SECRET 至少 32 位，可用下面命令生成：
+#   openssl rand -base64 48
+
 docker compose up -d --build
 ```
 
@@ -65,7 +72,7 @@ docker compose up -d --build
 | API 健康检查 | <http://localhost:8080/ping> |
 | RabbitMQ 管理台 | <http://localhost:15672> |
 
-Compose 中的数据库和 RabbitMQ 凭据仅用于本地开发。部署到公网前必须替换默认配置，并将敏感配置放在仓库外部。
+所有凭据均通过环境变量注入，仓库内不存放任何真实密钥。缺少必需变量时，服务会在启动阶段直接失败并一次性列出缺失项，不会以空密码或空密钥静默启动。
 
 停止服务：
 
@@ -82,6 +89,35 @@ docker compose down -v
 > `down -v` 会删除 MySQL、Redis、RabbitMQ 和上传文件的本地持久化数据，请确认后再执行。
 
 ## 本地开发
+
+### 首次准备
+
+后端启动时会读取工作目录下的 `.env` 补齐环境变量，该文件已被 `.gitignore` 排除：
+
+```powershell
+cd .\backend
+copy .env.example .env
+```
+
+编辑 `backend/.env`，至少填写三项：
+
+| 变量 | 说明 |
+| --- | --- |
+| `MYSQL_PASSWORD` | 本地 MySQL 的 root 密码 |
+| `RABBITMQ_PASSWORD` | 本地 RabbitMQ 密码，默认安装通常是 `guest` |
+| `JWT_SECRET` | JWT 签名密钥，至少 32 位，用 `openssl rand -base64 48` 生成 |
+
+其余配置项都有默认值，不设置即可。已存在的环境变量优先于 `.env`，便于临时覆盖：
+
+```powershell
+$env:LOG_LEVEL = "debug"; go run ./cmd
+```
+
+漏填时启动会直接失败并指明缺什么，不会带着空密钥跑起来：
+
+```
+启动失败: 配置缺少必需的环境变量: MYSQL_PASSWORD, JWT_SECRET（本地开发可复制 backend/.env.example 为 backend/.env 并填写）
+```
 
 ### 后端 API
 
@@ -111,7 +147,10 @@ npm run dev
 
 - Compose 使用 [`backend/configs/config.docker.yaml`](./backend/configs/config.docker.yaml) 作为容器配置模板。
 - 本地手动运行使用 [`backend/configs/config.yaml`](./backend/configs/config.yaml)。
-- 数据库密码、Redis 密码、RabbitMQ 密码和 JWT 密钥不得提交到仓库。
+- 两份配置中的敏感项一律写成 `${VAR}` 占位符，非敏感项写成 `${VAR:-默认值}`，仓库内不出现任何真实凭据。
+- `${VAR}` 为必填：未设置时启动失败并一次性列出全部缺失变量，不会静默展开成空值。
+- `jwt.secret` 在启动时校验长度（至少 32 位），阻止弱密钥进入运行环境。
+- 取值优先级：进程环境变量 > `.env` 文件 > 配置文件中的默认值。
 - Cloudflare、域名和外部反向代理属于部署环境配置，不属于本项目代码契约。
 
 ## 项目文档

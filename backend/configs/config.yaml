@@ -1,43 +1,50 @@
+# 本地开发配置。
+#
+# 敏感项一律写成 ${VAR} 占位符，不得填入真实值——本仓库是公开的，
+# 判断标准见 12-Factor「基准代码是否可以立刻开源而不暴露敏感信息」。
+# 非敏感项用 ${VAR:-默认值}，因此本地开发只需设置文件末尾注释里列出的 3 个变量。
+#
+# 启动前：cp backend/.env.example backend/.env 并填写，程序会自动读取。
 server:
-  port: 8081
+  port: ${SERVER_PORT:-8081}
 
 database:
-  host: 127.0.0.1
-  port: 3306
-  user: root
-  password: 123456
-  dbname: my_feed_system
+  host: ${MYSQL_HOST:-127.0.0.1}
+  port: ${MYSQL_PORT:-3306}
+  user: ${MYSQL_USER:-root}
+  password: ${MYSQL_PASSWORD}
+  dbname: ${MYSQL_DATABASE:-my_feed_system}
 
 redis:
-  host: 127.0.0.1
-  port: 6379
-  password: ""
-  db: 0
+  host: ${REDIS_HOST:-127.0.0.1}
+  port: ${REDIS_PORT:-6379}
+  password: ${REDIS_PASSWORD:-}
+  db: ${REDIS_DB:-0}
 
 rabbitmq:
-  host: 127.0.0.1
-  port: 5672
-  username: guest
-  password: guest
-  vhost: /
-  prefetch_count: 16
-  consumer_tag: feed-worker
+  host: ${RABBITMQ_HOST:-127.0.0.1}
+  port: ${RABBITMQ_PORT:-5672}
+  username: ${RABBITMQ_USER:-guest}
+  password: ${RABBITMQ_PASSWORD}
+  vhost: ${RABBITMQ_VHOST:-/}
+  prefetch_count: ${RABBITMQ_PREFETCH:-16}
+  consumer_tag: ${RABBITMQ_CONSUMER_TAG:-feed-worker}
 
 jwt:
-  secret: my-feed-system-secret
+  secret: ${JWT_SECRET}
 
 upload:
-  dir: .run/uploads
-  max_video_bytes: 268435456
+  dir: ${UPLOAD_DIR:-.run/uploads}
+  max_video_bytes: ${MAX_VIDEO_BYTES:-268435456}
 
 pprof:
   api:
-    enabled: true
-    addr: 127.0.0.1:6060
+    enabled: ${PPROF_API_ENABLED:-true}
+    addr: ${PPROF_API_ADDR:-127.0.0.1:6060}
   worker:
-    enabled: true
-    addr: 127.0.0.1:6061
+    enabled: ${PPROF_WORKER_ENABLED:-true}
+    addr: ${PPROF_WORKER_ADDR:-127.0.0.1:6061}
 
 log:
-  level: info
-  format: json
+  level: ${LOG_LEVEL:-info}
+  format: ${LOG_FORMAT:-text}

@@ -1,8 +1,11 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -78,18 +81,92 @@ type PprofServerConfig struct {
 }
 
 func Load(path string) (*Config, error) {
+	// 本地开发从工作目录下的 .env 补齐环境变量（该文件已被 .gitignore 排除）。
+	// 容器部署不带 .env，配置全部由编排层注入，两种场景走同一套代码。
+	loadDotEnv(".env")
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read config file: %w", err)
 	}
 
-	// 用环境变量展开配置内容，便于把 JWT 密钥等敏感项通过环境注入而不写进 Git。
-	data = []byte(os.Expand(string(data), os.Getenv))
+	expanded, missing := expandPlaceholders(string(data))
+	if len(missing) > 0 {
+		// 一次性列出全部缺失项，避免改一个报一个。
+		return nil, fmt.Errorf(
+			"配置缺少必需的环境变量: %s（本地开发可复制 backend/.env.example 为 backend/.env 并填写）",
+			strings.Join(missing, ", "),
+		)
+	}
 
 	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	if err := yaml.Unmarshal([]byte(expanded), &cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config file: %w", err)
 	}
 
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+
 	return &cfg, nil
+}
+
+// placeholderPattern 匹配 ${VAR} 与 ${VAR:-default} 两种写法。
+var placeholderPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}`)
+
+// expandPlaceholders 展开配置中的环境变量占位符，并返回缺失的必填变量名。
+//
+// 不使用 os.Expand 的原因：它把未设置的变量静默展开为空字符串，
+// 且不支持默认值语法。对密钥类配置而言这非常危险——缺少 JWT_SECRET
+// 会得到一个空密钥，服务照常启动，但任何人都能伪造 token。
+// 这里区分两种语义：
+//
+//	${VAR}            必填，未设置时收集进 missing 并让启动失败
+//	${VAR:-default}   选填，未设置时使用默认值（只用于非敏感项）
+func expandPlaceholders(raw string) (string, []string) {
+	var missing []string
+	seen := make(map[string]struct{})
+
+	out := placeholderPattern.ReplaceAllStringFunc(raw, func(match string) string {
+		groups := placeholderPattern.FindStringSubmatch(match)
+		name := groups[1]
+		hasDefault := strings.Contains(match, ":-")
+
+		if value, ok := os.LookupEnv(name); ok && value != "" {
+			return value
+		}
+		if hasDefault {
+			return groups[2]
+		}
+		if _, dup := seen[name]; !dup {
+			seen[name] = struct{}{}
+			missing = append(missing, name)
+		}
+		return ""
+	})
+
+	return out, missing
+}
+
+// minJWTSecretLength 是 JWT 密钥的最小长度。
+// HS256 的安全性完全取决于密钥强度，过短的密钥可被离线暴力破解。
+const minJWTSecretLength = 32
+
+// validate 在配置解析完成后做安全性兜底校验。
+// 这类问题如果放到运行期才暴露，往往已经签发了一批不可信的 token。
+func (c *Config) validate() error {
+	secret := strings.TrimSpace(c.JWT.Secret)
+	if secret == "" {
+		return errors.New("jwt.secret 为空：请设置 JWT_SECRET 环境变量")
+	}
+	if len(secret) < minJWTSecretLength {
+		return fmt.Errorf(
+			"jwt.secret 长度不足 %d 位（当前 %d 位）：请用 openssl rand -base64 48 生成后设置 JWT_SECRET",
+			minJWTSecretLength, len(secret),
+		)
+	}
+	if c.Database.DBName == "" {
+		return errors.New("database.dbname 为空：请检查配置文件")
+	}
+	return nil
 }

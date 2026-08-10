@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"gorm.io/gorm"
@@ -271,7 +271,7 @@ func (s *Service) invalidateDetailCache(videoID uint64) {
 
 	if s.detailCache != nil {
 		if err := s.detailCache.Delete(ctx, videoID); err != nil {
-			log.Printf("comment service: delete detail cache failed for video %d: %v", videoID, err)
+			slog.Warn("delete detail cache failed", slog.Uint64("video_id", videoID), slog.String("error", err.Error()))
 		} else {
 			observability.IncCacheInvalidation(observability.CacheVideoDetail, "l2", "write")
 		}
@@ -281,7 +281,7 @@ func (s *Service) invalidateDetailCache(videoID uint64) {
 			Cache:   mq.CacheNameVideoDetail,
 			VideoID: videoID,
 		}); err != nil {
-			log.Printf("comment service: publish detail invalidation failed for video %d: %v", videoID, err)
+			slog.Warn("publish detail invalidation failed", slog.Uint64("video_id", videoID), slog.String("error", err.Error()))
 		}
 	}
 }

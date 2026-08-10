@@ -2,7 +2,7 @@ package outbox
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"my_feed_system/internal/mq"
@@ -51,7 +51,7 @@ func (p *Poller) Run(ctx context.Context) {
 
 	for {
 		if err := p.runOnce(ctx); err != nil && ctx.Err() == nil {
-			log.Printf("outbox poller: process batch failed: %v", err)
+			slog.ErrorContext(ctx, "process outbox batch failed", slog.String("error", err.Error()))
 		}
 
 		select {
@@ -84,14 +84,14 @@ func (p *Poller) runOnce(ctx context.Context) error {
 			// 失败后回写 pending，等退避时间到达后再由后续轮询接着补投。
 			retryAt := time.Now().UTC().Add(nextRetryDelay(row.AttemptCount))
 			if err := p.repo.MarkPending(row.ID, retryAt, publishErr); err != nil {
-				log.Printf("outbox poller: requeue failed, id=%d err=%v", row.ID, err)
+				slog.WarnContext(ctx, "requeue outbox row failed", slog.Uint64("id", uint64(row.ID)), slog.String("error", err.Error()))
 			}
 			continue
 		}
 
 		if err := p.repo.Delete(row.ID); err != nil {
 			// 已经成功投递到 MQ 的消息删除失败时，最多造成重复投递，不会造成漏投。
-			log.Printf("outbox poller: delete published row failed, id=%d err=%v", row.ID, err)
+			slog.WarnContext(ctx, "delete published outbox row failed", slog.Uint64("id", uint64(row.ID)), slog.String("error", err.Error()))
 		}
 	}
 

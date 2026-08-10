@@ -5,7 +5,7 @@ database:
   host: mysql
   port: 3306
   user: root
-  password: 123456
+  password: ${MYSQL_PASSWORD}
   dbname: my_feed_system
 
 redis:
@@ -18,16 +18,17 @@ rabbitmq:
   host: rabbitmq
   port: 5672
   username: admin
-  password: password123
+  password: ${RABBITMQ_PASSWORD}
   vhost: /
   prefetch_count: 16
   consumer_tag: feed-worker
 
 jwt:
-  secret: my-feed-system-secret
+  secret: ${JWT_SECRET}
 
 upload:
   dir: /app/.run/uploads
+  max_video_bytes: 268435456
 
 pprof:
   api:
@@ -36,3 +37,7 @@ pprof:
   worker:
     enabled: false
     addr: 0.0.0.0:6061
+
+log:
+  level: info
+  format: json

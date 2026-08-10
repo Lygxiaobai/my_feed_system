@@ -1,6 +1,7 @@
 package http
 
 import (
+	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,11 +12,15 @@ import (
 	"my_feed_system/internal/comment"
 	"my_feed_system/internal/feed"
 	"my_feed_system/internal/like"
+	"my_feed_system/internal/media"
+	"my_feed_system/internal/middleware/accesslog"
 	jwtmiddleware "my_feed_system/internal/middleware/jwt"
 	"my_feed_system/internal/middleware/ratelimit"
+	"my_feed_system/internal/middleware/requestid"
 	"my_feed_system/internal/mq"
 	"my_feed_system/internal/observability"
 	"my_feed_system/internal/popularity"
+	"my_feed_system/internal/response"
 	"my_feed_system/internal/social"
 	"my_feed_system/internal/video"
 )
@@ -28,7 +33,7 @@ func NewRouter(
 	jwtSecret string,
 	uploadDir string,
 ) *gin.Engine {
-	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir)
+	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir, 0)
 }
 
 func NewRouterWithLocalCaches(
@@ -41,14 +46,26 @@ func NewRouterWithLocalCaches(
 	localHotCache *feed.LocalHotPageCache,
 	jwtSecret string,
 	uploadDir string,
+	maxVideoBytes int64,
 ) *gin.Engine {
-	r := gin.Default()
+	// 不用 gin.Default()：它固定绑定 gin.Logger()，而后者只能输出拼好的文本行，
+	// 无法交给 slog 分级和结构化。这里自行组装等价的中间件链。
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(requestid.New())
+	r.Use(accesslog.New(accesslog.Options{
+		// 健康检查每十秒一次，指标端点由 Prometheus 定期抓取，都属于记录了也无人查看的噪音。
+		SkipPaths:     []string{"/ping", "/metrics"},
+		SlowThreshold: time.Second,
+	}))
 
 	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "pong"})
+		response.OK(c, gin.H{"message": "pong"})
 	})
 	r.GET("/metrics", gin.WrapH(observability.NewMetricsHandler()))
-	r.Static("/static", uploadDir)
+	// 仅暴露处理后的媒体目录，sources 目录只供 Worker 读取，避免原始上传文件被直接访问。
+	r.Static("/static/videos", filepath.Join(uploadDir, "videos"))
+	r.Static("/static/covers", filepath.Join(uploadDir, "covers"))
 
 	tokenCache := account.NewTokenCache(redisClient)
 	detailCache := video.NewDetailCache(redisClient)
@@ -165,7 +182,7 @@ func NewRouterWithLocalCaches(
 		localDetailCache,
 		publisher,
 		uploadDir,
-	), uploadDir)
+	), uploadDir, media.NewService(db, uploadDir, maxVideoBytes))
 	videoGroup := r.Group("/video")
 	videoHandler.RegisterRoutes(videoGroup)
 
@@ -173,7 +190,7 @@ func NewRouterWithLocalCaches(
 	protectedVideoGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	videoHandler.RegisterProtectedRoutes(protectedVideoGroup)
 
-	likeHandler := like.NewHandler(like.NewServiceWithDetailCacheAndPublisher(db, popularityService, detailCache, publisher))
+	likeHandler := like.NewHandler(like.NewServiceWithCachesAndPublisher(db, popularityService, detailCache, localDetailCache, publisher))
 	likeGroup := r.Group("/like")
 	likeGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	likeGroup.POST("/like", likeLikeIPLimit, likeLikeAccountLimit, likeHandler.Like)

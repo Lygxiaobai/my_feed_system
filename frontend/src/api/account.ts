@@ -1,8 +1,8 @@
 import { postJson } from './client'
-import type { Account, BackendAccountEnvelope, MessageResponse, TokenResponse } from './types'
+import type { Account, BackendAccountEnvelope, TokenResponse } from './types'
 
 export function register(username: string, password: string) {
-  return postJson<MessageResponse>('/account/register', { username, password })
+  return postJson<BackendAccountEnvelope>('/account/register', { username, password })
 }
 
 export function login(username: string, password: string) {
@@ -10,7 +10,7 @@ export function login(username: string, password: string) {
 }
 
 export function logout() {
-  return postJson<MessageResponse>('/account/logout', {}, { authRequired: true })
+  return postJson<null>('/account/logout', {}, { authRequired: true })
 }
 
 export function rename(newUsername: string) {
@@ -18,7 +18,7 @@ export function rename(newUsername: string) {
 }
 
 export function changePassword(oldPassword: string, newPassword: string) {
-  return postJson<MessageResponse>(
+  return postJson<null>(
     '/account/changePassword',
     {
       old_password: oldPassword,

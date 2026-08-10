@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -68,16 +68,19 @@ func (c *Consumer) Run(ctx context.Context) error {
 
 			if err := c.handleDelivery(ctx, d); err != nil {
 				// nack(requeue=false) 会按队列策略进入死信队列。
-				log.Printf("consumer[%s]: handle message failed, send to dlq: %v", c.queue, err)
+				slog.ErrorContext(ctx, "handle message failed, sending to dlq",
+					slog.String("queue", c.queue), slog.String("error", err.Error()))
 				if nackErr := d.Nack(false, false); nackErr != nil {
-					log.Printf("consumer[%s]: nack failed: %v", c.queue, nackErr)
+					slog.ErrorContext(ctx, "nack failed",
+						slog.String("queue", c.queue), slog.String("error", nackErr.Error()))
 				}
 				continue
 			}
 
 			// 业务处理成功后再 ACK。
 			if err := d.Ack(false); err != nil {
-				log.Printf("consumer[%s]: ack failed: %v", c.queue, err)
+				slog.ErrorContext(ctx, "ack failed",
+					slog.String("queue", c.queue), slog.String("error", err.Error()))
 			}
 		}
 	}
@@ -148,15 +151,18 @@ func ConsumeEphemeralFanout(ctx context.Context, conn *amqp.Connection, exchange
 			}
 
 			if err := handleDelivery(ctx, d, handle); err != nil {
-				log.Printf("consumer[%s]: handle message failed, drop fanout message: %v", exchange, err)
+				slog.ErrorContext(ctx, "handle message failed, dropping fanout message",
+					slog.String("exchange", exchange), slog.String("error", err.Error()))
 				if nackErr := d.Nack(false, false); nackErr != nil {
-					log.Printf("consumer[%s]: nack failed: %v", exchange, nackErr)
+					slog.ErrorContext(ctx, "nack failed",
+						slog.String("exchange", exchange), slog.String("error", nackErr.Error()))
 				}
 				continue
 			}
 
 			if err := d.Ack(false); err != nil {
-				log.Printf("consumer[%s]: ack failed: %v", exchange, err)
+				slog.ErrorContext(ctx, "ack failed",
+					slog.String("exchange", exchange), slog.String("error", err.Error()))
 			}
 		}
 	}

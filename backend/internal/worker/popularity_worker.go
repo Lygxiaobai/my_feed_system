@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"gorm.io/gorm"
@@ -75,18 +75,21 @@ func (w *PopularityWorker) Handle(ctx context.Context, event mq.Envelope) error 
 	}
 
 	if w.service == nil {
-		log.Printf("popularity worker: redis unavailable, queued replay after mysql commit event_type=%s event_id=%s", event.EventType, event.EventID)
+		slog.WarnContext(ctx, "redis unavailable, queued replay after mysql commit",
+			slog.String("event_type", event.EventType), slog.String("event_id", event.EventID))
 		invalidateVideoDetailCache(w.detailCache, nil, payload.VideoID)
 		return nil
 	}
 
 	if err := w.service.RecordEvent(ctx, projection.EventID, projection.VideoID, float64(projection.Delta), projection.OccurredAt); err != nil {
-		log.Printf("popularity worker: defer redis projection to poller event_type=%s event_id=%s err=%v", event.EventType, event.EventID, err)
+		slog.WarnContext(ctx, "defer redis projection to poller",
+			slog.String("event_type", event.EventType), slog.String("event_id", event.EventID), slog.String("error", err.Error()))
 		invalidateVideoDetailCache(w.detailCache, nil, payload.VideoID)
 		return nil
 	}
 	if err := w.projectionRepo.Delete(projection.ID); err != nil {
-		log.Printf("popularity worker: delete applied projection failed, poller will retry cleanup event_id=%s err=%v", projection.EventID, err)
+		slog.WarnContext(ctx, "delete applied projection failed, poller will retry cleanup",
+			slog.String("event_id", projection.EventID), slog.String("error", err.Error()))
 	}
 	invalidateVideoDetailCache(w.detailCache, nil, payload.VideoID)
 

@@ -2,7 +2,7 @@ package worker
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"my_feed_system/internal/mq"
@@ -20,7 +20,7 @@ func invalidateVideoDetailCache(cache *video.DetailCache, publisher *mq.Publishe
 
 	if cache != nil {
 		if err := cache.Delete(ctx, videoID); err != nil {
-			log.Printf("worker: invalidate video detail cache failed, video_id=%d err=%v", videoID, err)
+			slog.WarnContext(ctx, "invalidate video detail cache failed", slog.Uint64("video_id", videoID), slog.String("error", err.Error()))
 		} else {
 			observability.IncCacheInvalidation(observability.CacheVideoDetail, "l2", "write")
 		}
@@ -30,7 +30,7 @@ func invalidateVideoDetailCache(cache *video.DetailCache, publisher *mq.Publishe
 			Cache:   mq.CacheNameVideoDetail,
 			VideoID: videoID,
 		}); err != nil {
-			log.Printf("worker: publish detail invalidation failed, video_id=%d err=%v", videoID, err)
+			slog.WarnContext(ctx, "publish detail invalidation failed", slog.Uint64("video_id", videoID), slog.String("error", err.Error()))
 		}
 	}
 }
@@ -43,10 +43,11 @@ func publishPopularityChanged(ctx context.Context, publisher *mq.Publisher, payl
 
 	env, err := mq.NewEnvelope(mq.EventTypePopularityChanged, mq.ProducerWorker, payload)
 	if err != nil {
-		log.Printf("worker: build popularity event failed: %v", err)
+		slog.ErrorContext(ctx, "build popularity event failed", slog.String("error", err.Error()))
 		return
 	}
 	if err := publisher.Publish(ctx, env); err != nil {
-		log.Printf("worker: publish popularity event failed, video_id=%d delta=%d err=%v", payload.VideoID, payload.Delta, err)
+		slog.ErrorContext(ctx, "publish popularity event failed",
+			slog.Uint64("video_id", payload.VideoID), slog.Int64("delta", int64(payload.Delta)), slog.String("error", err.Error()))
 	}
 }

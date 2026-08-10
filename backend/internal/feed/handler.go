@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"my_feed_system/internal/response"
 )
 
 // Handler 负责信息流模块的 HTTP 接口。
@@ -32,66 +34,66 @@ func (h *Handler) RegisterProtectedRoutes(rg *gin.RouterGroup) {
 func (h *Handler) ListLatest(c *gin.Context) {
 	var req ListLatestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
 	result, err := h.service.ListLatest(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "list latest feed failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	response.OK(c, result)
 }
 
 // ListLikesCount 按点赞数倒序返回排行榜。
 func (h *Handler) ListLikesCount(c *gin.Context) {
 	var req ListLikesCountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
 	result, err := h.service.ListLikesCount(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "list likes count feed failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	response.OK(c, result)
 }
 
 // ListByFollowing 返回当前用户关注作者的视频流。
 func (h *Handler) ListByFollowing(c *gin.Context) {
 	var req ListByFollowingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
 	result, err := h.service.ListByFollowing(c.GetUint64("account_id"), req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "list following feed failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	response.OK(c, result)
 }
 
 // ListByPopularity 返回基于热度聚合结果的热榜。
 func (h *Handler) ListByPopularity(c *gin.Context) {
 	var req ListByPopularityRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
 	result, err := h.service.ListByPopularity(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "list popularity feed failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	response.OK(c, result)
 }

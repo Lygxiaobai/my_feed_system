@@ -2,7 +2,7 @@ package popularity
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -44,7 +44,7 @@ func (p *ProjectionPoller) Run(ctx context.Context) {
 
 	for {
 		if err := p.runOnce(ctx); err != nil && ctx.Err() == nil {
-			log.Printf("popularity projection poller: process batch failed: %v", err)
+			slog.ErrorContext(ctx, "process projection batch failed", slog.String("error", err.Error()))
 		}
 
 		select {
@@ -68,13 +68,13 @@ func (p *ProjectionPoller) runOnce(ctx context.Context) error {
 		if applyErr != nil {
 			retryAt := time.Now().UTC().Add(nextProjectionRetryDelay(row.AttemptCount))
 			if err := p.repo.MarkPending(row.ID, retryAt, applyErr); err != nil {
-				log.Printf("popularity projection poller: requeue failed, id=%d err=%v", row.ID, err)
+				slog.WarnContext(ctx, "requeue projection row failed", slog.Uint64("id", uint64(row.ID)), slog.String("error", err.Error()))
 			}
 			continue
 		}
 
 		if err := p.repo.Delete(row.ID); err != nil {
-			log.Printf("popularity projection poller: delete applied row failed, id=%d err=%v", row.ID, err)
+			slog.WarnContext(ctx, "delete applied projection row failed", slog.Uint64("id", uint64(row.ID)), slog.String("error", err.Error()))
 		}
 	}
 

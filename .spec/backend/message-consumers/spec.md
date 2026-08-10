@@ -21,7 +21,7 @@ related:
 # message-consumers
 
 ## raw source
-The Worker consumes RabbitMQ events and applies asynchronous comment, like, social, popularity, timeline, and cache-invalidation work safely.
+The Worker consumes RabbitMQ events and applies asynchronous media, comment, like, social, popularity, timeline, and cache-invalidation work safely.
 
 ## expanded spec
-Consumers acknowledge messages only after the required effect is durable. Processed-message tracking makes redelivery safe, and failed messages follow the dead-letter policy instead of disappearing. Worker behavior must remain independently runnable from the API process.
+Consumers acknowledge messages only after the required effect is durable. Processed-message tracking makes redelivery safe, media tasks expose explicit processing/ready/failed states, and failed messages follow the dead-letter policy instead of disappearing. Worker behavior must remain independently runnable from the API process.

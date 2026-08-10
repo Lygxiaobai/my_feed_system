@@ -1,12 +1,12 @@
 import { postJson } from './client'
-import type { GetAllFollowersResponse, GetAllVloggersResponse, MessageResponse } from './types'
+import type { GetAllFollowersResponse, GetAllVloggersResponse } from './types'
 
 export function follow(vloggerId: number) {
-  return postJson<MessageResponse>('/social/follow', { vlogger_id: vloggerId }, { authRequired: true })
+  return postJson<null>('/social/follow', { vlogger_id: vloggerId }, { authRequired: true })
 }
 
 export function unfollow(vloggerId: number) {
-  return postJson<MessageResponse>('/social/unfollow', { vlogger_id: vloggerId }, { authRequired: true })
+  return postJson<null>('/social/unfollow', { vlogger_id: vloggerId }, { authRequired: true })
 }
 
 export function getAllFollowers(vloggerId?: number) {

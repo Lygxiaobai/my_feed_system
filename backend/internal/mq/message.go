@@ -18,15 +18,16 @@ const (
 )
 
 const (
-	EventTypeLikeCreated       = "like.created"
-	EventTypeLikeDeleted       = "like.deleted"
-	EventTypeCommentCreated    = "comment.created"
-	EventTypeCommentDeleted    = "comment.deleted"
-	EventTypeSocialFollowed    = "social.followed"
-	EventTypeSocialUnfollowed  = "social.unfollowed"
-	EventTypePopularityChanged = "popularity.changed"
-	EventTypeVideoTimelinePush = "video.timeline.publish"
-	EventTypeCacheInvalidated  = "cache.invalidated"
+	EventTypeLikeCreated             = "like.created"
+	EventTypeLikeDeleted             = "like.deleted"
+	EventTypeCommentCreated          = "comment.created"
+	EventTypeCommentDeleted          = "comment.deleted"
+	EventTypeSocialFollowed          = "social.followed"
+	EventTypeSocialUnfollowed        = "social.unfollowed"
+	EventTypePopularityChanged       = "popularity.changed"
+	EventTypeVideoTimelinePush       = "video.timeline.publish"
+	EventTypeCacheInvalidated        = "cache.invalidated"
+	EventTypeMediaTranscodeRequested = "media.transcode.requested"
 )
 
 const (
@@ -77,6 +78,11 @@ func newEventID() string {
 type LikePayload struct {
 	AccountID uint64 `json:"account_id"`
 	VideoID   uint64 `json:"video_id"`
+}
+
+type MediaTranscodePayload struct {
+	TaskID    uint64 `json:"task_id"`
+	AccountID uint64 `json:"account_id"`
 }
 
 type CommentCreatedPayload struct {

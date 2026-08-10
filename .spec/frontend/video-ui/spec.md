@@ -14,9 +14,13 @@ related:
 # video-ui
 
 ## raw source
-Users can open a video, view its metadata and media, and move between video-related workflows without losing the selected video identity.
+Users can upload, process, publish, open, and play a video, and move between video-related workflows without losing the selected video identity.
 
 ## expanded spec
-Detail loading, media URLs, missing videos, and navigation failures have explicit UI states. Actions originating from a detail view refresh or invalidate the visible data instead of leaving a contradictory stale card.
+Upload processing, task failure, detail loading, media URLs, missing videos, and navigation failures have explicit UI states. The publish action waits for the server task to become ready before sending playable URLs. Actions originating from a detail view refresh or invalidate the visible data instead of leaving a contradictory stale card.
+
+The upload workflow rejects an unusable file before any network request: a non-video type or a file above the server's size limit fails at selection time with the reason shown. An accepted upload reports real byte-level progress while the request body is sent, then reports processing and publishing as distinct in-progress states, and stays cancellable throughout. Cancellation is a normal outcome, not a failure state. In-progress state is described in user terms and does not expose transport, worker, or transcoding internals.
+
+The video poster is derived by the server from the video's first frame. It is not a user-facing concept: no cover is selected, uploaded, previewed, or confirmed anywhere in the publish workflow.
 
 The shared video player owns playback lifecycle behavior for feed and detail surfaces: muted autoplay, active-item pause rules, loading and buffering feedback, playback errors with retry, and resource cleanup when a video is no longer active. Feed playback keeps only the active item and its immediate neighbors enabled.

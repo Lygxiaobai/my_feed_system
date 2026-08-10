@@ -4,6 +4,8 @@ WORKDIR /src
 
 RUN apk add --no-cache ca-certificates tzdata
 
+ENV GOPROXY=https://goproxy.cn,direct
+
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -16,7 +18,7 @@ FROM alpine:3.22
 
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates tzdata wget
+RUN apk add --no-cache ca-certificates tzdata wget ffmpeg
 
 COPY --from=build /out/api /app/api
 COPY --from=build /out/worker /app/worker

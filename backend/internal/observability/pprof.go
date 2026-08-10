@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -42,7 +42,7 @@ func NewPprofHandler() http.Handler {
 // StartPprof 在独立地址启动 pprof；当 ctx 结束时自动关闭。
 func StartPprof(ctx context.Context, name string, cfg config.PprofServerConfig) error {
 	if !cfg.Enabled {
-		log.Printf("%s pprof disabled", name)
+		slog.Debug("pprof disabled", slog.String("name", name))
 		return nil
 	}
 
@@ -68,14 +68,14 @@ func StartPprof(ctx context.Context, name string, cfg config.PprofServerConfig) 
 		defer cancel()
 
 		if err := server.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("%s pprof shutdown failed: %v", name, err)
+			slog.Warn("pprof shutdown failed", slog.String("name", name), slog.String("error", err.Error()))
 		}
 	}()
 
 	go func() {
-		log.Printf("%s pprof listening on %s", name, addr)
+		slog.Info("pprof listening", slog.String("name", name), slog.String("addr", addr))
 		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("%s pprof server stopped unexpectedly: %v", name, err)
+			slog.Error("pprof server stopped unexpectedly", slog.String("name", name), slog.String("error", err.Error()))
 		}
 	}()
 

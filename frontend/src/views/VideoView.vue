@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
 import AppShell from '../components/AppShell.vue'
-import { ApiError } from '../api/client'
+import { AbortedError, ApiError } from '../api/client'
 import * as videoApi from '../api/video'
 import type { Video } from '../api/types'
 import { useAuthStore } from '../stores/auth'
@@ -13,84 +13,94 @@ const router = useRouter()
 const auth = useAuthStore()
 const toast = useToastStore()
 
-const busy = ref(false)
-const stage = ref('')
+/** 发布流程的阶段，取代原先用自由文本描述进度的做法，也避免把后端术语暴露给用户。 */
+type PublishPhase = 'idle' | 'uploading' | 'processing' | 'publishing'
+
+const phase = ref<PublishPhase>('idle')
+const uploadPercent = ref(0)
+const fileError = ref('')
 const published = ref<Video | null>(null)
 const publishRequestKey = ref('')
-
 const videoInput = ref<HTMLInputElement | null>(null)
-const coverInput = ref<HTMLInputElement | null>(null)
+const previewVideoUrl = ref('')
+let abortController: AbortController | null = null
 
 const publishForm = reactive({
   title: '',
   description: '',
   video: null as File | null,
-  cover: null as File | null,
 })
 
-const preview = reactive({
-  videoUrl: '',
-  coverUrl: '',
+const formatFileSize = videoApi.formatFileSize
+const maxSizeText = videoApi.formatFileSize(videoApi.MAX_VIDEO_BYTES)
+
+const busy = computed(() => phase.value !== 'idle')
+const canSubmit = computed(
+  () => !busy.value && publishForm.title.trim().length > 0 && !!publishForm.video && !fileError.value,
+)
+
+const phaseText = computed(() => {
+  if (phase.value === 'uploading') return `上传中 ${uploadPercent.value}%`
+  if (phase.value === 'processing') return '处理中'
+  if (phase.value === 'publishing') return '发布中'
+  return ''
 })
+
+// 只有上传阶段能拿到真实百分比，处理和发布阶段用不确定态动画表示仍在进行。
+const indeterminate = computed(() => phase.value === 'processing' || phase.value === 'publishing')
 
 function setPreviewVideo(file: File | null) {
-  if (preview.videoUrl) URL.revokeObjectURL(preview.videoUrl)
-  preview.videoUrl = file ? URL.createObjectURL(file) : ''
-}
-
-function setPreviewCover(file: File | null) {
-  if (preview.coverUrl) URL.revokeObjectURL(preview.coverUrl)
-  preview.coverUrl = file ? URL.createObjectURL(file) : ''
+  if (previewVideoUrl.value) URL.revokeObjectURL(previewVideoUrl.value)
+  previewVideoUrl.value = file ? URL.createObjectURL(file) : ''
 }
 
 watch(
   () => publishForm.video,
-  (f) => setPreviewVideo(f),
+  (file) => setPreviewVideo(file),
 )
 
 watch(
-  () => publishForm.cover,
-  (f) => setPreviewCover(f),
-)
-
-watch(
-  () => [publishForm.title, publishForm.description, publishForm.video, publishForm.cover],
+  () => [publishForm.title, publishForm.description, publishForm.video],
   () => {
     if (!busy.value) publishRequestKey.value = ''
   },
 )
 
 onUnmounted(() => {
+  abortController?.abort()
   setPreviewVideo(null)
-  setPreviewCover(null)
 })
 
-function pickVideo(e: Event) {
-  const input = e.target as HTMLInputElement
-  publishForm.video = input.files?.[0] ?? null
-}
+function pickVideo(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0] ?? null
+  if (!file) {
+    clearVideo()
+    return
+  }
 
-function pickCover(e: Event) {
-  const input = e.target as HTMLInputElement
-  publishForm.cover = input.files?.[0] ?? null
-}
+  // 在发起任何网络请求之前校验，避免超限文件整份传完才被服务端拒绝。
+  const message = videoApi.validateVideoFile(file)
+  if (message) {
+    publishForm.video = null
+    fileError.value = message
+    input.value = ''
+    toast.error(message)
+    return
+  }
 
-function openVideoPicker() {
-  videoInput.value?.click()
-}
-
-function openCoverPicker() {
-  coverInput.value?.click()
+  fileError.value = ''
+  publishForm.video = file
 }
 
 function clearVideo() {
   publishForm.video = null
+  fileError.value = ''
   if (videoInput.value) videoInput.value.value = ''
 }
 
-function clearCover() {
-  publishForm.cover = null
-  if (coverInput.value) coverInput.value.value = ''
+function cancel() {
+  abortController?.abort()
 }
 
 async function onPublish() {
@@ -103,59 +113,64 @@ async function onPublish() {
 
   const title = publishForm.title.trim()
   const description = publishForm.description.trim()
+  const file = publishForm.video
   if (!title) {
-    toast.error('请输入 title')
+    toast.error('请输入标题')
     return
   }
-  if (!publishForm.video) {
-    toast.error('请选择视频文件（.mp4）')
-    return
-  }
-  if (!publishForm.cover) {
-    toast.error('请选择封面图片（jpg/png/webp）')
+  if (!file) {
+    toast.error('请选择视频文件')
     return
   }
 
-  busy.value = true
-  stage.value = ''
+  const controller = new AbortController()
+  abortController = controller
   published.value = null
+  uploadPercent.value = 0
+  phase.value = 'uploading'
+
   try {
-    stage.value = '上传封面'
-    const coverRes = await videoApi.uploadCover(publishForm.cover!)
+    const task = await videoApi.uploadVideo(file, {
+      onProgress: (percent) => {
+        uploadPercent.value = percent
+      },
+      signal: controller.signal,
+    })
 
-    stage.value = '上传视频'
-    const videoRes = await videoApi.uploadVideo(publishForm.video!)
+    phase.value = 'processing'
+    const isReady = task.status === 'ready' && !!task.play_url && !!task.cover_url
+    const readyTask = isReady ? task : await videoApi.waitForVideoUpload(task.id, { signal: controller.signal })
 
-    const coverUrl = coverRes.url || coverRes.cover_url || ''
-    const playUrl = videoRes.url || videoRes.play_url || ''
-    if (!coverUrl || !playUrl) {
-      toast.error('上传成功但缺少 url')
-      return
-    }
-
-    stage.value = '发布视频'
-    if (!publishRequestKey.value) {
-      publishRequestKey.value = crypto.randomUUID()
-    }
+    phase.value = 'publishing'
+    if (!publishRequestKey.value) publishRequestKey.value = videoApi.createIdempotencyKey()
+    // 封面由后端转码时自动取视频首帧生成，用户侧不再有封面这个概念。
     const res = await videoApi.publishVideo(
-      { title, description, play_url: playUrl, cover_url: coverUrl },
+      {
+        title,
+        description,
+        play_url: readyTask.play_url!,
+        cover_url: readyTask.cover_url!,
+      },
       { idempotencyKey: publishRequestKey.value },
     )
 
     published.value = res
-    toast.success('已发布')
     publishRequestKey.value = ''
-
     publishForm.title = ''
     publishForm.description = ''
     clearVideo()
-    clearCover()
-  } catch (e) {
-    const msg = e instanceof ApiError ? e.message : String(e)
-    toast.error(msg)
+    toast.success('已发布')
+  } catch (error) {
+    // 用户主动取消属于正常操作，不当作失败处理。
+    if (error instanceof AbortedError) {
+      toast.info('已取消')
+    } else {
+      toast.error(error instanceof ApiError ? error.message : String(error))
+    }
   } finally {
-    busy.value = false
-    stage.value = ''
+    abortController = null
+    phase.value = 'idle'
+    uploadPercent.value = 0
   }
 }
 </script>
@@ -164,85 +179,69 @@ async function onPublish() {
   <AppShell>
     <div class="publish-wrap">
       <div class="card publish-card">
-        <div class="row" style="justify-content: space-between; align-items: baseline">
-          <p class="title" style="margin: 0">发布视频</p>
-          <div v-if="busy" class="pill">进行中：{{ stage || '…' }}</div>
-        </div>
-        <p class="subtle" style="margin-top: 10px">选择视频文件与封面图片，上传到本机后自动生成 URL，再写入 `/video/publish`。</p>
+        <p class="title" style="margin: 0">发布视频</p>
 
         <div class="grid form-grid" style="margin-top: 16px">
           <div>
-            <label>title</label>
-            <input v-model.trim="publishForm.title" class="big-input" :disabled="busy" />
+            <label>标题</label>
+            <input v-model.trim="publishForm.title" class="big-input" :disabled="busy" placeholder="给视频起个标题" />
           </div>
+
           <div>
-            <label>description</label>
-            <textarea v-model.trim="publishForm.description" class="big-input" :disabled="busy" />
+            <label>描述</label>
+            <textarea v-model.trim="publishForm.description" class="big-input" :disabled="busy" placeholder="选填" />
           </div>
-          <div class="grid two">
-            <div>
-              <label>video (.mp4)</label>
-              <input ref="videoInput" class="file-native" type="file" accept="video/mp4" :disabled="busy" @change="pickVideo" />
-              <div class="file-box">
-                <button type="button" :disabled="busy" @click="openVideoPicker">选择视频</button>
-                <div class="file-name" :class="publishForm.video ? '' : 'muted'">
-                  {{ publishForm.video ? publishForm.video.name : '未选择文件' }}
-                </div>
-                <button v-if="publishForm.video" type="button" :disabled="busy" @click="clearVideo">清除</button>
+
+          <div>
+            <label>视频文件</label>
+            <input
+              ref="videoInput"
+              class="file-native"
+              type="file"
+              accept="video/*"
+              :disabled="busy"
+              @change="pickVideo"
+            />
+            <div class="file-box">
+              <button type="button" :disabled="busy" @click="videoInput?.click()">选择视频</button>
+              <div class="file-name" :class="publishForm.video ? '' : 'muted'">
+                {{ publishForm.video ? publishForm.video.name : '未选择文件' }}
               </div>
-              <div v-if="publishForm.video" class="subtle" style="margin-top: 6px">
-                已选择：{{ publishForm.video.name }}（{{ Math.ceil(publishForm.video.size / 1024 / 1024) }} MB）
-              </div>
+              <button v-if="publishForm.video" type="button" :disabled="busy" @click="clearVideo">清除</button>
             </div>
-            <div>
-              <label>cover (jpg/png/webp)</label>
-              <input
-                ref="coverInput"
-                class="file-native"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                :disabled="busy"
-                @change="pickCover"
-              />
-              <div class="file-box">
-                <button type="button" :disabled="busy" @click="openCoverPicker">选择封面</button>
-                <div class="file-name" :class="publishForm.cover ? '' : 'muted'">
-                  {{ publishForm.cover ? publishForm.cover.name : '未选择文件' }}
-                </div>
-                <button v-if="publishForm.cover" type="button" :disabled="busy" @click="clearCover">清除</button>
-              </div>
-              <div v-if="publishForm.cover" class="subtle" style="margin-top: 6px">已选择：{{ publishForm.cover.name }}</div>
+            <div v-if="fileError" class="file-tip bad">{{ fileError }}</div>
+            <div v-else-if="publishForm.video" class="file-tip">
+              {{ formatFileSize(publishForm.video.size) }}，上限 {{ maxSizeText }}
             </div>
           </div>
 
-          <div v-if="preview.coverUrl || preview.videoUrl" class="grid two">
-            <div v-if="preview.coverUrl" class="preview-card">
-              <div class="subtle">封面预览</div>
-              <img class="cover" :src="preview.coverUrl" alt="cover preview" />
+          <div v-if="previewVideoUrl" class="preview-card">
+            <video class="video" :src="previewVideoUrl" controls playsinline preload="metadata" />
+          </div>
+
+          <div v-if="busy" class="progress">
+            <div class="progress-head">
+              <span>{{ phaseText }}</span>
+              <button class="cancel-btn" type="button" @click="cancel">取消</button>
             </div>
-            <div v-if="preview.videoUrl" class="preview-card">
-              <div class="subtle">视频预览</div>
-              <video class="video" :src="preview.videoUrl" controls playsinline preload="metadata" />
+            <div class="progress-track">
+              <div
+                class="progress-bar"
+                :class="{ indeterminate }"
+                :style="indeterminate ? undefined : { width: `${uploadPercent}%` }"
+              />
             </div>
           </div>
 
           <div class="row" style="justify-content: flex-end; margin-top: 8px">
-            <button class="primary big-btn" type="button" :disabled="busy" @click="onPublish">发布</button>
+            <button class="primary big-btn" type="button" :disabled="!canSubmit" @click="onPublish">发布</button>
           </div>
         </div>
 
         <div v-if="published" class="card" style="margin-top: 14px">
-          <p class="title">已发布</p>
-          <div class="row" style="justify-content: space-between">
-            <div>
-              <div class="title" style="margin: 0">{{ published.title }}</div>
-              <div class="subtle mono">#{{ published.id }}</div>
-            </div>
-            <div class="row">
-              <RouterLink class="pill" :to="`/video/${published.id}`">去播放</RouterLink>
-              <a class="pill mono" :href="published.play_url" target="_blank" rel="noreferrer">play_url</a>
-              <a class="pill mono" :href="published.cover_url" target="_blank" rel="noreferrer">cover_url</a>
-            </div>
+          <div class="row" style="justify-content: space-between; align-items: center">
+            <div class="title" style="margin: 0">{{ published.title }}</div>
+            <RouterLink class="pill" :to="`/video/${published.id}`">去播放</RouterLink>
           </div>
         </div>
       </div>
@@ -263,18 +262,6 @@ async function onPublish() {
 
 .form-grid {
   gap: 16px;
-}
-
-.form-grid .grid.two {
-  gap: 20px;
-}
-
-.form-grid .grid.two > * {
-  min-width: 0;
-}
-
-.form-grid input[type='file'] {
-  max-width: 100%;
 }
 
 .file-native {
@@ -319,6 +306,16 @@ async function onPublish() {
   color: rgba(255, 255, 255, 0.55);
 }
 
+.file-tip {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.file-tip.bad {
+  color: rgba(254, 44, 85, 0.92);
+}
+
 .big-input {
   box-sizing: border-box;
   width: 100%;
@@ -339,23 +336,71 @@ async function onPublish() {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 16px;
   padding: 12px;
-  display: grid;
-  gap: 10px;
-}
-
-.cover {
-  width: 100%;
-  aspect-ratio: 9/12;
-  object-fit: cover;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.35);
 }
 
 .video {
   width: 100%;
+  max-height: 420px;
+  aspect-ratio: 16/9;
+  object-fit: contain;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(0, 0, 0, 0.35);
+}
+
+.progress {
+  display: grid;
+  gap: 8px;
+}
+
+.progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.cancel-btn {
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  min-height: 0;
+}
+
+.progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(37, 244, 238, 0.9), rgba(254, 44, 85, 0.9));
+  transition: width 0.2s ease;
+}
+
+/* 处理和发布阶段拿不到进度，用往复动画表示仍在进行。 */
+.progress-bar.indeterminate {
+  width: 40%;
+  animation: progress-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-bar.indeterminate {
+    width: 100%;
+    animation: none;
+  }
 }
 </style>

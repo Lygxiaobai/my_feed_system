@@ -14,6 +14,7 @@ import (
 	"my_feed_system/internal/config"
 	"my_feed_system/internal/idempotency"
 	"my_feed_system/internal/like"
+	"my_feed_system/internal/media"
 	"my_feed_system/internal/mq"
 	"my_feed_system/internal/outbox"
 	"my_feed_system/internal/popularity"
@@ -30,7 +31,10 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		cfg.DBName,
 	)
 
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	// 用 slog 适配器接管 GORM 日志，统一输出格式并避免 SQL 参数值进日志。
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+		Logger: newSlogGormLogger(200 * time.Millisecond),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("open mysql: %w", err)
 	}
@@ -53,6 +57,7 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		&account.Account{},
 		&video.Video{},
 		&like.VideoLike{},
+		&media.Task{},
 		&comment.VideoComment{},
 		&social.SocialRelation{},
 		&mq.ProcessedMessage{},

@@ -4,13 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
 
 	"my_feed_system/internal/mq"
 	"my_feed_system/internal/observability"
+	"my_feed_system/internal/outbox"
 	"my_feed_system/internal/popularity"
 	"my_feed_system/internal/video"
 )
@@ -26,7 +28,9 @@ type Service struct {
 	videoRepo   *video.Repo
 	popularity  *popularity.Service
 	detailCache *video.DetailCache
+	localDetail *video.LocalDetailCache
 	publisher   *mq.Publisher
+	outboxRepo  *outbox.Repo
 }
 
 func NewService(db *gorm.DB, popularityService *popularity.Service) *Service {
@@ -38,13 +42,19 @@ func NewServiceWithDetailCache(db *gorm.DB, popularityService *popularity.Servic
 }
 
 func NewServiceWithDetailCacheAndPublisher(db *gorm.DB, popularityService *popularity.Service, detailCache *video.DetailCache, publisher *mq.Publisher) *Service {
+	return NewServiceWithCachesAndPublisher(db, popularityService, detailCache, nil, publisher)
+}
+
+func NewServiceWithCachesAndPublisher(db *gorm.DB, popularityService *popularity.Service, detailCache *video.DetailCache, localDetail *video.LocalDetailCache, publisher *mq.Publisher) *Service {
 	return &Service{
 		db:          db,
 		repo:        NewRepo(db),
 		videoRepo:   video.NewRepo(db),
 		popularity:  popularityService,
 		detailCache: detailCache,
+		localDetail: localDetail,
 		publisher:   publisher,
+		outboxRepo:  outbox.NewRepo(db),
 	}
 }
 
@@ -57,33 +67,53 @@ func (s *Service) Like(accountID uint64, req LikeRequest) error {
 		return video.ErrVideoNotFound
 	}
 
-	existing, err := s.repo.FindByVideoAndAccount(req.VideoID, accountID)
-	if err != nil {
+	popularityDelta := int64(0)
+	if s.publisher == nil && s.popularity == nil {
+		popularityDelta = int64(popularity.LikeWeight)
+	}
+
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		var existing VideoLike
+		queryErr := tx.Where("video_id = ? AND account_id = ?", req.VideoID, accountID).First(&existing).Error
+		if queryErr == nil {
+			return ErrAlreadyLiked
+		}
+		if !errors.Is(queryErr, gorm.ErrRecordNotFound) {
+			return queryErr
+		}
+
+		if err := tx.Create(&VideoLike{VideoID: req.VideoID, AccountID: accountID}).Error; err != nil {
+			if isDuplicateKey(err) {
+				return ErrAlreadyLiked
+			}
+			return err
+		}
+		if err := s.videoRepo.AdjustCounters(tx, req.VideoID, 1, 0, popularityDelta); err != nil {
+			return err
+		}
+
+		if s.publisher != nil {
+			event, err := mq.NewEnvelope(mq.EventTypePopularityChanged, mq.ProducerAPIServer, mq.PopularityChangedPayload{
+				VideoID: req.VideoID,
+				Delta:   int64(popularity.LikeWeight),
+				Reason:  mq.EventTypeLikeCreated,
+			})
+			if err != nil {
+				return fmt.Errorf("build popularity.changed event: %w", err)
+			}
+			if err := s.outboxRepo.Enqueue(tx, event); err != nil {
+				return fmt.Errorf("enqueue popularity.changed event: %w", err)
+			}
+		}
+		return nil
+	}); err != nil {
 		return err
 	}
-	if existing != nil {
-		return ErrAlreadyLiked
-	}
 
-	// 兜底：未接入 MQ 时沿用同步写逻辑。
-	if s.publisher == nil {
-		return s.likeSync(accountID, req)
+	if s.publisher == nil && s.popularity != nil {
+		_ = s.popularity.Record(context.Background(), req.VideoID, popularity.LikeWeight, time.Now())
 	}
-
-	// 异步路径：发布事件后快速返回，由 Worker 落库。
-	event, err := mq.NewEnvelope(mq.EventTypeLikeCreated, mq.ProducerAPIServer, mq.LikePayload{
-		AccountID: accountID,
-		VideoID:   req.VideoID,
-	})
-	if err != nil {
-		return fmt.Errorf("build like.created event: %w", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := s.publisher.Publish(ctx, event); err != nil {
-		return err
-	}
+	s.invalidateDetailCache(req.VideoID)
 	return nil
 }
 
@@ -96,33 +126,45 @@ func (s *Service) Unlike(accountID uint64, req LikeRequest) error {
 		return video.ErrVideoNotFound
 	}
 
-	existing, err := s.repo.FindByVideoAndAccount(req.VideoID, accountID)
-	if err != nil {
+	popularityDelta := int64(0)
+	if s.publisher == nil && s.popularity == nil {
+		popularityDelta = int64(popularity.UnlikeWeight)
+	}
+
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("video_id = ? AND account_id = ?", req.VideoID, accountID).Delete(&VideoLike{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return ErrLikeNotFound
+		}
+		if err := s.videoRepo.AdjustCounters(tx, req.VideoID, -1, 0, popularityDelta); err != nil {
+			return err
+		}
+
+		if s.publisher != nil {
+			event, err := mq.NewEnvelope(mq.EventTypePopularityChanged, mq.ProducerAPIServer, mq.PopularityChangedPayload{
+				VideoID: req.VideoID,
+				Delta:   int64(popularity.UnlikeWeight),
+				Reason:  mq.EventTypeLikeDeleted,
+			})
+			if err != nil {
+				return fmt.Errorf("build popularity.changed event: %w", err)
+			}
+			if err := s.outboxRepo.Enqueue(tx, event); err != nil {
+				return fmt.Errorf("enqueue popularity.changed event: %w", err)
+			}
+		}
+		return nil
+	}); err != nil {
 		return err
 	}
-	if existing == nil {
-		return ErrLikeNotFound
-	}
 
-	// 兜底：未接入 MQ 时沿用同步写逻辑。
-	if s.publisher == nil {
-		return s.unlikeSync(accountID, req)
+	if s.publisher == nil && s.popularity != nil {
+		_ = s.popularity.Record(context.Background(), req.VideoID, popularity.UnlikeWeight, time.Now())
 	}
-
-	// 异步路径：发布事件后快速返回，由 Worker 落库。
-	event, err := mq.NewEnvelope(mq.EventTypeLikeDeleted, mq.ProducerAPIServer, mq.LikePayload{
-		AccountID: accountID,
-		VideoID:   req.VideoID,
-	})
-	if err != nil {
-		return fmt.Errorf("build like.deleted event: %w", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := s.publisher.Publish(ctx, event); err != nil {
-		return err
-	}
+	s.invalidateDetailCache(req.VideoID)
 	return nil
 }
 
@@ -151,60 +193,8 @@ func (s *Service) ListLikedVideoIDs(accountID uint64, videoIDs []uint64) ([]uint
 	return s.repo.FindLikedVideoIDs(accountID, videoIDs)
 }
 
-func (s *Service) likeSync(accountID uint64, req LikeRequest) error {
-	popularityDelta := int64(0)
-	if s.popularity == nil {
-		popularityDelta = int64(popularity.LikeWeight)
-	}
-
-	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&VideoLike{VideoID: req.VideoID, AccountID: accountID}).Error; err != nil {
-			return err
-		}
-
-		return s.videoRepo.AdjustCounters(tx, req.VideoID, 1, 0, popularityDelta)
-	}); err != nil {
-		return err
-	}
-
-	if s.popularity != nil {
-		_ = s.popularity.Record(context.Background(), req.VideoID, popularity.LikeWeight, time.Now())
-	}
-	s.invalidateDetailCache(req.VideoID)
-
-	return nil
-}
-
-func (s *Service) unlikeSync(accountID uint64, req LikeRequest) error {
-	popularityDelta := int64(0)
-	if s.popularity == nil {
-		popularityDelta = int64(popularity.UnlikeWeight)
-	}
-
-	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		result := tx.Where("video_id = ? AND account_id = ?", req.VideoID, accountID).Delete(&VideoLike{})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected == 0 {
-			return ErrLikeNotFound
-		}
-
-		return s.videoRepo.AdjustCounters(tx, req.VideoID, -1, 0, popularityDelta)
-	}); err != nil {
-		return err
-	}
-
-	if s.popularity != nil {
-		_ = s.popularity.Record(context.Background(), req.VideoID, popularity.UnlikeWeight, time.Now())
-	}
-	s.invalidateDetailCache(req.VideoID)
-
-	return nil
-}
-
 func (s *Service) invalidateDetailCache(videoID uint64) {
-	if s.detailCache == nil && s.publisher == nil {
+	if s.detailCache == nil && s.localDetail == nil && s.publisher == nil {
 		return
 	}
 
@@ -213,17 +203,28 @@ func (s *Service) invalidateDetailCache(videoID uint64) {
 
 	if s.detailCache != nil {
 		if err := s.detailCache.Delete(ctx, videoID); err != nil {
-			log.Printf("like service: delete detail cache failed for video %d: %v", videoID, err)
+			slog.Warn("delete detail cache failed", slog.Uint64("video_id", videoID), slog.String("error", err.Error()))
 		} else {
 			observability.IncCacheInvalidation(observability.CacheVideoDetail, "l2", "write")
 		}
+	}
+	if s.localDetail != nil {
+		s.localDetail.Delete(videoID)
 	}
 	if s.publisher != nil {
 		if err := s.publisher.PublishCacheInvalidated(ctx, mq.CacheInvalidatedPayload{
 			Cache:   mq.CacheNameVideoDetail,
 			VideoID: videoID,
 		}); err != nil {
-			log.Printf("like service: publish detail invalidation failed for video %d: %v", videoID, err)
+			slog.Warn("publish detail invalidation failed", slog.Uint64("video_id", videoID), slog.String("error", err.Error()))
 		}
 	}
+}
+
+func isDuplicateKey(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "Duplicate entry") || strings.Contains(message, "UNIQUE constraint failed")
 }

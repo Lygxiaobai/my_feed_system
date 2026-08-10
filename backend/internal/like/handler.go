@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"my_feed_system/internal/response"
 	"my_feed_system/internal/video"
 )
 
@@ -29,81 +30,82 @@ func (h *Handler) RegisterProtectedRoutes(rg *gin.RouterGroup) {
 func (h *Handler) Like(c *gin.Context) {
 	var req LikeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
 	if err := h.service.Like(c.GetUint64("account_id"), req); err != nil {
 		if errors.Is(err, video.ErrVideoNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+			response.FailTip(c, http.StatusNotFound, response.ResourceNotFound, "视频不存在或已被删除", err)
 			return
 		}
 		if errors.Is(err, ErrAlreadyLiked) {
-			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+			// 重复点赞对用户来说结果一致，按重复提交归类而非报错误提示。
+			response.FailTip(c, http.StatusBadRequest, response.DuplicatedRequest, "已经点过赞了", err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "like failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "like success"})
+	response.OK(c, nil)
 }
 
 func (h *Handler) Unlike(c *gin.Context) {
 	var req LikeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
 	if err := h.service.Unlike(c.GetUint64("account_id"), req); err != nil {
 		if errors.Is(err, video.ErrVideoNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+			response.FailTip(c, http.StatusNotFound, response.ResourceNotFound, "视频不存在或已被删除", err)
 			return
 		}
 		if errors.Is(err, ErrLikeNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+			response.FailTip(c, http.StatusNotFound, response.ResourceNotFound, "尚未点赞，无需取消", err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "unlike failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "unlike success"})
+	response.OK(c, nil)
 }
 
 func (h *Handler) IsLiked(c *gin.Context) {
 	var req LikeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
 	isLiked, err := h.service.IsLiked(c.GetUint64("account_id"), req)
 	if err != nil {
 		if errors.Is(err, video.ErrVideoNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+			response.FailTip(c, http.StatusNotFound, response.ResourceNotFound, "视频不存在或已被删除", err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "check like failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"is_liked": isLiked})
+	response.OK(c, gin.H{"is_liked": isLiked})
 }
 
 func (h *Handler) ListLikedVideoIDs(c *gin.Context) {
 	var req ListLikedVideoIDsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
 	ids, err := h.service.ListLikedVideoIDs(c.GetUint64("account_id"), req.VideoIDs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "list liked video ids failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"video_ids": ids})
+	response.OK(c, gin.H{"video_ids": ids})
 }

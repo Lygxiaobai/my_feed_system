@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"my_feed_system/internal/account"
+	"my_feed_system/internal/response"
 )
 
 // Handler 负责关注模块的 HTTP 接口。
@@ -35,51 +36,55 @@ func (h *Handler) RegisterProtectedRoutes(rg *gin.RouterGroup) {
 func (h *Handler) Follow(c *gin.Context) {
 	var req FollowRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
 	if err := h.service.Follow(c.GetUint64("account_id"), req); err != nil {
-		if errors.Is(err, ErrCannotFollowSelf) || errors.Is(err, ErrAlreadyFollowed) {
-			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		if errors.Is(err, ErrCannotFollowSelf) {
+			response.FailTip(c, http.StatusBadRequest, response.ParamError, "不能关注自己", err)
+			return
+		}
+		if errors.Is(err, ErrAlreadyFollowed) {
+			response.FailTip(c, http.StatusBadRequest, response.DuplicatedRequest, "已经关注过了", err)
 			return
 		}
 		if errors.Is(err, account.ErrAccountNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+			response.Fail(c, http.StatusNotFound, response.AccountNotFound, err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "follow failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "follow success"})
+	response.OK(c, nil)
 }
 
 // Unfollow 删除当前登录用户的关注关系。
 func (h *Handler) Unfollow(c *gin.Context) {
 	var req FollowRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
 	if err := h.service.Unfollow(c.GetUint64("account_id"), req); err != nil {
 		if errors.Is(err, ErrFollowNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+			response.FailTip(c, http.StatusNotFound, response.ResourceNotFound, "尚未关注该用户", err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "unfollow failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "unfollow success"})
+	response.OK(c, nil)
 }
 
 // GetAllFollowers 返回粉丝列表；未传 vlogger_id 时默认查询当前登录用户。
 func (h *Handler) GetAllFollowers(c *gin.Context) {
 	var req GetAllFollowersRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
@@ -89,18 +94,18 @@ func (h *Handler) GetAllFollowers(c *gin.Context) {
 
 	relations, err := h.service.GetAllFollowers(req.VloggerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "get followers failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"followers": relations})
+	response.OK(c, gin.H{"followers": relations})
 }
 
 // GetAllVloggers 返回关注列表；未传 follower_id 时默认查询当前登录用户。
 func (h *Handler) GetAllVloggers(c *gin.Context) {
 	var req GetAllVloggersRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
@@ -110,9 +115,9 @@ func (h *Handler) GetAllVloggers(c *gin.Context) {
 
 	relations, err := h.service.GetAllVloggers(req.FollowerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "get vloggers failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"vloggers": relations})
+	response.OK(c, gin.H{"vloggers": relations})
 }

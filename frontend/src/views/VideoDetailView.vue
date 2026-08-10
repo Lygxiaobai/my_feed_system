@@ -104,7 +104,6 @@ function toggleMute() {
   } catch {
     // 某些隐私模式会禁用 localStorage，静音功能本身仍需正常工作。
   }
-  toast.info(muted.value ? '已静音' : '已取消静音')
 }
 
 function togglePlayPause() {
@@ -440,11 +439,6 @@ onBeforeUnmount(() => {
               <span class="count">分享</span>
             </button>
           </div>
-
-          <div class="hint">
-            <span class="chip mono">点击 暂停/播放</span>
-            <span class="chip mono">双击 点赞</span>
-          </div>
         </div>
       </div>
 
@@ -656,15 +650,6 @@ onBeforeUnmount(() => {
   color: rgba(255, 255, 255, 0.8);
 }
 
-.hint {
-  position: absolute;
-  left: 14px;
-  top: 14px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .chip {
   display: inline-flex;
   align-items: center;
@@ -874,11 +859,6 @@ onBeforeUnmount(() => {
   .act {
     width: 64px;
     padding: 8px 6px;
-  }
-
-  .hint {
-    left: 10px;
-    top: 10px;
   }
 
   .drawer-backdrop {

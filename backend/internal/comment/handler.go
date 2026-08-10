@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"my_feed_system/internal/response"
 	"my_feed_system/internal/video"
 )
 
@@ -34,68 +35,68 @@ func (h *Handler) RegisterProtectedRoutes(rg *gin.RouterGroup) {
 func (h *Handler) ListAll(c *gin.Context) {
 	var req ListAllRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
 	comments, err := h.service.ListAll(req)
 	if err != nil {
 		if errors.Is(err, video.ErrVideoNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+			response.FailTip(c, http.StatusNotFound, response.ResourceNotFound, "视频不存在或已被删除", err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "list comments failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"comments": comments})
+	response.OK(c, gin.H{"comments": comments})
 }
 
 // Publish 发布一条新评论或回复评论。
 func (h *Handler) Publish(c *gin.Context) {
 	var req PublishRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
 	comment, err := h.service.Publish(c.GetUint64("account_id"), c.GetString("account_username"), req)
 	if err != nil {
 		if errors.Is(err, video.ErrVideoNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+			response.FailTip(c, http.StatusNotFound, response.ResourceNotFound, "视频不存在或已被删除", err)
 			return
 		}
 		if errors.Is(err, ErrInvalidParentComment) || errors.Is(err, ErrParentCommentMismatch) {
-			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+			response.FailTip(c, http.StatusBadRequest, response.ParamError, "回复的评论不存在或已被删除", err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "publish comment failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "publish comment success", "comment": comment})
+	response.OK(c, gin.H{"comment": comment})
 }
 
 // Delete 删除评论，并在需要时一并移除其回复树。
 func (h *Handler) Delete(c *gin.Context) {
 	var req DeleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request", "error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
 		return
 	}
 
 	if err := h.service.Delete(c.GetUint64("account_id"), req); err != nil {
 		if errors.Is(err, ErrCommentNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+			response.FailTip(c, http.StatusNotFound, response.ResourceNotFound, "评论不存在或已被删除", err)
 			return
 		}
 		if errors.Is(err, ErrCommentForbidden) {
-			c.JSON(http.StatusForbidden, gin.H{"message": err.Error()})
+			response.FailTip(c, http.StatusForbidden, response.AccessDenied, "只能删除自己的评论或自己视频下的评论", err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "delete comment failed", "error": err.Error()})
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "delete comment success"})
+	response.OK(c, nil)
 }

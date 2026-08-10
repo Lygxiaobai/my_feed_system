@@ -1,6 +1,4 @@
-﻿export type MessageResponse = { message: string }
-
-export type TokenResponse = { token: string }
+﻿export type TokenResponse = { token: string }
 
 export type Account = {
   id: number
@@ -94,7 +92,7 @@ export type BackendCommentListEnvelope = {
   comments: Comment[]
 }
 
-export type CommentPublishResponse = MessageResponse & {
+export type CommentPublishResponse = {
   comment: CommentReply | Comment
 }
 

@@ -15,6 +15,15 @@ type Config struct {
 	JWT      JWTConfig      `yaml:"jwt"`
 	Upload   UploadConfig   `yaml:"upload"`
 	Pprof    PprofConfig    `yaml:"pprof"`
+	Log      LogConfig      `yaml:"log"`
+}
+
+// LogConfig 控制日志输出。
+// Level 取 debug / info / warn / error，生产环境不应使用 debug；
+// Format 取 json / text，线上用 json 以便被采集系统直接解析。
+type LogConfig struct {
+	Level  string `yaml:"level"`
+	Format string `yaml:"format"`
 }
 
 type ServerConfig struct {
@@ -54,7 +63,8 @@ type JWTConfig struct {
 }
 
 type UploadConfig struct {
-	Dir string `yaml:"dir"`
+	Dir           string `yaml:"dir"`
+	MaxVideoBytes int64  `yaml:"max_video_bytes"`
 }
 
 type PprofConfig struct {
@@ -72,6 +82,9 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read config file: %w", err)
 	}
+
+	// 用环境变量展开配置内容，便于把 JWT 密钥等敏感项通过环境注入而不写进 Git。
+	data = []byte(os.Expand(string(data), os.Getenv))
 
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {

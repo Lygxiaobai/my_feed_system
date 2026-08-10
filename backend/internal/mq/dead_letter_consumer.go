@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"gorm.io/gorm"
@@ -73,15 +73,18 @@ func (c *DeadLetterConsumer) Run(ctx context.Context) error {
 			}
 
 			if err := c.store(d); err != nil {
-				log.Printf("dlq-consumer[%s]: store dead letter failed, keep message unacked: %v", c.queue, err)
+				slog.ErrorContext(ctx, "store dead letter failed, keeping message unacked",
+					slog.String("queue", c.queue), slog.String("error", err.Error()))
 				if nackErr := d.Nack(false, true); nackErr != nil {
-					log.Printf("dlq-consumer[%s]: nack requeue failed: %v", c.queue, nackErr)
+					slog.ErrorContext(ctx, "nack requeue failed",
+						slog.String("queue", c.queue), slog.String("error", nackErr.Error()))
 				}
 				continue
 			}
 
 			if err := d.Ack(false); err != nil {
-				log.Printf("dlq-consumer[%s]: ack failed: %v", c.queue, err)
+				slog.ErrorContext(ctx, "ack failed",
+					slog.String("queue", c.queue), slog.String("error", err.Error()))
 			}
 		}
 	}

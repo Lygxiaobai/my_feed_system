@@ -2,7 +2,7 @@ package jwt
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"my_feed_system/internal/account"
+	"my_feed_system/internal/response"
 )
 
 func JWTAuth(db *gorm.DB, secret string) gin.HandlerFunc {
@@ -23,8 +24,7 @@ func JWTAuthWithTokenCache(db *gorm.DB, tokenCache *account.TokenCache, secret s
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if !strings.HasPrefix(authHeader, "Bearer ") {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "missing bearer token"})
-			c.Abort()
+			response.Abort(c, http.StatusUnauthorized, response.LoginRequired, nil)
 			return
 		}
 
@@ -36,22 +36,19 @@ func JWTAuthWithTokenCache(db *gorm.DB, tokenCache *account.TokenCache, secret s
 			return []byte(secret), nil
 		})
 		if err != nil || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid token"})
-			c.Abort()
+			response.Abort(c, http.StatusUnauthorized, response.LoginExpired, err)
 			return
 		}
 
 		claims, ok := token.Claims.(jwtv5.MapClaims)
 		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid token claims"})
-			c.Abort()
+			response.Abort(c, http.StatusUnauthorized, response.LoginExpired, nil)
 			return
 		}
 
 		accountIDValue, ok := claims["account_id"].(float64)
 		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid token payload"})
-			c.Abort()
+			response.Abort(c, http.StatusUnauthorized, response.LoginExpired, nil)
 			return
 		}
 
@@ -64,19 +61,19 @@ func JWTAuthWithTokenCache(db *gorm.DB, tokenCache *account.TokenCache, secret s
 			cachedToken, ok, err := tokenCache.Get(ctx, accountID)
 			cancel()
 			if err != nil {
-				log.Printf("jwt auth: read token cache failed for account %d: %v", accountID, err)
+				// 缓存不可用时降级回源 MySQL，不影响本次鉴权结果，故记 warn 而非 error。
+				slog.WarnContext(c.Request.Context(), "read token cache failed, falling back to database",
+					slog.Uint64("account_id", accountID), slog.String("error", err.Error()))
 			} else if ok {
 				if cachedToken != tokenString {
-					c.JSON(http.StatusUnauthorized, gin.H{"message": "token expired"})
-					c.Abort()
+					response.Abort(c, http.StatusUnauthorized, response.LoginExpired, nil)
 					return
 				}
 
 				if username == "" {
 					currentAccount, err := repo.FindByID(accountID)
 					if err != nil || currentAccount == nil {
-						c.JSON(http.StatusUnauthorized, gin.H{"message": "account not found"})
-						c.Abort()
+						response.Abort(c, http.StatusUnauthorized, response.AccountNotFound, err)
 						return
 					}
 					username = currentAccount.Username
@@ -91,21 +88,20 @@ func JWTAuthWithTokenCache(db *gorm.DB, tokenCache *account.TokenCache, secret s
 
 		currentAccount, err := repo.FindByID(accountID)
 		if err != nil || currentAccount == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "account not found"})
-			c.Abort()
+			response.Abort(c, http.StatusUnauthorized, response.AccountNotFound, err)
 			return
 		}
 
 		if currentAccount.Token != tokenString {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "token expired"})
-			c.Abort()
+			response.Abort(c, http.StatusUnauthorized, response.LoginExpired, nil)
 			return
 		}
 
 		if tokenCache != nil {
 			ctx, cancel := context.WithTimeout(c.Request.Context(), time.Second)
 			if err := tokenCache.Set(ctx, accountID, tokenString); err != nil {
-				log.Printf("jwt auth: refill token cache failed for account %d: %v", accountID, err)
+				slog.WarnContext(c.Request.Context(), "refill token cache failed",
+					slog.Uint64("account_id", accountID), slog.String("error", err.Error()))
 			}
 			cancel()
 		}

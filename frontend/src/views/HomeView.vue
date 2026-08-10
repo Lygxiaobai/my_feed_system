@@ -221,7 +221,6 @@ function toggleMute() {
     // 某些隐私模式会禁用 localStorage，静音功能本身仍需正常工作。
   }
   for (const player of playerMap.values()) player.setMuted(muted.value)
-  toast.info(muted.value ? '已静音' : '已取消静音')
 }
 
 function togglePlayPause() {
@@ -756,17 +755,6 @@ onBeforeUnmount(() => {
                 <span class="count">分享</span>
               </button>
             </div>
-
-            <div class="hint">
-              <span class="chip mono desktop-hint">↑ ↓ 切换</span>
-              <span class="chip mono desktop-hint">空格 暂停</span>
-              <span class="chip mono desktop-hint">M 静音</span>
-              <span class="chip mono desktop-hint">C 评论</span>
-              <span class="chip mono mobile-hint">上滑切换</span>
-              <span class="chip mono mobile-hint">点按暂停</span>
-              <span v-if="canInteractWithLike" class="chip mono">双击 点赞</span>
-              <span v-else class="chip mono">登录后可点赞/关注</span>
-            </div>
           </div>
         </section>
       </div>
@@ -1029,20 +1017,6 @@ onBeforeUnmount(() => {
   color: rgba(255, 255, 255, 0.8);
 }
 
-.hint {
-  position: absolute;
-  left: 14px;
-  top: 14px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  pointer-events: none;
-}
-
-.mobile-hint {
-  display: none;
-}
-
 .chip {
   display: inline-flex;
   align-items: center;
@@ -1275,20 +1249,6 @@ onBeforeUnmount(() => {
 
   .icon {
     font-size: 22px;
-  }
-
-  .hint {
-    left: 10px;
-    right: 10px;
-    top: 10px;
-  }
-
-  .desktop-hint {
-    display: none;
-  }
-
-  .mobile-hint {
-    display: inline-flex;
   }
 
   .drawer-backdrop {

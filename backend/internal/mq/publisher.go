@@ -105,6 +105,8 @@ func exchangeAndKey(eventType string) (exchange string, routingKey string, err e
 		return ExchangeVideoTimeline, eventType, nil
 	case EventTypeCacheInvalidated:
 		return ExchangeCacheInvalidated, "", nil
+	case EventTypeMediaTranscodeRequested:
+		return ExchangeMediaEvents, eventType, nil
 	default:
 		return "", "", fmt.Errorf("unknown event type: %s", eventType)
 	}

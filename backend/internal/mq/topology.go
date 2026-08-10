@@ -13,6 +13,7 @@ const (
 	ExchangePopularityEvents = "popularity.events"
 	ExchangeVideoTimeline    = "video.timeline.events"
 	ExchangeCacheInvalidated = "cache.invalidate.events"
+	ExchangeMediaEvents      = "media.events"
 )
 
 const (
@@ -21,6 +22,7 @@ const (
 	QueueSocialWrite      = "social.write.q"
 	QueuePopularityUpdate = "popularity.update.q"
 	QueueTimelineUpdate   = "timeline.update.q"
+	QueueMediaTranscode   = "media.transcode.q"
 )
 
 const (
@@ -45,6 +47,7 @@ const (
 	SocialDLX     = "social.events.dlx"
 	PopularityDLX = "popularity.events.dlx"
 	TimelineDLX   = "video.timeline.events.dlx"
+	MediaDLX      = "media.events.dlx"
 )
 
 type QueueSpec struct {
@@ -121,6 +124,17 @@ var queueSpecs = []QueueSpec{
 		DLRoutingKey: "timeline.write.failed",
 		BindingKeys: []string{
 			EventTypeVideoTimelinePush,
+		},
+	},
+	{
+		Exchange:     ExchangeMediaEvents,
+		ExchangeType: "topic",
+		Queue:        QueueMediaTranscode,
+		DLX:          MediaDLX,
+		DLQ:          QueueMediaTranscode + ".dlq",
+		DLRoutingKey: "media.transcode.failed",
+		BindingKeys: []string{
+			EventTypeMediaTranscodeRequested,
 		},
 	},
 }

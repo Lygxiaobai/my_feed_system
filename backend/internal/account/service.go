@@ -3,7 +3,7 @@ package account
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"time"
 
 	jwtv5 "github.com/golang-jwt/jwt/v5"
@@ -213,7 +213,7 @@ func (s *Service) writeTokenCache(accountID uint64, token string) {
 	defer cancel()
 
 	if err := s.tokenCache.Set(ctx, accountID, token); err != nil {
-		log.Printf("account service: write token cache failed for account %d: %v", accountID, err)
+		slog.Warn("write token cache failed", slog.Uint64("account_id", accountID), slog.String("error", err.Error()))
 	}
 }
 
@@ -226,6 +226,6 @@ func (s *Service) deleteTokenCache(accountID uint64) {
 	defer cancel()
 
 	if err := s.tokenCache.Delete(ctx, accountID); err != nil {
-		log.Printf("account service: delete token cache failed for account %d: %v", accountID, err)
+		slog.Warn("delete token cache failed", slog.Uint64("account_id", accountID), slog.String("error", err.Error()))
 	}
 }

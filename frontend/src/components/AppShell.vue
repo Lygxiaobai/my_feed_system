@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -15,7 +15,6 @@ const route = useRoute()
 
 const search = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const searchOpen = ref(false)
-const moreOpen = ref(false)
 
 watch(
   () => route.query.q,
@@ -27,7 +26,6 @@ watch(
 watch(
   () => route.fullPath,
   () => {
-    moreOpen.value = false
     searchOpen.value = false
   },
 )
@@ -48,11 +46,6 @@ const userLabel = computed(() => {
   return accountId ? `${username} #${accountId}` : username
 })
 
-const profileTo = computed(() => {
-  const id = auth.claims?.account_id
-  return id ? `/u/${id}` : '/account'
-})
-
 async function onSearch() {
   const q = search.value.trim()
   searchOpen.value = false
@@ -60,12 +53,10 @@ async function onSearch() {
 }
 
 async function goLogin() {
-  moreOpen.value = false
   await router.push('/account')
 }
 
 async function goSettings() {
-  moreOpen.value = false
   await router.push('/settings')
 }
 </script>
@@ -99,9 +90,7 @@ async function goSettings() {
 
     <div class="dy-main">
       <header class="dy-topbar">
-        <div class="dy-top-left desktop-only">
-          <div class="dy-tabs-hint">{{ route.name }}</div>
-        </div>
+        <div class="dy-top-left desktop-only" />
 
         <RouterLink class="dy-mobile-brand mobile-only" to="/">ShortVideo</RouterLink>
 
@@ -115,9 +104,6 @@ async function goSettings() {
             ⌕
           </button>
           <RouterLink class="dy-btn dy-btn-ghost desktop-only" to="/video">+ 发布视频</RouterLink>
-          <button class="dy-icon-btn mobile-only" type="button" aria-label="更多" @click="moreOpen = !moreOpen">
-            ⋯
-          </button>
         </div>
       </header>
 
@@ -130,22 +116,6 @@ async function goSettings() {
           @keydown.enter="onSearch"
         />
         <button class="dy-btn dy-btn-primary" type="button" @click="onSearch">搜索</button>
-      </div>
-
-      <div v-if="moreOpen" class="dy-more-backdrop mobile-only" @click.self="moreOpen = false">
-        <div class="dy-more-sheet">
-          <div class="dy-more-user">
-            <span class="dy-user-dot" :class="auth.isLoggedIn ? 'ok' : 'bad'" />
-            <span>{{ userLabel }}</span>
-          </div>
-          <RouterLink class="dy-more-link" to="/following" @click="moreOpen = false">关注流</RouterLink>
-          <RouterLink class="dy-more-link" to="/likes" @click="moreOpen = false">点赞榜</RouterLink>
-          <RouterLink class="dy-more-link" to="/hot" @click="moreOpen = false">热榜</RouterLink>
-          <RouterLink class="dy-more-link" to="/video" @click="moreOpen = false">发布视频</RouterLink>
-          <RouterLink class="dy-more-link" to="/account" @click="moreOpen = false">账号</RouterLink>
-          <RouterLink class="dy-more-link" to="/settings" @click="moreOpen = false">设置</RouterLink>
-          <button v-if="!auth.isLoggedIn" class="dy-btn dy-btn-primary" type="button" @click="goLogin">去登录</button>
-        </div>
       </div>
 
       <div class="dy-content" :class="props.full ? 'full' : 'padded'">
@@ -173,14 +143,10 @@ async function goSettings() {
         <span class="dy-tab-publish">+</span>
         <span>发布</span>
       </RouterLink>
-      <RouterLink class="dy-tab" :class="{ on: route.path.startsWith('/account') || route.path.startsWith('/u/') }" :to="profileTo">
+      <RouterLink class="dy-tab" :class="{ on: route.path.startsWith('/account') }" to="/account">
         <span class="dy-tab-icon">☺</span>
         <span>我的</span>
       </RouterLink>
-      <button class="dy-tab" type="button" :class="{ on: moreOpen }" @click="moreOpen = !moreOpen">
-        <span class="dy-tab-icon">⋯</span>
-        <span>更多</span>
-      </button>
     </nav>
 
     <Toaster />
@@ -344,13 +310,6 @@ async function goSettings() {
   z-index: 30;
 }
 
-.dy-tabs-hint {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-}
-
 .dy-search {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -417,49 +376,6 @@ async function goSettings() {
   flex-shrink: 0;
 }
 
-.dy-more-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 0 10px calc(var(--bottom-nav-h, 56px) + 8px);
-}
-
-.dy-more-sheet {
-  width: min(480px, 100%);
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(18, 18, 22, 0.96);
-  backdrop-filter: blur(18px);
-  padding: 12px;
-  display: grid;
-  gap: 8px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
-}
-
-.dy-more-user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 13px;
-}
-
-.dy-more-link {
-  padding: 12px 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  text-decoration: none;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 14px;
-}
-
 .dy-content {
   flex: 1;
   min-height: 0;
@@ -486,7 +402,7 @@ async function goSettings() {
   padding-bottom: var(--safe-bottom, 0px);
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: stretch;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(8, 8, 12, 0.92);
@@ -579,10 +495,6 @@ async function goSettings() {
 
   .dy-mobile-search.mobile-only {
     display: grid !important;
-  }
-
-  .dy-more-backdrop.mobile-only {
-    display: flex !important;
   }
 
   .dy-topbar {

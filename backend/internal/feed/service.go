@@ -2,7 +2,7 @@ package feed
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sort"
 	"time"
 
@@ -74,7 +74,7 @@ func (s *Service) ListLatest(req ListLatestRequest) (*ListLatestResult, error) {
 		// latest 页缓存先读版本号，后续所有 key 都带 version，避免全量删分页 key。
 		cacheVersion, err := s.latestCache.GetVersion(ctx)
 		if err != nil {
-			log.Printf("feed service: read latest cache version failed: %v", err)
+			slog.Warn("read latest cache version failed", slog.String("error", err.Error()))
 		} else if cacheVersion > 0 {
 			version = cacheVersion
 		}
@@ -97,7 +97,7 @@ func (s *Service) ListLatest(req ListLatestRequest) (*ListLatestResult, error) {
 		cachedResult, ok, err := s.latestCache.Get(ctx, version, req)
 		if err != nil {
 			observability.IncCacheL2Miss(observability.CacheFeedLatest)
-			log.Printf("feed service: read latest cache failed: %v", err)
+			slog.Warn("read latest cache failed", slog.String("error", err.Error()))
 		} else if ok {
 			observability.IncCacheL2Hit(observability.CacheFeedLatest)
 			if s.localLatestCache != nil {
@@ -115,7 +115,7 @@ func (s *Service) ListLatest(req ListLatestRequest) (*ListLatestResult, error) {
 		// 全局时间线命中时优先复用，减少直接扫 MySQL 的次数。
 		timelineResult, ok, err := s.listLatestFromTimeline(req)
 		if err != nil {
-			log.Printf("feed service: read global timeline failed: %v", err)
+			slog.Warn("read global timeline failed", slog.String("error", err.Error()))
 		} else if ok {
 			s.setLatestCaches(ctx, version, req, timelineResult)
 			observability.ObserveCacheLoadSeconds(observability.CacheFeedLatest, time.Since(startedAt).Seconds())
@@ -190,7 +190,7 @@ func (s *Service) listLatestFromTimeline(req ListLatestRequest) (*ListLatestResu
 	}
 	if len(staleIDs) > 0 {
 		if err := s.timelineStore.Remove(context.Background(), staleIDs...); err != nil {
-			log.Printf("feed service: cleanup stale global timeline members failed: %v", err)
+			slog.Warn("cleanup stale global timeline members failed", slog.String("error", err.Error()))
 		}
 	}
 	if len(candidates) == 0 {
@@ -302,7 +302,7 @@ func (s *Service) ListByPopularity(req ListByPopularityRequest) (*ListByPopulari
 		cachedResult, ok, err := s.hotCache.Get(ctx, req)
 		if err != nil {
 			observability.IncCacheL2Miss(observability.CacheFeedHot)
-			log.Printf("feed service: read hot cache failed: %v", err)
+			slog.Warn("read hot cache failed", slog.String("error", err.Error()))
 		} else if ok {
 			observability.IncCacheL2Hit(observability.CacheFeedHot)
 			if s.localHotCache != nil {
@@ -327,7 +327,7 @@ func (s *Service) ListByPopularity(req ListByPopularityRequest) (*ListByPopulari
 
 	videoIDs, scores, snapshotAsOf, err := s.popularity.ListHot(ctx, asOf, req.Limit+1, req.Offset)
 	if err != nil {
-		log.Printf("feed service: read popularity ranking failed, fallback to MySQL: %v", err)
+		slog.Warn("read popularity ranking failed, falling back to MySQL", slog.String("error", err.Error()))
 		return s.listByPersistedPopularity(ctx, req)
 	}
 	if len(videoIDs) == 0 {
@@ -414,7 +414,7 @@ func (s *Service) listByPersistedPopularity(ctx context.Context, req ListByPopul
 func (s *Service) setLatestCaches(ctx context.Context, version int64, req ListLatestRequest, result *ListLatestResult) {
 	if s.latestCache != nil {
 		if err := s.latestCache.Set(ctx, version, req, result); err != nil {
-			log.Printf("feed service: write latest cache failed: %v", err)
+			slog.Warn("write latest cache failed", slog.String("error", err.Error()))
 		}
 	}
 	if s.localLatestCache != nil {
@@ -425,7 +425,7 @@ func (s *Service) setLatestCaches(ctx context.Context, version int64, req ListLa
 func (s *Service) setHotCaches(ctx context.Context, req ListByPopularityRequest, result *ListByPopularityResult) {
 	if s.hotCache != nil {
 		if err := s.hotCache.Set(ctx, req, result); err != nil {
-			log.Printf("feed service: write hot cache failed: %v", err)
+			slog.Warn("write hot cache failed", slog.String("error", err.Error()))
 		}
 	}
 	if s.localHotCache != nil {

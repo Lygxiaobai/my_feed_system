@@ -6,6 +6,12 @@ code:
 related:
   - backend/internal/config/loadconfig.go
   - backend/internal/db/db.go
+  - backend/internal/db/gormlog.go
+  - backend/internal/logging/logging.go
+  - backend/internal/response/code.go
+  - backend/internal/response/response.go
+  - backend/internal/middleware/accesslog/accesslog.go
+  - backend/internal/middleware/requestid/requestid.go
   - backend/internal/mq/connection.go
   - backend/internal/observability/metrics.go
   - backend/internal/observability/pprof.go
@@ -17,3 +23,7 @@ The backend exposes one HTTP API surface with public and authenticated routes, p
 
 ## expanded spec
 Routes, middleware, database initialization, broker connections, metrics, and pprof are assembled without making the Worker depend on the API process. Configuration errors fail loudly at startup. Runtime changes must preserve the public API contract and the separation between synchronous requests and asynchronous work.
+
+The response envelope and the failure-code vocabulary have a single owner; handlers select a code and a user-facing message and never assemble a response body themselves. The writing path accepts the underlying error only as a logging input, so no call site is able to place internal error text in a response.
+
+Logging has one owner as well: severity thresholds, output shape, redaction, and request-identifier propagation are configured once for both processes and are not re-implemented per package. Library loggers that would otherwise write in their own format are adapted into it rather than left to write directly. The framework's own request logger is replaced so that request outcome, latency, and route become fields rather than a preformatted line. Severity level and output shape are configurable without a rebuild, and the deployment bounds retained log volume so that an unattended process cannot exhaust disk.

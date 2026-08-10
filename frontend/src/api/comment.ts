@@ -1,5 +1,5 @@
 ﻿import { postJson } from './client'
-import type { BackendCommentListEnvelope, Comment, CommentPublishResponse, MessageResponse } from './types'
+import type { BackendCommentListEnvelope, Comment, CommentPublishResponse } from './types'
 
 export async function listAll(videoId: number) {
   const res = await postJson<BackendCommentListEnvelope>('/comment/listAll', { video_id: videoId })
@@ -19,5 +19,5 @@ export function publish(videoId: number, content: string, parentCommentId?: numb
 }
 
 export function remove(commentId: number) {
-  return postJson<MessageResponse>('/comment/delete', { comment_id: commentId }, { authRequired: true })
+  return postJson<null>('/comment/delete', { comment_id: commentId }, { authRequired: true })
 }

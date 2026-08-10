@@ -3,7 +3,7 @@ package ratelimit
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"net/http"
 	"strconv"
@@ -11,10 +11,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+
+	"my_feed_system/internal/response"
 )
 
 const (
-	defaultMessage = "too many requests"
+	defaultMessage = "操作过于频繁，请稍后再试"
 	defaultTimeout = 200 * time.Millisecond
 )
 
@@ -145,14 +147,13 @@ func newMiddleware(checker Checker, policy Policy, resolveSubject func(c *gin.Co
 		if err != nil {
 			if policy.FailOpen {
 				// Redis 异常时默认降级放行，避免限流组件故障拖垮主业务链路。
-				log.Printf("ratelimit bypassed: scope=%s subject=%s err=%v", policy.Name, subject, err)
+				slog.WarnContext(c.Request.Context(), "rate limit bypassed due to checker failure",
+					slog.String("scope", policy.Name), slog.String("error", err.Error()))
 				c.Next()
 				return
 			}
 
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
-				"message": "rate limit unavailable",
-			})
+			response.Abort(c, http.StatusServiceUnavailable, response.CacheError, err)
 			return
 		}
 
@@ -167,9 +168,8 @@ func newMiddleware(checker Checker, policy Policy, resolveSubject func(c *gin.Co
 			retryAfterSeconds = 1
 		}
 		c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
-		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-			"message": policy.Message,
-		})
+		response.FailTip(c, http.StatusTooManyRequests, response.RateLimited, policy.Message, nil)
+		c.Abort()
 	}
 }
 

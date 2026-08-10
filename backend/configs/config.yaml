@@ -28,6 +28,7 @@ jwt:
 
 upload:
   dir: .run/uploads
+  max_video_bytes: 268435456
 
 pprof:
   api:
@@ -36,3 +37,7 @@ pprof:
   worker:
     enabled: true
     addr: 127.0.0.1:6061
+
+log:
+  level: info
+  format: json

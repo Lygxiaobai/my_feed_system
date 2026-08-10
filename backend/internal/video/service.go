@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -210,7 +210,7 @@ func (s *Service) GetDetail(req GetDetailRequest) (*Video, error) {
 
 	// 先在 singleflight 之外查一次缓存，让已经命中的请求直接返回，避免不必要地进入合并逻辑。
 	if cachedVideo, ok, notFound, err := s.getDetailFromCaches(ctx, req.ID, true); err != nil {
-		log.Printf("video service: read detail cache failed for video %d: %v", req.ID, err)
+		slog.Warn("read detail cache failed", slog.Uint64("video_id", req.ID), slog.String("error", err.Error()))
 	} else if ok {
 		if notFound {
 			return nil, ErrVideoNotFound
@@ -433,7 +433,7 @@ func (s *Service) getDetailFromCaches(ctx context.Context, videoID uint64, recor
 func (s *Service) setDetailCaches(videoID uint64, payload []byte) {
 	if s.detailCache != nil {
 		if err := s.detailCache.SetRaw(context.Background(), videoID, payload); err != nil {
-			log.Printf("video service: write detail cache failed for video %d: %v", videoID, err)
+			slog.Warn("write detail cache failed", slog.Uint64("video_id", videoID), slog.String("error", err.Error()))
 		}
 	}
 	if s.localDetail != nil {
@@ -444,7 +444,7 @@ func (s *Service) setDetailCaches(videoID uint64, payload []byte) {
 func (s *Service) setDetailNotFound(videoID uint64) {
 	if s.detailCache != nil {
 		if err := s.detailCache.SetNotFound(context.Background(), videoID); err != nil {
-			log.Printf("video service: write detail not-found cache failed for video %d: %v", videoID, err)
+			slog.Warn("write detail not-found cache failed", slog.Uint64("video_id", videoID), slog.String("error", err.Error()))
 		}
 	}
 	if s.localDetail != nil {
@@ -458,7 +458,7 @@ func (s *Service) invalidateDetailCache(videoID uint64) {
 
 	if s.detailCache != nil {
 		if err := s.detailCache.Delete(ctx, videoID); err != nil {
-			log.Printf("video service: delete detail cache failed for video %d: %v", videoID, err)
+			slog.Warn("delete detail cache failed", slog.Uint64("video_id", videoID), slog.String("error", err.Error()))
 		} else {
 			observability.IncCacheInvalidation(observability.CacheVideoDetail, "l2", "write")
 		}
@@ -468,7 +468,7 @@ func (s *Service) invalidateDetailCache(videoID uint64) {
 			Cache:   mq.CacheNameVideoDetail,
 			VideoID: videoID,
 		}); err != nil {
-			log.Printf("video service: publish detail invalidation failed for video %d: %v", videoID, err)
+			slog.Warn("publish detail invalidation failed", slog.Uint64("video_id", videoID), slog.String("error", err.Error()))
 		}
 	}
 }

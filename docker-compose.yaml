@@ -1,10 +1,15 @@
 services:
   mysql:
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     image: mysql:8.4
     container_name: my-feed-system-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
       MYSQL_DATABASE: my_feed_system
       TZ: Asia/Shanghai
     command:
@@ -14,13 +19,18 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p123456 --silent"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD} --silent"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 20s
 
   redis:
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     image: redis:7.4-alpine
     container_name: my-feed-system-redis
     restart: unless-stopped
@@ -34,12 +44,17 @@ services:
       retries: 10
 
   rabbitmq:
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     image: rabbitmq:3.13-management
     container_name: my-feed-system-rabbitmq
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: password123
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
       TZ: Asia/Shanghai
     ports:
       - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
@@ -53,11 +68,24 @@ services:
       start_period: 20s
 
   backend:
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     build:
       context: ./backend
       dockerfile: Dockerfile
+      network: host
     image: my-feed-system-backend:latest
     container_name: my-feed-system-backend
+    environment:
+      GIN_MODE: release
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
     restart: unless-stopped
     depends_on:
       mysql:
@@ -79,8 +107,20 @@ services:
       start_period: 20s
 
   worker:
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     image: my-feed-system-backend:latest
     container_name: my-feed-system-worker
+    environment:
+      GIN_MODE: release
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
     restart: unless-stopped
     command: ["/app/worker"]
     depends_on:
@@ -97,6 +137,11 @@ services:
       - uploads_data:/app/.run/uploads
 
   frontend:
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     build:
       context: .
       dockerfile: frontend/Dockerfile

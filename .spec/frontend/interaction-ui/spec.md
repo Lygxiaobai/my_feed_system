@@ -21,4 +21,6 @@ The web application exposes like, comment, follow, and unfollow actions from fee
 ## expanded spec
 Repeated actions remain understandable and do not produce contradictory local state. Loading, success, and failure feedback is visible at the action's surface, and a successful mutation updates the relevant video or profile view.
 
-Like mutations remain pending until the visible state is confirmed by the server. Comment requests are applied only when their response still belongs to the open video, and comment loading, refresh, submit, and delete states do not incorrectly block one another.
+Like mutations remain pending until the API's transactional response succeeds; the UI does not wait for asynchronous popularity projection. Comment requests are applied only when their response still belongs to the open video, and comment loading, refresh, submit, and delete states do not incorrectly block one another.
+
+Feedback is reserved for outcomes the user cannot otherwise observe. A control whose own label already reflects the resulting state does not additionally raise a transient message. Playback surfaces carry no persistent instructional overlay describing available gestures or keyboard shortcuts; those inputs remain supported but are not advertised on top of the video.

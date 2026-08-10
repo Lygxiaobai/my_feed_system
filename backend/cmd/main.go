@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +20,7 @@ import (
 	"my_feed_system/internal/db"
 	"my_feed_system/internal/feed"
 	httpserver "my_feed_system/internal/http"
+	"my_feed_system/internal/logging"
 	"my_feed_system/internal/mq"
 	"my_feed_system/internal/observability"
 	"my_feed_system/internal/outbox"
@@ -29,28 +30,45 @@ import (
 
 const serverShutdownTimeout = 5 * time.Second
 
+// fatal 记录致命错误后退出。
+// slog 刻意没有提供 Fatal 级别；启动期依赖不可用时必须让进程立即退出，
+// 由编排层重启，因此这里显式 os.Exit(1)。
+func fatal(msg string, err error) {
+	slog.Error(msg, slog.String("error", err.Error()))
+	os.Exit(1)
+}
+
 func main() {
+	// 先用环境变量把日志跑起来，保证「配置加载失败」本身也有结构化日志可查。
+	logging.Setup(os.Getenv("LOG_LEVEL"), os.Getenv("LOG_FORMAT"), "api")
+
 	cfg, err := config.Load("configs/config.yaml")
 	if err != nil {
-		log.Fatalf("load config failed: %v", err)
+		fatal("load config failed", err)
 	}
+	// 配置就绪后按配置重建；环境变量优先，便于线上临时调整级别而不改配置文件。
+	logging.Setup(
+		firstNonEmpty(os.Getenv("LOG_LEVEL"), cfg.Log.Level),
+		firstNonEmpty(os.Getenv("LOG_FORMAT"), cfg.Log.Format),
+		"api",
+	)
 
 	database, err := db.NewMySQL(cfg.Database)
 	if err != nil {
-		log.Fatalf("connect mysql failed: %v", err)
+		fatal("connect mysql failed", err)
 	}
 
 	var redisClient *redis.Client
 	redisClient, err = db.NewRedis(cfg.Redis)
 	if err != nil {
-		log.Printf("connect redis failed, fallback to MySQL-only mode: %v", err)
+		slog.Warn("redis unavailable, falling back to MySQL-only mode", slog.String("error", err.Error()))
 	} else {
 		defer func() {
 			if closeErr := redisClient.Close(); closeErr != nil {
-				log.Printf("close redis failed: %v", closeErr)
+				slog.Warn("close redis failed", slog.String("error", closeErr.Error()))
 			}
 		}()
-		log.Printf("redis connected: %s:%d", cfg.Redis.Host, cfg.Redis.Port)
+		slog.Info("redis connected", slog.String("host", cfg.Redis.Host), slog.Int("port", cfg.Redis.Port))
 	}
 
 	var popularityService *popularity.Service
@@ -66,7 +84,7 @@ func main() {
 	//视频详细缓存
 	localDetailStore, err := cachex.NewBytesCache(observability.CacheVideoDetail, 32<<20)
 	if err != nil {
-		log.Fatalf("create local detail cache failed: %v", err)
+		fatal("create local detail cache failed", err)
 	}
 	defer localDetailStore.Close()
 	localDetailCache := video.NewLocalDetailCache(localDetailStore)
@@ -75,7 +93,7 @@ func main() {
 	// latest/hot 页只缓存热点结果，容量可以明显小于 detail L1。
 	localLatestStore, err := cachex.NewBytesCache(observability.CacheFeedLatest, 16<<20)
 	if err != nil {
-		log.Fatalf("create local latest feed cache failed: %v", err)
+		fatal("create local latest feed cache failed", err)
 	}
 	defer localLatestStore.Close()
 	localLatestCache := feed.NewLocalLatestPageCache(localLatestStore)
@@ -83,22 +101,24 @@ func main() {
 	//热榜视频页缓存
 	localHotStore, err := cachex.NewBytesCache(observability.CacheFeedHot, 16<<20)
 	if err != nil {
-		log.Fatalf("create local hot feed cache failed: %v", err)
+		fatal("create local hot feed cache failed", err)
 	}
 	defer localHotStore.Close()
 	localHotCache := feed.NewLocalHotPageCache(localHotStore)
 
 	var rabbitConn *amqp.Connection
 	if conn, err := mq.Dial(cfg.RabbitMQ); err != nil {
-		log.Printf("connect rabbitmq failed, API will continue in degraded mode and outbox will retry later: %v", err)
+		slog.Warn("rabbitmq unavailable, running in degraded mode and outbox will retry later",
+			slog.String("error", err.Error()))
 	} else {
 		rabbitConn = conn
 		if err := mq.DeclareTopology(rabbitConn); err != nil {
-			log.Printf("declare rabbitmq topology failed, outbox will retry later: %v", err)
+			slog.Warn("declare rabbitmq topology failed, outbox will retry later",
+				slog.String("error", err.Error()))
 		}
 		defer func() {
 			if closeErr := rabbitConn.Close(); closeErr != nil {
-				log.Printf("close rabbitmq failed: %v", closeErr)
+				slog.Warn("close rabbitmq failed", slog.String("error", closeErr.Error()))
 			}
 		}()
 	}
@@ -107,7 +127,7 @@ func main() {
 	defer stop()
 
 	if err := observability.StartPprof(ctx, "api", cfg.Pprof.API); err != nil {
-		log.Fatalf("start api pprof failed: %v", err)
+		fatal("start api pprof failed", err)
 	}
 
 	publisher := mq.NewResilientPublisher(cfg.RabbitMQ)
@@ -124,6 +144,7 @@ func main() {
 		localHotCache,
 		cfg.JWT.Secret,
 		cfg.Upload.Dir,
+		cfg.Upload.MaxVideoBytes,
 	)
 	if rabbitConn != nil {
 		//L1缓存失效的处理
@@ -135,7 +156,8 @@ func main() {
 		}
 		go func() {
 			tag := fmt.Sprintf("%s-cache-invalidator", consumerTagPrefix)
-			log.Printf("cache invalidation consumer started: exchange=%s tag=%s", mq.ExchangeCacheInvalidated, tag)
+			slog.Info("cache invalidation consumer started",
+				slog.String("exchange", mq.ExchangeCacheInvalidated), slog.String("tag", tag))
 			handle := func(ctx context.Context, event mq.Envelope) error {
 				// 同一个 fanout 通道上按 cache name 分发到各自的本地失效处理器。
 				if err := detailInvalidationConsumer.Handle(ctx, event); err != nil {
@@ -145,7 +167,7 @@ func main() {
 			}
 			//消费广播消息
 			if err := mq.ConsumeEphemeralFanout(ctx, rabbitConn, mq.ExchangeCacheInvalidated, tag, cfg.RabbitMQ.PrefetchCount, handle); err != nil && ctx.Err() == nil {
-				log.Printf("cache invalidation consumer stopped: %v", err)
+				slog.Error("cache invalidation consumer stopped", slog.String("error", err.Error()))
 			}
 		}()
 	}
@@ -159,7 +181,7 @@ func main() {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("server started at %s", addr)
+		slog.Info("server started", slog.String("addr", addr))
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- fmt.Errorf("run server failed: %w", err)
 		}
@@ -167,9 +189,9 @@ func main() {
 
 	select {
 	case <-ctx.Done():
-		log.Printf("server shutting down")
+		slog.Info("server shutting down")
 	case err := <-errCh:
-		log.Printf("%v", err)
+		slog.Error("server stopped unexpectedly", slog.String("error", err.Error()))
 		stop()
 	}
 
@@ -177,6 +199,16 @@ func main() {
 	defer cancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("shutdown server failed: %v", err)
+		fatal("shutdown server failed", err)
 	}
+}
+
+// firstNonEmpty 返回第一个非空字符串，用于实现「环境变量优先于配置文件」。
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }

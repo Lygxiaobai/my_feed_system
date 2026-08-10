@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"my_feed_system/internal/observability"
 )
 
 // Options 控制访问日志行为。
@@ -42,6 +44,12 @@ func New(options Options) gin.HandlerFunc {
 		latency := time.Since(start)
 
 		status := c.Writer.Status()
+		route := routeOf(c)
+
+		// 指标与日志共用同一份现成数据。放在这里而不是单独的中间件，
+		// 是为了保证「记了日志的请求一定也计入指标」，两者不会各自漏统计。
+		observability.ObserveHTTPRequest(c.Request.Method, route, status, latency.Seconds())
+
 		level := levelFor(status, latency, options.SlowThreshold)
 
 		ctx := c.Request.Context()
@@ -53,7 +61,7 @@ func New(options Options) gin.HandlerFunc {
 		// 访问日志是每请求必走的热路径，值得如此。
 		attrs := []slog.Attr{
 			slog.String("method", c.Request.Method),
-			slog.String("route", routeOf(c)),
+			slog.String("route", route),
 			slog.Int("status", status),
 			slog.Int64("latency_ms", latency.Milliseconds()),
 			slog.String("client_ip", c.ClientIP()),

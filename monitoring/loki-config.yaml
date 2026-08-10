@@ -1,0 +1,63 @@
+# Loki 单体模式配置，适合单机小规模部署。
+# 存储用本地文件系统而非对象存储：这台机器只有一个 Loki 实例，
+# 引入 MinIO 之类的对象存储只会白白多占内存。
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  # 单机部署不需要冗长的启动日志
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  tsdb_shipper:
+    active_index_directory: /loki/tsdb-index
+    cache_location: /loki/tsdb-cache
+  filesystem:
+    directory: /loki/chunks
+
+limits_config:
+  # 允许接收轻微乱序的日志，容器重启时时间戳可能回跳
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  # 单机小流量，放宽突发限制避免正常日志被丢弃
+  ingestion_rate_mb: 8
+  ingestion_burst_size_mb: 16
+  max_query_series: 5000
+  # 保留 7 天：这台机器只有 20GB 可用磁盘，超过这个窗口的排查需求
+  # 应该依赖指标而不是原始日志
+  retention_period: 168h
+
+compactor:
+  working_directory: /loki/compactor
+  delete_request_store: filesystem
+  # 只有开启 retention_enabled，上面的 retention_period 才会真正生效
+  retention_enabled: true
+  retention_delete_delay: 2h
+  compaction_interval: 10m
+
+# 单机部署没有多副本，关闭结构化元数据以外的分析上报
+analytics:
+  reporting_enabled: false

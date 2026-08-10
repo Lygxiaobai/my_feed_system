@@ -1,0 +1,65 @@
+// Grafana Alloy 采集配置。
+//
+// 选用 Alloy 而非 Promtail：官方文档明确 Promtail 已于 2026-03-02 EOL，
+// 不再有任何更新，全部后续开发转移到 Alloy。
+//
+// 采集方式是通过 Docker socket 读取容器日志，而不是替换 Docker 的 logging driver。
+// 这样 `docker logs` 仍然可用——排查时不必依赖 Grafana 可达，多一条独立退路。
+
+// 发现本机所有容器。
+discovery.docker "containers" {
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "30s"
+}
+
+// 把 Docker 元数据整理成查询时好用的标签。
+// 只保留低基数标签：容器名与 compose 服务名。
+// request_id 这类高基数字段绝不能做标签，否则 Loki 索引会爆炸；
+// 它留在日志正文里，用 LogQL 的行过滤即可检索。
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service"
+	}
+}
+
+loki.source.docker "containers" {
+	host       = "unix:///var/run/docker.sock"
+	targets    = discovery.relabel.containers.output
+	labels     = {job = "docker"}
+	forward_to = [loki.process.app_logs.receiver]
+}
+
+loki.process "app_logs" {
+	// backend 与 worker 输出结构化 JSON，把 level 提升为标签，
+	// 这样在 Grafana 里可以直接按级别筛选而不必全文扫描。
+	// 其他容器（MySQL/RabbitMQ 等）不是 JSON，解析失败时该阶段静默跳过，
+	// 日志本身仍会照常入库。
+	stage.json {
+		expressions = {
+			level = "level",
+		}
+	}
+
+	stage.labels {
+		values = {
+			level = "",
+		}
+	}
+
+	forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}

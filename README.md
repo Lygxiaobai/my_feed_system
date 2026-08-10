@@ -143,6 +143,33 @@ npm run dev
 
 前端开发服务器默认运行在 `127.0.0.1:5173`，通过 Vite 代理访问本地 API。后端默认开发端口为 `127.0.0.1:8081`，代理规则见 [`frontend/vite.config.ts`](./frontend/vite.config.ts)。
 
+## 可观测性
+
+Compose 会一并启动 Prometheus、Loki、Grafana Alloy 和 Grafana。四者**只监听 `127.0.0.1`**，不对外开放端口，通过 SSH 隧道访问：
+
+```bash
+ssh -L 3000:127.0.0.1:3000 <your-server>
+# 然后浏览器打开 http://localhost:3000
+```
+
+登录账号来自 `.env` 的 `GRAFANA_USER` / `GRAFANA_PASSWORD`。数据源与「Feed 系统总览」仪表盘会自动装配，无需手工配置。
+
+| 组件 | 作用 | 保留期 |
+| --- | --- | --- |
+| Prometheus | 抓取 API 的 RED 指标与缓存指标 | 15 天 / 2 GB |
+| Loki | 汇总全部容器日志，按 `service`、`level` 建索引 | 7 天 |
+| Grafana Alloy | 从 Docker socket 采集日志推送到 Loki | — |
+| Grafana | 仪表盘与日志检索 | — |
+
+采集端用 Alloy 而非 Promtail：后者已于 2026-03-02 EOL。日志经 Docker socket 读取，不替换 logging driver，因此 `docker logs` 仍可正常使用。
+
+排查线上问题的常用入口：
+
+- **按请求追踪**：拿用户报错里的 `requestId`，在 Grafana 的 Loki 面板执行
+  `{service=~"backend|worker"} |= "<requestId>"`
+- **只看错误**：`{service=~"backend|worker", level=~"ERROR|WARN"}`
+- **不开 Grafana 时**：`docker logs my-feed-system-backend 2>&1 | grep '"level":"ERROR"'`
+
 ## 配置与部署边界
 
 - Compose 使用 [`backend/configs/config.docker.yaml`](./backend/configs/config.docker.yaml) 作为容器配置模板。

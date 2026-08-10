@@ -119,7 +119,7 @@ func (h *Handler) ListByAuthorID(c *gin.Context) {
 		return
 	}
 
-	videos, err := h.service.ListByAuthorID(req)
+	videos, err := h.service.ListByAuthorID(c.GetUint64("account_id"), req)
 	if err != nil {
 		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 		return
@@ -145,7 +145,7 @@ func (h *Handler) GetDetail(c *gin.Context) {
 		return
 	}
 
-	video, err := h.service.GetDetail(req)
+	video, err := h.service.GetDetail(c.GetUint64("account_id"), req)
 	if err != nil {
 		if errors.Is(err, ErrVideoNotFound) {
 			response.FailTip(c, http.StatusNotFound, response.ResourceNotFound, "视频不存在或已被删除", err)

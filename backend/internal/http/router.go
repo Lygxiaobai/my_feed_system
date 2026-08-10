@@ -1,6 +1,7 @@
 package http
 
 import (
+	"log/slog"
 	"path/filepath"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 	"gorm.io/gorm"
 
 	"my_feed_system/internal/account"
+	"my_feed_system/internal/audit"
+	"my_feed_system/internal/config"
 	"my_feed_system/internal/comment"
 	"my_feed_system/internal/feed"
 	"my_feed_system/internal/like"
@@ -33,7 +36,7 @@ func NewRouter(
 	jwtSecret string,
 	uploadDir string,
 ) *gin.Engine {
-	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir, 0)
+	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir, 0, config.AuditConfig{})
 }
 
 func NewRouterWithLocalCaches(
@@ -47,6 +50,7 @@ func NewRouterWithLocalCaches(
 	jwtSecret string,
 	uploadDir string,
 	maxVideoBytes int64,
+	auditCfg config.AuditConfig,
 ) *gin.Engine {
 	// 不用 gin.Default()：它固定绑定 gin.Logger()，而后者只能输出拼好的文本行，
 	// 无法交给 slog 分级和结构化。这里自行组装等价的中间件链。
@@ -184,11 +188,26 @@ func NewRouterWithLocalCaches(
 		uploadDir,
 	), uploadDir, media.NewService(db, uploadDir, maxVideoBytes))
 	videoGroup := r.Group("/video")
+	// 公开路由挂可选鉴权：作者本人需要能看到自己尚未过审的内容，
+	// 匿名访问则只看得到已过审的。
+	videoGroup.Use(jwtmiddleware.OptionalJWTAuth(jwtSecret))
 	videoHandler.RegisterRoutes(videoGroup)
 
 	protectedVideoGroup := videoGroup.Group("")
 	protectedVideoGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	videoHandler.RegisterProtectedRoutes(protectedVideoGroup)
+
+	auditService := audit.NewService(
+		db,
+		video.NewAuditStore(db),
+		buildModerator(auditCfg),
+		video.NewApprovalPublisher(db),
+		auditCfg.ReviewerAccountIDs,
+	)
+	auditHandler := audit.NewHandler(auditService)
+	auditGroup := r.Group("/audit")
+	auditGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
+	auditHandler.RegisterProtectedRoutes(auditGroup)
 
 	likeHandler := like.NewHandler(like.NewServiceWithCachesAndPublisher(db, popularityService, detailCache, localDetailCache, publisher))
 	likeGroup := r.Group("/like")
@@ -236,4 +255,28 @@ func NewRouterWithLocalCaches(
 	feedHandler.RegisterProtectedRoutes(protectedFeedGroup)
 
 	return r
+}
+
+// buildModerator 按配置装配审核实现。
+//
+// 当前只有本地词库；日后接入云厂商时在这里替换或用装饰器串联即可，
+// 业务侧的状态机、流水与查询过滤都不需要改动。
+func buildModerator(cfg config.AuditConfig) audit.Moderator {
+	blockWords, err := audit.LoadWordFile(cfg.BlockWordFile)
+	if err != nil {
+		slog.Warn("load block word file failed, continuing without it",
+			slog.String("path", cfg.BlockWordFile), slog.String("error", err.Error()))
+	}
+	reviewWords, err := audit.LoadWordFile(cfg.ReviewWordFile)
+	if err != nil {
+		slog.Warn("load review word file failed, continuing without it",
+			slog.String("path", cfg.ReviewWordFile), slog.String("error", err.Error()))
+	}
+
+	slog.Info("content moderator ready",
+		slog.Int("block_words", len(blockWords)),
+		slog.Int("review_words", len(reviewWords)),
+		slog.String("media_policy", cfg.MediaPolicy))
+
+	return audit.NewKeywordModerator(blockWords, reviewWords, audit.MediaPolicy(cfg.MediaPolicy))
 }

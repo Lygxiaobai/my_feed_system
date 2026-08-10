@@ -5,6 +5,9 @@ export type Account = {
   username: string
 }
 
+/** 内容审核状态，与后端 audit.Status 一致。 */
+export type AuditStatus = 'pending' | 'reviewing' | 'approved' | 'rejected'
+
 export type Video = {
   id: number
   author_id: number
@@ -16,6 +19,8 @@ export type Video = {
   created_at: string
   likes_count: number
   comment_count: number
+  /** 仅作者本人查看自己的作品时才会看到非 approved 的值。 */
+  audit_status?: AuditStatus
 }
 
 export type CommentReply = {

@@ -145,6 +145,7 @@ func main() {
 		cfg.JWT.Secret,
 		cfg.Upload.Dir,
 		cfg.Upload.MaxVideoBytes,
+		cfg.Audit,
 	)
 	if rabbitConn != nil {
 		//L1缓存失效的处理

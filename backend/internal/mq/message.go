@@ -28,6 +28,7 @@ const (
 	EventTypeVideoTimelinePush       = "video.timeline.publish"
 	EventTypeCacheInvalidated        = "cache.invalidated"
 	EventTypeMediaTranscodeRequested = "media.transcode.requested"
+	EventTypeAuditRequested          = "audit.requested"
 )
 
 const (
@@ -83,6 +84,14 @@ type LikePayload struct {
 type MediaTranscodePayload struct {
 	TaskID    uint64 `json:"task_id"`
 	AccountID uint64 `json:"account_id"`
+}
+
+// AuditRequestedPayload 触发一次内容审核。
+// 只带 ID 不带内容本身：内容以数据库为准，避免事件重投时用到过期快照。
+type AuditRequestedPayload struct {
+	TargetType string `json:"target_type"`
+	TargetID   uint64 `json:"target_id"`
+	AuthorID   uint64 `json:"author_id"`
 }
 
 type CommentCreatedPayload struct {

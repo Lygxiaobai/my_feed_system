@@ -6,7 +6,7 @@ import AppShell from '../components/AppShell.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { ApiError } from '../api/client'
 import * as accountApi from '../api/account'
-import type { SocialRelation, Video } from '../api/types'
+import type { AuditStatus, SocialRelation, Video } from '../api/types'
 import * as videoApi from '../api/video'
 import { useAuthStore } from '../stores/auth'
 import { useSocialStore } from '../stores/social'
@@ -108,6 +108,27 @@ async function loadLikedVideos() {
 
 async function goVideo(id: number) {
   await router.push(`/video/${id}`)
+}
+
+/**
+ * 把审核状态映射成角标文案。
+ *
+ * 只在自己的作品列表里展示——他人看到的列表本就只有已过审内容。
+ * 被拒时刻意只给通用文案，不展示命中了什么规则：一旦回显，
+ * 就能通过反复修改试探出词库边界。
+ */
+function auditBadge(status?: AuditStatus): { text: string; tone: string } | null {
+  switch (status) {
+    case 'pending':
+      return { text: '审核中', tone: 'wait' }
+    case 'reviewing':
+      return { text: '人工复审中', tone: 'wait' }
+    case 'rejected':
+      return { text: '未通过', tone: 'bad' }
+    default:
+      // approved 或字段缺失时不显示角标，避免正常内容平白多出干扰元素。
+      return null
+  }
 }
 
 function openWorksVideos() {
@@ -311,6 +332,9 @@ watch(
           <div v-else class="video-grid" style="margin-top: 12px">
             <button v-for="v in myVideos.items" :key="v.id" class="video-card" type="button" @click="goVideo(v.id)">
               <img class="video-cover" :src="v.cover_url" :alt="v.title" loading="lazy" />
+              <span v-if="auditBadge(v.audit_status)" class="audit-badge" :class="auditBadge(v.audit_status)?.tone">
+                {{ auditBadge(v.audit_status)?.text }}
+              </span>
               <div class="video-meta">
                 <div class="video-title">{{ v.title }}</div>
                 <div class="video-sub subtle">❤️ {{ v.likes_count }} · 💬 {{ v.comment_count }} · {{ new Date(v.created_at).toLocaleDateString() }}</div>
@@ -528,6 +552,30 @@ watch(
   cursor: pointer;
   padding: 0;
   text-align: left;
+  position: relative;
+}
+
+.audit-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.4;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.audit-badge.wait {
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.audit-badge.bad {
+  background: rgba(254, 44, 85, 0.85);
+  color: #fff;
+  border-color: rgba(254, 44, 85, 0.6);
 }
 
 .video-card:hover {

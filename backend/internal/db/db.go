@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"my_feed_system/internal/account"
+	"my_feed_system/internal/audit"
 	"my_feed_system/internal/comment"
 	"my_feed_system/internal/config"
 	"my_feed_system/internal/idempotency"
@@ -65,11 +66,15 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		&idempotency.Key{},
 		&outbox.Message{},
 		&popularity.Projection{},
+		&audit.Record{},
 	); err != nil {
 		return nil, fmt.Errorf("auto migrate tables: %w", err)
 	}
 	if err := ensureCommentSchema(db); err != nil {
 		return nil, fmt.Errorf("ensure comment schema: %w", err)
+	}
+	if err := backfillAuditStatus(db); err != nil {
+		return nil, fmt.Errorf("backfill audit status: %w", err)
 	}
 	if err := syncVideoCounters(db); err != nil {
 		return nil, fmt.Errorf("sync video counters: %w", err)
@@ -111,6 +116,30 @@ func ensureCommentSchema(db *gorm.DB) error {
 
 	return nil
 }
+
+// backfillAuditStatus 把审核功能上线前就已存在的视频置为已通过。
+//
+// 新增列的默认值是 pending，如果不做这一步，上线瞬间全部历史内容
+// 都会从信息流中消失——那是数据事故而不是审核生效。
+// 只针对空值与 pending 且创建时间早于本次迁移的行，用 audit_records
+// 里是否已有记录来区分「历史遗留」与「新发布待审」。
+func backfillAuditStatus(db *gorm.DB) error {
+	return db.Exec(`
+		UPDATE videos
+		SET audit_status = 'approved'
+		WHERE (audit_status IS NULL OR audit_status = '' OR audit_status = 'pending')
+		  AND NOT EXISTS (
+		      SELECT 1 FROM audit_records
+		      WHERE audit_records.target_type = 'video'
+		        AND audit_records.target_id = videos.id
+		  )
+		  AND videos.created_at < ?
+	`, auditFeatureLaunchedAt).Error
+}
+
+// auditFeatureLaunchedAt 是审核功能上线时间。
+// 早于此时间发布且没有任何审核流水的内容视为历史存量，直接放行。
+var auditFeatureLaunchedAt = time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC)
 
 func syncVideoCounters(db *gorm.DB) error {
 	if err := db.Exec(`

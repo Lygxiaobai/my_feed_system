@@ -19,6 +19,24 @@ type Config struct {
 	Upload   UploadConfig   `yaml:"upload"`
 	Pprof    PprofConfig    `yaml:"pprof"`
 	Log      LogConfig      `yaml:"log"`
+	Audit    AuditConfig    `yaml:"audit"`
+}
+
+// AuditConfig 控制内容审核。
+//
+// 词库文件本身属于敏感资产（会被用来反推规则并试探绕过），
+// 与密钥同等对待：不进版本库，通过路径引用。
+type AuditConfig struct {
+	// BlockWordFile 命中即拒绝的词库路径。
+	BlockWordFile string `yaml:"block_word_file"`
+	// ReviewWordFile 命中转人工的词库路径。
+	ReviewWordFile string `yaml:"review_word_file"`
+	// MediaPolicy 在未接入媒体审核能力时的处置方式：review（默认）或 pass。
+	// 生产环境应保持 review——没有能力审核就不能假装审过了。
+	MediaPolicy string `yaml:"media_policy"`
+	// ReviewerAccountIDs 是有人工复审权限的账号。
+	// 当前系统只有「是/不是审核员」一个区分，用白名单而不是引入一套 RBAC。
+	ReviewerAccountIDs []uint64 `yaml:"reviewer_account_ids"`
 }
 
 // LogConfig 控制日志输出。

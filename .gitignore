@@ -45,3 +45,7 @@ frontend/dist-ssr/
 *.local
 .env.local
 .env.*.local
+
+# 审核词库属于敏感资产，会被用来反推规则，不入库
+backend/configs/audit/*.txt
+!backend/configs/audit/*.example.txt

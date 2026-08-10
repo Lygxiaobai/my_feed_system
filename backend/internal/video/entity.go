@@ -1,6 +1,10 @@
 package video
 
-import "time"
+import (
+	"time"
+
+	"my_feed_system/internal/audit"
+)
 
 // Video is the persisted video model.
 type Video struct {
@@ -14,8 +18,12 @@ type Video struct {
 	LikesCount   int64     `gorm:"not null;default:0;index:idx_videos_likes_count" json:"likes_count"`
 	CommentCount int64     `gorm:"not null;default:0" json:"comment_count"`
 	Popularity   int64     `gorm:"not null;default:0;index:idx_videos_popularity" json:"popularity"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	// AuditStatus 决定内容能否进入公开信息流。
+	// 默认 pending：发布后仅作者可见，机审或人工通过后才公开。
+	// 与 created_at 组成联合索引，因为所有信息流查询都会带上这个过滤条件。
+	AuditStatus audit.Status `gorm:"size:20;not null;default:'pending';index:idx_videos_audit_created,priority:1" json:"audit_status"`
+	CreatedAt   time.Time    `gorm:"index:idx_videos_audit_created,priority:2" json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
 }
 
 func (Video) TableName() string {

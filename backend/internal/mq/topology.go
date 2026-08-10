@@ -14,6 +14,7 @@ const (
 	ExchangeVideoTimeline    = "video.timeline.events"
 	ExchangeCacheInvalidated = "cache.invalidate.events"
 	ExchangeMediaEvents      = "media.events"
+	ExchangeAuditEvents      = "audit.events"
 )
 
 const (
@@ -23,6 +24,7 @@ const (
 	QueuePopularityUpdate = "popularity.update.q"
 	QueueTimelineUpdate   = "timeline.update.q"
 	QueueMediaTranscode   = "media.transcode.q"
+	QueueAuditModerate    = "audit.moderate.q"
 )
 
 const (
@@ -48,6 +50,7 @@ const (
 	PopularityDLX = "popularity.events.dlx"
 	TimelineDLX   = "video.timeline.events.dlx"
 	MediaDLX      = "media.events.dlx"
+	AuditDLX      = "audit.events.dlx"
 )
 
 type QueueSpec struct {
@@ -135,6 +138,17 @@ var queueSpecs = []QueueSpec{
 		DLRoutingKey: "media.transcode.failed",
 		BindingKeys: []string{
 			EventTypeMediaTranscodeRequested,
+		},
+	},
+	{
+		Exchange:     ExchangeAuditEvents,
+		ExchangeType: "topic",
+		Queue:        QueueAuditModerate,
+		DLX:          AuditDLX,
+		DLQ:          QueueAuditModerate + ".dlq",
+		DLRoutingKey: "audit.moderate.failed",
+		BindingKeys: []string{
+			EventTypeAuditRequested,
 		},
 	},
 }

@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 
+	"my_feed_system/internal/audit"
 	"my_feed_system/internal/idempotency"
 	"my_feed_system/internal/mq"
 	"my_feed_system/internal/observability"
@@ -139,22 +140,27 @@ func (s *Service) Publish(accountID uint64, username string, idemKey string, req
 			PlayURL:     playURL,
 			CoverURL:    coverURL,
 			Popularity:  int64(popularity.PublishWeight),
+			// 发布即待审：此刻内容仅作者本人可见，不进入任何公开信息流。
+			AuditStatus: audit.StatusPending,
 		}
 
 		if err := s.repo.Create(tx, video); err != nil {
 			return err
 		}
 
-		event, err := mq.NewEnvelope(mq.EventTypeVideoTimelinePush, mq.ProducerAPIServer, mq.VideoTimelinePayload{
-			VideoID:   video.ID,
-			AuthorID:  video.AuthorID,
-			CreatedAt: video.CreatedAt,
+		// 这里只发审核事件。推送全局时间线与计入热度都属于「让内容公开可见」，
+		// 必须推迟到审核通过之后，否则未过审内容会经 Redis 时间线与热度榜
+		// 绕过数据库层的过滤泄漏出去。
+		event, err := mq.NewEnvelope(mq.EventTypeAuditRequested, mq.ProducerAPIServer, mq.AuditRequestedPayload{
+			TargetType: string(audit.TargetVideo),
+			TargetID:   video.ID,
+			AuthorID:   video.AuthorID,
 		})
 		if err != nil {
-			return fmt.Errorf("build timeline outbox event: %w", err)
+			return fmt.Errorf("build audit outbox event: %w", err)
 		}
 		if err := s.outboxRepo.Enqueue(tx, event); err != nil {
-			return fmt.Errorf("enqueue timeline outbox event: %w", err)
+			return fmt.Errorf("enqueue audit outbox event: %w", err)
 		}
 
 		responseVideo := *video
@@ -174,7 +180,8 @@ func (s *Service) Publish(accountID uint64, username string, idemKey string, req
 	}
 
 	if createdNew && s.popularity != nil {
-		_ = s.popularity.Record(context.Background(), video.ID, popularity.PublishWeight, video.CreatedAt)
+		// 只在本地对象上带出初始热度供响应展示，不写入 Redis 排行榜——
+		// 写入排行榜等同于公开，必须等审核通过后由审核流程触发。
 		video.Popularity = int64(popularity.PublishWeight)
 	}
 	if createdNew {
@@ -184,8 +191,10 @@ func (s *Service) Publish(accountID uint64, username string, idemKey string, req
 	return video, nil
 }
 
-func (s *Service) ListByAuthorID(req ListByAuthorIDRequest) ([]Video, error) {
-	videos, err := s.repo.FindByAuthorID(req.AuthorID)
+// ListByAuthorID 返回作者的作品列表。
+// viewerID 是当前查看者：本人可见自己全部状态的作品，他人只见已过审的。
+func (s *Service) ListByAuthorID(viewerID uint64, req ListByAuthorIDRequest) ([]Video, error) {
+	videos, err := s.repo.FindByAuthorID(req.AuthorID, viewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +214,10 @@ func (s *Service) ListLiked(accountID uint64) ([]Video, error) {
 }
 
 // GetDetail 按 “L1 -> L2 -> DB” 的顺序读取视频详情，并用 singleflight 合并同一个 videoID 的并发回源。
-func (s *Service) GetDetail(req GetDetailRequest) (*Video, error) {
+//
+// viewerID 用于审核可见性判断：未过审的视频只有作者本人能打开，
+// 其他人一律按「不存在」处理。
+func (s *Service) GetDetail(viewerID uint64, req GetDetailRequest) (*Video, error) {
 	ctx := context.Background()
 
 	// 先在 singleflight 之外查一次缓存，让已经命中的请求直接返回，避免不必要地进入合并逻辑。
@@ -213,6 +225,9 @@ func (s *Service) GetDetail(req GetDetailRequest) (*Video, error) {
 		slog.Warn("read detail cache failed", slog.Uint64("video_id", req.ID), slog.String("error", err.Error()))
 	} else if ok {
 		if notFound {
+			return nil, ErrVideoNotFound
+		}
+		if !visibleTo(cachedVideo, viewerID) {
 			return nil, ErrVideoNotFound
 		}
 		return cachedVideo, nil
@@ -273,7 +288,24 @@ func (s *Service) GetDetail(req GetDetailRequest) (*Video, error) {
 	}
 
 	// 到这里要么是自己回源成功，要么是复用了其他并发请求产出的缓存/回源结果。
+	if !visibleTo(loadResult.video, viewerID) {
+		return nil, ErrVideoNotFound
+	}
 	return loadResult.video, nil
+}
+
+// visibleTo 判断查看者能否看到该视频。
+//
+// 未过审时返回「不存在」而不是「无权限」：后者会泄漏视频确实存在这一事实，
+// 可被用来枚举他人尚未公开的内容。
+func visibleTo(video *Video, viewerID uint64) bool {
+	if video == nil {
+		return false
+	}
+	if video.AuditStatus.IsPublic() {
+		return true
+	}
+	return viewerID != 0 && viewerID == video.AuthorID
 }
 
 // decoratePopularity bulk loads popularity scores for a video list.

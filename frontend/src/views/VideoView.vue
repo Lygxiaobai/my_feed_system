@@ -159,7 +159,9 @@ async function onPublish() {
     publishForm.title = ''
     publishForm.description = ''
     clearVideo()
-    toast.success('已发布')
+    // 发布后内容处于待审状态，仅作者本人可见，审核通过才进入信息流。
+    // 这里如实告知，避免用户以为发布失败而反复重传。
+    toast.success('已提交，审核通过后将出现在信息流中')
   } catch (error) {
     // 用户主动取消属于正常操作，不当作失败处理。
     if (error instanceof AbortedError) {
@@ -240,7 +242,10 @@ async function onPublish() {
 
         <div v-if="published" class="card" style="margin-top: 14px">
           <div class="row" style="justify-content: space-between; align-items: center">
-            <div class="title" style="margin: 0">{{ published.title }}</div>
+            <div>
+              <div class="title" style="margin: 0">{{ published.title }}</div>
+              <div class="audit-tip">审核通过后才会出现在信息流中，你可以先在「我的」里查看</div>
+            </div>
             <RouterLink class="pill" :to="`/video/${published.id}`">去播放</RouterLink>
           </div>
         </div>
@@ -314,6 +319,12 @@ async function onPublish() {
 
 .file-tip.bad {
   color: rgba(254, 44, 85, 0.92);
+}
+
+.audit-tip {
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .big-input {

@@ -42,3 +42,12 @@ pprof:
 log:
   level: ${LOG_LEVEL:-info}
   format: ${LOG_FORMAT:-json}
+
+audit:
+  block_word_file: /app/configs/audit/block-words.txt
+  review_word_file: /app/configs/audit/review-words.txt
+  # 未接入媒体审核能力时视频与封面的处置方式：review 转人工 / pass 直接放行。
+  # 生产环境保持 review——没有能力审核就不能假装审过了。
+  media_policy: review
+  # 有人工复审权限的账号 ID。
+  reviewer_account_ids: [1]

@@ -12,6 +12,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"my_feed_system/internal/audit"
 	"my_feed_system/internal/config"
 	"my_feed_system/internal/db"
 	"my_feed_system/internal/feed"
@@ -102,6 +103,14 @@ func main() {
 	popularityWorker := workerpkg.NewPopularityWorker(database, popularityService, detailCache)
 	timelineConsumer := workerpkg.NewTimelineConsumer(timelineStore, latestCache, publisher)
 	mediaWorker := workerpkg.NewMediaWorker(database, cfg.Upload.Dir)
+	auditService := audit.NewService(
+		database,
+		video.NewAuditStore(database),
+		buildModerator(cfg.Audit),
+		video.NewApprovalPublisher(database),
+		cfg.Audit.ReviewerAccountIDs,
+	)
+	auditWorker := workerpkg.NewAuditWorker(auditService)
 	popularityProjectionPoller := popularity.NewProjectionPoller(popularity.NewProjectionRepo(database), popularityService)
 
 	consumerTagPrefix := strings.TrimSpace(cfg.RabbitMQ.ConsumerTag)
@@ -132,6 +141,7 @@ func main() {
 	start(mq.QueuePopularityUpdate, "popularity", popularityWorker.Handle)
 	start(mq.QueueTimelineUpdate, "timeline", timelineConsumer.Handle)
 	start(mq.QueueMediaTranscode, "media", mediaWorker.Handle)
+	start(mq.QueueAuditModerate, "audit", auditWorker.Handle)
 
 	for _, spec := range mq.QueueSpecs() {
 		spec := spec
@@ -178,4 +188,25 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// buildModerator 与 API 侧保持同一套装配逻辑，保证机审规则两端一致。
+func buildModerator(cfg config.AuditConfig) audit.Moderator {
+	blockWords, err := audit.LoadWordFile(cfg.BlockWordFile)
+	if err != nil {
+		slog.Warn("load block word file failed, continuing without it",
+			slog.String("path", cfg.BlockWordFile), slog.String("error", err.Error()))
+	}
+	reviewWords, err := audit.LoadWordFile(cfg.ReviewWordFile)
+	if err != nil {
+		slog.Warn("load review word file failed, continuing without it",
+			slog.String("path", cfg.ReviewWordFile), slog.String("error", err.Error()))
+	}
+
+	slog.Info("content moderator ready",
+		slog.Int("block_words", len(blockWords)),
+		slog.Int("review_words", len(reviewWords)),
+		slog.String("media_policy", cfg.MediaPolicy))
+
+	return audit.NewKeywordModerator(blockWords, reviewWords, audit.MediaPolicy(cfg.MediaPolicy))
 }

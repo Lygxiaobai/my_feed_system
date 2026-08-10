@@ -5,10 +5,15 @@ import (
 
 	"gorm.io/gorm"
 
+	"my_feed_system/internal/audit"
 	"my_feed_system/internal/video"
 )
 
 // Repo 负责信息流查询所需的数据库访问。
+//
+// 本文件内所有查询都面向公众，因此**每一个**都必须带上审核过滤。
+// 漏掉任意一处，未过审内容就会从那条路径泄漏出去，
+// 审核体系等于形同虚设——新增查询方法时务必套用 onlyApproved。
 type Repo struct {
 	db *gorm.DB
 }
@@ -18,11 +23,17 @@ func NewRepo(db *gorm.DB) *Repo {
 	return &Repo{db: db}
 }
 
+// onlyApproved 给查询附加审核过滤。
+// 统一走这个函数而不是各处手写字符串，避免拼错列名或写错状态值。
+func onlyApproved(query *gorm.DB) *gorm.DB {
+	return query.Where("videos.audit_status = ?", audit.StatusApproved)
+}
+
 // ListLatest 使用 created_at + id 作为游标，按最新发布时间分页。
 func (r *Repo) ListLatest(limit int64, latestTime int64, lastID uint64) ([]video.Video, error) {
 	var videos []video.Video
 
-	query := r.db.Model(&video.Video{})
+	query := onlyApproved(r.db.Model(&video.Video{}))
 	if latestTime > 0 {
 		cursorTime := time.UnixMilli(latestTime)
 		query = query.Where(
@@ -44,7 +55,7 @@ func (r *Repo) ListLatest(limit int64, latestTime int64, lastID uint64) ([]video
 func (r *Repo) ListLikesCount(limit int64, likesCountBefore *int64, idBefore uint64) ([]video.Video, error) {
 	var videos []video.Video
 
-	query := r.db.Model(&video.Video{})
+	query := onlyApproved(r.db.Model(&video.Video{}))
 	if likesCountBefore != nil {
 		query = query.Where(
 			"likes_count < ? OR (likes_count = ? AND id < ?)",
@@ -65,9 +76,9 @@ func (r *Repo) ListLikesCount(limit int64, likesCountBefore *int64, idBefore uin
 func (r *Repo) ListByFollowing(followerID uint64, limit int64, latestTime int64, lastID uint64) ([]video.Video, error) {
 	var videos []video.Video
 
-	query := r.db.Model(&video.Video{}).
+	query := onlyApproved(r.db.Model(&video.Video{}).
 		Joins("JOIN social_relations sr ON sr.vlogger_id = videos.author_id").
-		Where("sr.follower_id = ?", followerID)
+		Where("sr.follower_id = ?", followerID))
 
 	if latestTime > 0 {
 		cursorTime := time.UnixMilli(latestTime)
@@ -86,14 +97,18 @@ func (r *Repo) ListByFollowing(followerID uint64, limit int64, latestTime int64,
 	return videos, nil
 }
 
-// FindByIDs 按主键批量查询视频，用于把热度快照结果回填成完整视频信息。
+// FindByIDs 按主键批量查询视频，用于把热度快照或全局时间线的结果回填成完整视频信息。
+//
+// 这里同样要过滤：Redis 里的时间线与热度榜是异步写入的，
+// 内容被下架后残留的 ID 只能靠这一层挡住。
 func (r *Repo) FindByIDs(ids []uint64) ([]video.Video, error) {
 	if len(ids) == 0 {
 		return []video.Video{}, nil
 	}
 
 	var videos []video.Video
-	if err := r.db.Where("id IN ?", ids).Find(&videos).Error; err != nil {
+	if err := onlyApproved(r.db.Model(&video.Video{}).Where("id IN ?", ids)).
+		Find(&videos).Error; err != nil {
 		return nil, err
 	}
 
@@ -104,7 +119,9 @@ func (r *Repo) FindByIDs(ids []uint64) ([]video.Video, error) {
 func (r *Repo) ListByPopularity(limit int64, offset int64) ([]video.Video, error) {
 	var videos []video.Video
 
-	query := r.db.Model(&video.Video{}).Order("popularity DESC, id DESC").Limit(int(limit))
+	query := onlyApproved(r.db.Model(&video.Video{})).
+		Order("popularity DESC, id DESC").
+		Limit(int(limit))
 	if offset > 0 {
 		query = query.Offset(int(offset))
 	}

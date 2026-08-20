@@ -3,7 +3,10 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppShell from '../components/AppShell.vue'
+import Skeleton from '../components/Skeleton.vue'
 import UserAvatar from '../components/UserAvatar.vue'
+import UserListSkeleton from '../components/UserListSkeleton.vue'
+import VideoGridSkeleton from '../components/VideoGridSkeleton.vue'
 import { ApiError } from '../api/client'
 import * as accountApi from '../api/account'
 import * as socialApi from '../api/social'
@@ -240,8 +243,10 @@ onMounted(loadProfile)
         <div class="row" style="gap: 12px; align-items: center">
           <UserAvatar :username="state.user?.username ?? 'User'" :id="state.user?.id ?? userId" :size="64" />
           <div>
-            <div class="title" style="margin: 0">@{{ state.user?.username ?? '-' }}</div>
-            <div class="subtle mono">#{{ state.user?.id ?? userId }}</div>
+            <div class="title" style="margin: 0">
+              <Skeleton v-if="state.loading && !state.user" width="120px" height="18px" />
+              <template v-else>@{{ state.user?.username ?? '-' }}</template>
+            </div>
           </div>
         </div>
 
@@ -259,24 +264,35 @@ onMounted(loadProfile)
         </div>
       </div>
 
-      <div v-if="state.loading" class="hint" style="margin-top: 12px">加载中…</div>
-      <div v-else-if="state.error" class="hint bad" style="margin-top: 12px">{{ state.error }}</div>
+      <div v-if="state.error" class="hint bad" style="margin-top: 12px">{{ state.error }}</div>
 
       <div v-else class="row" style="margin-top: 14px">
-        <button class="metric" type="button" :disabled="!auth.isLoggedIn || state.socialLoading" @click="openFollowers">
-          <div class="metric-num">{{ auth.isLoggedIn ? (state.socialLoading ? '…' : state.followers.length) : '—' }}</div>
+        <button class="metric" type="button" :disabled="!auth.isLoggedIn || state.loading || state.socialLoading" @click="openFollowers">
+          <div class="metric-num">
+            <Skeleton v-if="state.loading || (auth.isLoggedIn && state.socialLoading)" width="28px" height="18px" />
+            <template v-else>{{ auth.isLoggedIn ? state.followers.length : '—' }}</template>
+          </div>
           <div class="metric-label">粉丝</div>
         </button>
-        <button class="metric" type="button" :disabled="!auth.isLoggedIn || state.socialLoading" @click="openFollowing">
-          <div class="metric-num">{{ auth.isLoggedIn ? (state.socialLoading ? '…' : state.vloggers.length) : '—' }}</div>
+        <button class="metric" type="button" :disabled="!auth.isLoggedIn || state.loading || state.socialLoading" @click="openFollowing">
+          <div class="metric-num">
+            <Skeleton v-if="state.loading || (auth.isLoggedIn && state.socialLoading)" width="28px" height="18px" />
+            <template v-else>{{ auth.isLoggedIn ? state.vloggers.length : '—' }}</template>
+          </div>
           <div class="metric-label">关注</div>
         </button>
         <div class="metric static">
-          <div class="metric-num">{{ state.videos.length }}</div>
+          <div class="metric-num">
+            <Skeleton v-if="state.loading" width="28px" height="18px" />
+            <template v-else>{{ state.videos.length }}</template>
+          </div>
           <div class="metric-label">作品</div>
         </div>
         <div class="metric static">
-          <div class="metric-num">{{ totalReceivedLikes }}</div>
+          <div class="metric-num">
+            <Skeleton v-if="state.loading" width="36px" height="18px" />
+            <template v-else>{{ totalReceivedLikes }}</template>
+          </div>
           <div class="metric-label">获赞</div>
         </div>
         <div v-if="!auth.isLoggedIn" class="subtle" style="margin-left: 8px">登录后可查看粉丝/关注列表</div>
@@ -287,10 +303,10 @@ onMounted(loadProfile)
     <div class="card" style="margin-top: 14px">
       <div class="row" style="justify-content: space-between">
         <p class="title" style="margin: 0">作品</p>
-        <div class="subtle">点击封面进入播放页</div>
       </div>
 
-      <div v-if="state.videos.length === 0" class="hint" style="margin-top: 12px">暂无作品</div>
+      <VideoGridSkeleton v-if="state.loading" style="margin-top: 12px" />
+      <div v-else-if="state.videos.length === 0" class="hint" style="margin-top: 12px">暂无作品</div>
 
       <div v-else class="video-grid" style="margin-top: 12px">
         <button v-for="v in state.videos" :key="v.id" class="video-card" type="button" @click="goVideo(v.id)">
@@ -310,15 +326,14 @@ onMounted(loadProfile)
           <button class="drawer-x" type="button" @click="closeDrawer">×</button>
         </div>
         <div class="drawer-body">
-          <div v-if="state.socialLoading" class="drawer-hint">加载中…</div>
+          <UserListSkeleton v-if="state.socialLoading" />
           <div v-else-if="state.socialError" class="drawer-hint bad">{{ state.socialError }}</div>
           <div v-else-if="listItems.length === 0" class="drawer-hint">暂无</div>
 
-          <button v-for="u in listItems" :key="u.id" class="user-row" type="button" @click="goUser(u)">
+          <button v-for="u in listItems" v-if="!state.socialLoading && !state.socialError" :key="u.id" class="user-row" type="button" @click="goUser(u)">
             <UserAvatar :username="relationUsername(u)" :id="relationUserId(u)" :size="40" />
             <div class="user-meta">
               <div class="user-name">{{ relationUsername(u) }}</div>
-              <div class="user-id mono">#{{ relationUserId(u) }}</div>
             </div>
           </button>
         </div>

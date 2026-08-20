@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, watch } from 'vue'
 
 import AppShell from '../components/AppShell.vue'
+import FeedCardSkeleton from '../components/FeedCardSkeleton.vue'
 import JsonBox from '../components/JsonBox.vue'
 import FeedVideoCard from '../components/FeedVideoCard.vue'
 import { ApiError } from '../api/client'
@@ -212,6 +213,9 @@ watch(
           </div>
           <div v-if="latest.error" class="pill bad" style="margin-top: 10px">&#x9519;&#x8BEF;&#xFF1A;{{ latest.error }}</div>
           <div class="grid" style="gap: 10px; margin-top: 12px">
+            <template v-if="latest.loading && latest.items.length === 0">
+              <FeedCardSkeleton v-for="n in 3" :key="`latest-sk-${n}`" />
+            </template>
             <FeedVideoCard
               v-for="item in latest.items"
               :key="`latest-${item.id}`"
@@ -220,6 +224,7 @@ watch(
               :busy="action.loading"
               @toggle-like="toggleLike"
             />
+            <FeedCardSkeleton v-if="latest.loading && latest.items.length > 0" />
           </div>
         </div>
 
@@ -241,6 +246,9 @@ watch(
           </div>
           <div v-if="likesCount.error" class="pill bad" style="margin-top: 10px">&#x9519;&#x8BEF;&#xFF1A;{{ likesCount.error }}</div>
           <div class="grid" style="gap: 10px; margin-top: 12px">
+            <template v-if="likesCount.loading && likesCount.items.length === 0">
+              <FeedCardSkeleton v-for="n in 3" :key="`likes-sk-${n}`" />
+            </template>
             <FeedVideoCard
               v-for="item in likesCount.items"
               :key="`likes-${item.id}`"
@@ -249,6 +257,7 @@ watch(
               :busy="action.loading"
               @toggle-like="toggleLike"
             />
+            <FeedCardSkeleton v-if="likesCount.loading && likesCount.items.length > 0" />
           </div>
         </div>
 
@@ -268,6 +277,9 @@ watch(
           <div v-if="!auth.isLoggedIn" class="pill bad" style="margin-top: 10px">&#x672A;&#x767B;&#x5F55;&#xFF1A;&#x65E0;&#x6CD5;&#x8BBF;&#x95EE;&#x5173;&#x6CE8;&#x6D41;</div>
           <div v-if="following.error" class="pill bad" style="margin-top: 10px">&#x9519;&#x8BEF;&#xFF1A;{{ following.error }}</div>
           <div class="grid" style="gap: 10px; margin-top: 12px">
+            <template v-if="following.loading && following.items.length === 0">
+              <FeedCardSkeleton v-for="n in 3" :key="`following-sk-${n}`" />
+            </template>
             <FeedVideoCard
               v-for="item in following.items"
               :key="`following-${item.id}`"
@@ -276,6 +288,7 @@ watch(
               :busy="action.loading"
               @toggle-like="toggleLike"
             />
+            <FeedCardSkeleton v-if="following.loading && following.items.length > 0" />
           </div>
         </div>
       </div>

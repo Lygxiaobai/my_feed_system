@@ -6,7 +6,9 @@ import * as feedApi from '../api/feed'
 import * as likeApi from '../api/like'
 import type { FeedVideoItem } from '../api/types'
 import AppShell from '../components/AppShell.vue'
+import FeedCardSkeleton from '../components/FeedCardSkeleton.vue'
 import FeedVideoCard from '../components/FeedVideoCard.vue'
+import Skeleton from '../components/Skeleton.vue'
 import { useAuthStore } from '../stores/auth'
 import { useToastStore } from '../stores/toast'
 
@@ -110,7 +112,6 @@ watch(
       <div class="row" style="justify-content: space-between; align-items: baseline">
         <div>
           <p class="title" style="margin: 0">&#x70ED;&#x699C;</p>
-          <p class="subtle" style="margin: 6px 0 0">&#x6309;&#x70ED;&#x5EA6;&#x6392;&#x5E8F;&#xFF08;`/feed/listByPopularity`&#xFF09;</p>
         </div>
 
         <div class="row">
@@ -122,8 +123,14 @@ watch(
       </div>
 
       <div v-if="state.error" class="pill bad" style="margin-top: 12px">&#x9519;&#x8BEF;&#xFF1A;{{ state.error }}</div>
-      <div v-else-if="state.loading && state.items.length === 0" class="subtle" style="margin-top: 12px">&#x52A0;&#x8F7D;&#x4E2D;&#x2026;</div>
-      <div v-else-if="state.items.length === 0" class="subtle" style="margin-top: 12px">&#x6682;&#x65E0;&#x5185;&#x5BB9;</div>
+      <div v-else-if="!state.loading && state.items.length === 0" class="subtle" style="margin-top: 12px">&#x6682;&#x65E0;&#x5185;&#x5BB9;</div>
+
+      <div v-if="state.loading && state.items.length === 0" class="rank-list" style="margin-top: 14px">
+        <div v-for="n in 3" :key="`hot-sk-${n}`" class="rank-row">
+          <Skeleton class="rank-sk" width="44px" height="44px" radius="16px" />
+          <FeedCardSkeleton />
+        </div>
+      </div>
 
       <div v-if="state.items.length" class="rank-list" style="margin-top: 14px">
         <div v-for="(item, idx) in state.items" :key="`hot-${item.id}`" class="rank-row">
@@ -136,6 +143,10 @@ watch(
             :busy="!!likeBusy[String(item.id)]"
             @toggle-like="toggleLike"
           />
+        </div>
+        <div v-if="state.loading" class="rank-row">
+          <Skeleton class="rank-sk" width="44px" height="44px" radius="16px" />
+          <FeedCardSkeleton />
         </div>
       </div>
     </div>
@@ -188,7 +199,8 @@ watch(
     grid-template-columns: 38px minmax(0, 1fr);
     gap: 10px;
   }
-  .rank-num {
+  .rank-num,
+  :deep(.rank-sk) {
     height: 38px;
     width: 38px;
     border-radius: 14px;

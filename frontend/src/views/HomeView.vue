@@ -3,6 +3,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute, useRouter } from 'vue-router'
 
 import AppShell from '../components/AppShell.vue'
+import CommentListSkeleton from '../components/CommentListSkeleton.vue'
+import FeedStageSkeleton from '../components/FeedStageSkeleton.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import VideoPlayer, { type VideoPlayerHandle } from '../components/VideoPlayer.vue'
 import { ApiError } from '../api/client'
@@ -684,7 +686,9 @@ onBeforeUnmount(() => {
       </div>
 
       <div ref="scroller" class="scroller" @scroll="onScroll">
-        <div v-if="currentState.loading && currentState.items.length === 0" class="center-hint">加载中…</div>
+        <section v-if="currentState.loading && currentState.items.length === 0" class="slide">
+          <FeedStageSkeleton />
+        </section>
         <div v-else-if="currentState.error && currentState.items.length === 0" class="center-hint bad">
           {{ currentState.error }}
         </div>
@@ -711,7 +715,6 @@ onBeforeUnmount(() => {
             <div class="meta">
               <RouterLink class="author-link" :to="`/u/${item.author.id}`" @click.stop>
                 <UserAvatar :username="item.author.username" :id="item.author.id" :size="34" />
-                <span class="author-name">@{{ item.author.username }}</span>
               </RouterLink>
               <div class="title">{{ item.title }}</div>
               <div v-if="item.description" class="desc">{{ item.description }}</div>
@@ -757,6 +760,9 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </section>
+        <section v-if="currentState.loading && currentState.items.length > 0" class="slide">
+          <FeedStageSkeleton />
+        </section>
       </div>
 
       <div v-if="drawer.open" class="drawer-backdrop" @click.self="closeDrawer">
@@ -767,7 +773,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="drawer-body">
-            <div v-if="drawer.commentsLoading && drawer.comments.length === 0" class="drawer-hint">加载中…</div>
+            <CommentListSkeleton v-if="drawer.commentsLoading && drawer.comments.length === 0" />
             <div v-else-if="drawer.error" class="drawer-hint bad">{{ drawer.error }}</div>
             <div v-else-if="drawer.comments.length === 0" class="drawer-hint">暂无评论</div>
 

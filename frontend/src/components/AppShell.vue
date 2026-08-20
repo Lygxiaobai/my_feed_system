@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { useAuthStore } from '../stores/auth'
@@ -39,13 +39,6 @@ watch(
   { immediate: true },
 )
 
-const userLabel = computed(() => {
-  if (!auth.isLoggedIn) return '未登录'
-  const username = auth.claims?.username ?? '(unknown)'
-  const accountId = auth.claims?.account_id
-  return accountId ? `${username} #${accountId}` : username
-})
-
 async function onSearch() {
   const q = search.value.trim()
   searchOpen.value = false
@@ -77,10 +70,6 @@ async function goSettings() {
       </nav>
 
       <div class="dy-aside-foot">
-        <div class="dy-user">
-          <span class="dy-user-dot" :class="auth.isLoggedIn ? 'ok' : 'bad'" />
-          <span class="dy-user-name">{{ userLabel }}</span>
-        </div>
         <div class="dy-user-actions">
           <button v-if="!auth.isLoggedIn" class="dy-btn dy-btn-primary" type="button" @click="goLogin">登录</button>
           <button v-else class="dy-btn dy-btn-primary" type="button" @click="goSettings">设置</button>
@@ -95,7 +84,7 @@ async function goSettings() {
         <RouterLink class="dy-mobile-brand mobile-only" to="/">ShortVideo</RouterLink>
 
         <div class="dy-search desktop-only">
-          <input v-model="search" class="dy-search-input" placeholder="搜索标题 / 作者（本地过滤）" @keydown.enter="onSearch" />
+          <input v-model="search" class="dy-search-input" aria-label="搜索" @keydown.enter="onSearch" />
           <button class="dy-btn dy-btn-primary" type="button" @click="onSearch">搜索</button>
         </div>
 
@@ -111,7 +100,7 @@ async function goSettings() {
         <input
           v-model="search"
           class="dy-search-input"
-          placeholder="搜索标题 / 作者"
+          aria-label="搜索"
           autofocus
           @keydown.enter="onSearch"
         />
@@ -210,39 +199,6 @@ async function goSettings() {
   gap: 10px;
   padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.dy-user {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.dy-user-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
-  flex-shrink: 0;
-}
-
-.dy-user-dot.ok {
-  background: rgba(34, 197, 94, 1);
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14);
-}
-
-.dy-user-dot.bad {
-  background: rgba(254, 44, 85, 1);
-  box-shadow: 0 0 0 3px rgba(254, 44, 85, 0.14);
-}
-
-.dy-user-name {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.86);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .dy-user-actions {

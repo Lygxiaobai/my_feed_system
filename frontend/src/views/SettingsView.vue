@@ -100,14 +100,13 @@ async function onLogout() {
       </div>
     </div>
 
-    <div v-else class="grid two">
+    <div v-else>
       <div class="card">
         <div class="row" style="justify-content: space-between; align-items: flex-start">
           <div class="row" style="gap: 12px; align-items: center">
             <UserAvatar :username="me.username" :id="me.id" :size="56" />
             <div>
               <div class="title" style="margin: 0">@{{ me.username }}</div>
-              <div class="subtle mono">#{{ me.id }}</div>
             </div>
           </div>
         </div>
@@ -136,15 +135,6 @@ async function onLogout() {
             <button class="ghost" type="button" :disabled="busy" @click="goChangePassword">修改密码</button>
             <button class="danger" type="button" :disabled="busy" @click="onLogout">退出登录</button>
           </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <p class="title">说明</p>
-        <div class="grid" style="margin-top: 10px">
-          <div class="pill ok">改名后会返回新 token，旧 token 立即失效</div>
-          <div class="pill ok">退出登录会清空本地 token</div>
-          <div class="pill">修改密码需要先登录，成功后会让旧 token 失效</div>
         </div>
       </div>
     </div>

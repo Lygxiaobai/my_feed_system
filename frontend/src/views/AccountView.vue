@@ -3,7 +3,10 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppShell from '../components/AppShell.vue'
+import Skeleton from '../components/Skeleton.vue'
 import UserAvatar from '../components/UserAvatar.vue'
+import UserListSkeleton from '../components/UserListSkeleton.vue'
+import VideoGridSkeleton from '../components/VideoGridSkeleton.vue'
 import { ApiError } from '../api/client'
 import * as accountApi from '../api/account'
 import type { AuditStatus, SocialRelation, Video } from '../api/types'
@@ -282,7 +285,6 @@ watch(
             <UserAvatar :username="me.username" :id="me.id" :size="64" />
             <div>
               <div class="title" style="margin: 0">@{{ me.username }}</div>
-              <div class="subtle mono">#{{ me.id }}</div>
             </div>
           </div>
 
@@ -293,19 +295,31 @@ watch(
 
         <div class="row" style="margin-top: 14px">
           <button class="metric" type="button" :disabled="social.followersLoading" @click="openFollowers">
-            <div class="metric-num">{{ social.followersLoading ? '…' : social.followerCount }}</div>
+            <div class="metric-num">
+              <Skeleton v-if="social.followersLoading" width="28px" height="18px" />
+              <template v-else>{{ social.followerCount }}</template>
+            </div>
             <div class="metric-label">粉丝</div>
           </button>
           <button class="metric" type="button" :disabled="social.vloggersLoading" @click="openFollowing">
-            <div class="metric-num">{{ social.vloggersLoading ? '…' : social.followingCount }}</div>
+            <div class="metric-num">
+              <Skeleton v-if="social.vloggersLoading" width="28px" height="18px" />
+              <template v-else>{{ social.followingCount }}</template>
+            </div>
             <div class="metric-label">关注</div>
           </button>
           <button class="metric" type="button" :class="{ active: videoTab === 'works' }" @click="openWorksVideos">
-            <div class="metric-num">{{ myVideos.loading ? '…' : myVideos.items.length }}</div>
+            <div class="metric-num">
+              <Skeleton v-if="myVideos.loading" width="28px" height="18px" />
+              <template v-else>{{ myVideos.items.length }}</template>
+            </div>
             <div class="metric-label">作品</div>
           </button>
           <div class="metric static">
-            <div class="metric-num">{{ myVideos.loading ? '…' : totalReceivedLikes }}</div>
+            <div class="metric-num">
+              <Skeleton v-if="myVideos.loading" width="36px" height="18px" />
+              <template v-else>{{ totalReceivedLikes }}</template>
+            </div>
             <div class="metric-label">获赞</div>
           </div>
           <div v-if="socialErrorHint" class="subtle" style="margin-left: 8px">社交信息加载失败：{{ socialErrorHint }}</div>
@@ -325,7 +339,7 @@ watch(
         </div>
 
         <template v-if="videoTab === 'works'">
-          <div v-if="myVideos.loading" class="hint" style="margin-top: 12px">加载中…</div>
+          <VideoGridSkeleton v-if="myVideos.loading" style="margin-top: 12px" />
           <div v-else-if="myVideos.error" class="hint bad" style="margin-top: 12px">{{ myVideos.error }}</div>
           <div v-else-if="myVideos.items.length === 0" class="hint" style="margin-top: 12px">暂无作品</div>
 
@@ -343,7 +357,7 @@ watch(
           </div>
         </template>
         <template v-else>
-          <div v-if="likedVideos.loading" class="hint" style="margin-top: 12px">加载中…</div>
+          <VideoGridSkeleton v-if="likedVideos.loading" style="margin-top: 12px" />
           <div v-else-if="likedVideos.error" class="hint bad" style="margin-top: 12px">{{ likedVideos.error }}</div>
           <div v-else-if="likedVideos.items.length === 0" class="hint" style="margin-top: 12px">暂无点赞视频</div>
 
@@ -367,7 +381,7 @@ watch(
           <button class="drawer-x" type="button" @click="closeDrawer">×</button>
         </div>
         <div class="drawer-body">
-          <div v-if="drawerLoading" class="drawer-hint">加载中…</div>
+          <UserListSkeleton v-if="drawerLoading" />
           <div v-else-if="drawerError" class="drawer-hint bad">{{ drawerError }}</div>
           <div v-else-if="listItems.length === 0" class="drawer-hint">暂无</div>
 
@@ -375,7 +389,6 @@ watch(
             <UserAvatar :username="relationUsername(u)" :id="relationUserId(u)" :size="40" />
             <div class="user-meta">
               <div class="user-name">{{ relationUsername(u) }}</div>
-              <div class="user-id mono">#{{ relationUserId(u) }}</div>
             </div>
           </button>
         </div>

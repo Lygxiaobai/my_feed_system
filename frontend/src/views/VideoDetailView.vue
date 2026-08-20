@@ -3,6 +3,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute, useRouter } from 'vue-router'
 
 import AppShell from '../components/AppShell.vue'
+import CommentListSkeleton from '../components/CommentListSkeleton.vue'
+import FeedStageSkeleton from '../components/FeedStageSkeleton.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import VideoPlayer, { type VideoPlayerHandle } from '../components/VideoPlayer.vue'
 import { ApiError } from '../api/client'
@@ -386,7 +388,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="wrap">
-        <div v-if="state.loading" class="center-hint">加载中…</div>
+        <FeedStageSkeleton v-if="state.loading" />
         <div v-else-if="state.error" class="center-hint bad">{{ state.error }}</div>
 
         <div v-else-if="state.video" class="stage" @click="onStageClick" @dblclick.prevent="onStageDoubleClick">
@@ -402,14 +404,9 @@ onBeforeUnmount(() => {
           <div class="meta">
             <RouterLink class="author-link" :to="`/u/${state.video.author_id}`" @click.stop>
               <UserAvatar :username="state.video.username" :id="state.video.author_id" :size="34" />
-              <span class="author-name">@{{ state.video.username }}</span>
             </RouterLink>
             <div class="title">{{ state.video.title }}</div>
             <div v-if="state.video.description" class="desc">{{ state.video.description }}</div>
-            <div class="row" style="margin-top: 10px">
-              <a class="chip mono" :href="state.video.play_url" target="_blank" rel="noreferrer">play_url</a>
-              <a class="chip mono" :href="state.video.cover_url" target="_blank" rel="noreferrer">cover_url</a>
-            </div>
           </div>
 
           <div class="actions">
@@ -450,7 +447,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="drawer-body">
-            <div v-if="drawer.commentsLoading && drawer.comments.length === 0" class="drawer-hint">加载中…</div>
+            <CommentListSkeleton v-if="drawer.commentsLoading && drawer.comments.length === 0" />
             <div v-else-if="drawer.error" class="drawer-hint bad">{{ drawer.error }}</div>
             <div v-else-if="drawer.comments.length === 0" class="drawer-hint">暂无评论</div>
 

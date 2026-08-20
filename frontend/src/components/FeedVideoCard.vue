@@ -33,7 +33,7 @@ function formatPopularity(value?: number) {
             <RouterLink :to="`/video/${item.id}`">{{ item.title }}</RouterLink>
           </div>
           <div class="subtle">
-            &#x4F5C;&#x8005;&#xFF1A;{{ item.author.username }} (#{{ item.author.id }}) &#x00B7;
+            &#x4F5C;&#x8005;&#xFF1A;{{ item.author.username }} &#x00B7;
             &#x521B;&#x5EFA;&#x65F6;&#x95F4;&#xFF1A;{{ new Date(item.create_time * 1000).toLocaleString() }}
           </div>
         </div>

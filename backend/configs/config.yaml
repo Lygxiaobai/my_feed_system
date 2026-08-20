@@ -59,3 +59,15 @@ audit:
   media_policy: review
   # 有人工复审权限的账号 ID。
   reviewer_account_ids: [1]
+
+auth:
+  email:
+    test_domain: ${AUTH_EMAIL_TEST_DOMAIN:-lmr.com}
+    code_ttl_seconds: ${AUTH_EMAIL_CODE_TTL:-600}
+  smtp:
+    host: ${SMTP_HOST:-smtp.163.com}
+    port: ${SMTP_PORT:-465}
+    tls: ${SMTP_TLS:-ssl}
+    user: ${SMTP_USER:-}
+    password: ${SMTP_PASSWORD:-}
+    from: ${SMTP_FROM:-}

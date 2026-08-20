@@ -2,19 +2,31 @@ package account
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	jwtv5 "github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+
+	"my_feed_system/internal/config"
 )
 
 var (
 	ErrUsernameTaken     = errors.New("username already exists")
 	ErrInvalidCredential = errors.New("invalid username or password")
 	ErrAccountNotFound   = errors.New("account not found")
+	ErrEmailInvalid      = errors.New("invalid email")
+	ErrEmailCodeInvalid  = errors.New("invalid email code")
+	ErrEmailCooldown     = errors.New("email code cooldown")
+	ErrMailNotConfigured = errors.New("mail service not configured")
+	ErrMailSendFailed    = errors.New("send email code failed")
+	ErrEmailStoreMissing = errors.New("email otp store unavailable")
 )
 
 // Service 封装账号模块的核心业务逻辑。
@@ -22,6 +34,9 @@ type Service struct {
 	repo       *Repo
 	tokenCache *TokenCache
 	jwtSecret  []byte
+	otp        *OTPStore
+	mailer     Mailer
+	emailCfg   config.EmailAuthConfig
 }
 
 // NewService 创建账号服务。
@@ -36,6 +51,13 @@ func NewServiceWithTokenCache(db *gorm.DB, tokenCache *TokenCache, jwtSecret str
 		tokenCache: tokenCache,
 		jwtSecret:  []byte(jwtSecret),
 	}
+}
+
+// SetEmail 接入邮箱验证码登录。未设置时相关接口返回存储不可用。
+func (s *Service) SetEmail(otp *OTPStore, mailer Mailer, cfg config.EmailAuthConfig) {
+	s.otp = otp
+	s.mailer = mailer
+	s.emailCfg = cfg
 }
 
 // Register 创建新账号，并在写入前做用户名唯一性校验。
@@ -70,7 +92,7 @@ func (s *Service) Login(req LoginRequest) (*LoginResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if account == nil {
+	if account == nil || account.Password == "" {
 		return nil, ErrInvalidCredential
 	}
 
@@ -145,6 +167,9 @@ func (s *Service) ChangePassword(accountID uint64, req ChangePasswordRequest) er
 		return ErrAccountNotFound
 	}
 
+	if account.Password == "" {
+		return ErrInvalidCredential
+	}
 	if err := bcrypt.CompareHashAndPassword([]byte(account.Password), []byte(req.OldPassword)); err != nil {
 		return ErrInvalidCredential
 	}
@@ -202,6 +227,148 @@ func (s *Service) generateToken(account *Account) (string, error) {
 	})
 
 	return token.SignedString(s.jwtSecret)
+}
+
+// SendEmailCode 为邮箱签发验证码会话。测试域不发信，其它邮箱走 SMTP。
+func (s *Service) SendEmailCode(ctx context.Context, req SendEmailCodeRequest) error {
+	email := normalizeEmail(req.Email)
+	if !isValidEmail(email) {
+		return ErrEmailInvalid
+	}
+	if s.otp == nil || !s.otp.available() {
+		return ErrEmailStoreMissing
+	}
+
+	allowed, err := s.otp.MarkCooldown(ctx, email)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return ErrEmailCooldown
+	}
+
+	if s.isTestEmail(email) {
+		return s.otp.SaveTest(ctx, email)
+	}
+	if s.mailer == nil || !s.mailer.Configured() {
+		return ErrMailNotConfigured
+	}
+
+	code, err := randomDigits6()
+	if err != nil {
+		return err
+	}
+	if err := s.otp.SaveHash(ctx, email, hashOTP(email, code)); err != nil {
+		return err
+	}
+	if err := s.mailer.SendCode(email, code, s.otpTTLMinutes()); err != nil {
+		slog.ErrorContext(ctx, "send email otp failed", slog.String("error", err.Error()))
+		return ErrMailSendFailed
+	}
+	return nil
+}
+
+// VerifyEmail 校验验证码并登录或创建账号。
+func (s *Service) VerifyEmail(ctx context.Context, req VerifyEmailRequest) (*LoginResult, error) {
+	email := normalizeEmail(req.Email)
+	code := strings.TrimSpace(req.Code)
+	if !isValidEmail(email) {
+		return nil, ErrEmailInvalid
+	}
+	if !isValidCode(code) {
+		return nil, ErrEmailCodeInvalid
+	}
+	if s.otp == nil || !s.otp.available() {
+		return nil, ErrEmailStoreMissing
+	}
+
+	if s.isTestEmail(email) {
+		ok, err := s.otp.ConsumeTest(ctx, email)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, ErrEmailCodeInvalid
+		}
+	} else {
+		ok, err := s.otp.MatchHash(ctx, email, hashOTP(email, code))
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, ErrEmailCodeInvalid
+		}
+	}
+
+	account, err := s.repo.FindByIdentity(ProviderEmail, email)
+	if err != nil {
+		return nil, err
+	}
+	created := false
+	if account == nil {
+		account, err = s.createEmailAccount(email)
+		if err != nil {
+			return nil, err
+		}
+		created = true
+	}
+
+	token, err := s.generateToken(account)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.UpdateToken(account.ID, token); err != nil {
+		return nil, err
+	}
+	account.Token = token
+	s.writeTokenCache(account.ID, token)
+	if created {
+		slog.InfoContext(ctx, "email account created", slog.Uint64("account_id", account.ID))
+	}
+	return &LoginResult{Account: account, Token: token, Created: created}, nil
+}
+
+func (s *Service) createEmailAccount(email string) (*Account, error) {
+	base := usernameFromEmail(email)
+	username, err := uniqueUsername(base, func(name string) (bool, error) {
+		existing, err := s.repo.FindByUsername(name)
+		if err != nil {
+			return false, err
+		}
+		return existing != nil, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	account := &Account{Username: username}
+	if err := s.repo.CreateWithEmailIdentity(account, email); err != nil {
+		return nil, err
+	}
+	return account, nil
+}
+
+func (s *Service) isTestEmail(email string) bool {
+	return isTestEmailDomain(email, s.emailCfg.TestDomain)
+}
+
+func (s *Service) otpTTLMinutes() int {
+	seconds := s.emailCfg.CodeTTLSeconds
+	if seconds <= 0 {
+		return int(defaultOTPTTL / time.Minute)
+	}
+	minutes := seconds / 60
+	if minutes < 1 {
+		return 1
+	}
+	return minutes
+}
+
+func randomDigits6() (string, error) {
+	var n uint32
+	if err := binary.Read(rand.Reader, binary.BigEndian, &n); err != nil {
+		return "", fmt.Errorf("generate otp: %w", err)
+	}
+	return fmt.Sprintf("%06d", n%1_000_000), nil
 }
 
 func (s *Service) writeTokenCache(accountID uint64, token string) {

@@ -20,6 +20,27 @@ type Config struct {
 	Pprof    PprofConfig    `yaml:"pprof"`
 	Log      LogConfig      `yaml:"log"`
 	Audit    AuditConfig    `yaml:"audit"`
+	Auth     AuthConfig     `yaml:"auth"`
+}
+
+// AuthConfig 控制登录方式。密钥类字段一律从环境变量展开。
+type AuthConfig struct {
+	Email EmailAuthConfig `yaml:"email"`
+	SMTP  SMTPConfig      `yaml:"smtp"`
+}
+
+type EmailAuthConfig struct {
+	TestDomain     string `yaml:"test_domain"`
+	CodeTTLSeconds int    `yaml:"code_ttl_seconds"`
+}
+
+type SMTPConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	TLS      string `yaml:"tls"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	From     string `yaml:"from"`
 }
 
 // AuditConfig 控制内容审核。

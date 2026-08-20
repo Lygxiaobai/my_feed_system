@@ -12,8 +12,8 @@ import (
 	"my_feed_system/internal/account"
 	"my_feed_system/internal/analytics"
 	"my_feed_system/internal/audit"
-	"my_feed_system/internal/config"
 	"my_feed_system/internal/comment"
+	"my_feed_system/internal/config"
 	"my_feed_system/internal/feed"
 	"my_feed_system/internal/like"
 	"my_feed_system/internal/media"
@@ -37,7 +37,7 @@ func NewRouter(
 	jwtSecret string,
 	uploadDir string,
 ) *gin.Engine {
-	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir, 0, config.AuditConfig{})
+	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir, 0, config.AuditConfig{}, config.AuthConfig{})
 }
 
 func NewRouterWithLocalCaches(
@@ -52,6 +52,7 @@ func NewRouterWithLocalCaches(
 	uploadDir string,
 	maxVideoBytes int64,
 	auditCfg config.AuditConfig,
+	authCfg config.AuthConfig,
 ) *gin.Engine {
 	// 不用 gin.Default()：它固定绑定 gin.Logger()，而后者只能输出拼好的文本行，
 	// 无法交给 slog 分级和结构化。这里自行组装等价的中间件链。
@@ -179,10 +180,39 @@ func NewRouterWithLocalCaches(
 	eventGroup.Use(jwtmiddleware.OptionalJWTAuth(jwtSecret), eventReportIPLimit)
 	analytics.NewHandler().RegisterRoutes(eventGroup)
 
-	accountHandler := account.NewHandler(account.NewServiceWithTokenCache(db, tokenCache, jwtSecret))
+	emailSendIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "account.email.send.ip",
+		Limit:    5,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	emailVerifyIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "account.email.verify.ip",
+		Limit:    20,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+
+	accountService := account.NewServiceWithTokenCache(db, tokenCache, jwtSecret)
+	var otpStore *account.OTPStore
+	if redisClient != nil {
+		ttl := time.Duration(authCfg.Email.CodeTTLSeconds) * time.Second
+		otpStore = account.NewOTPStore(redisClient, ttl)
+	}
+	accountService.SetEmail(otpStore, &account.SMTPMailer{
+		Host:     authCfg.SMTP.Host,
+		Port:     authCfg.SMTP.Port,
+		TLS:      authCfg.SMTP.TLS,
+		User:     authCfg.SMTP.User,
+		Password: authCfg.SMTP.Password,
+		From:     authCfg.SMTP.From,
+	}, authCfg.Email)
+	accountHandler := account.NewHandler(accountService)
 	accountGroup := r.Group("/account")
 	accountGroup.POST("/register", registerIPLimit, accountHandler.Register)
 	accountGroup.POST("/login", loginIPLimit, accountHandler.Login)
+	accountGroup.POST("/email/sendCode", emailSendIPLimit, accountHandler.SendEmailCode)
+	accountGroup.POST("/email/verify", emailVerifyIPLimit, accountHandler.VerifyEmail)
 	accountGroup.POST("/findByID", accountHandler.FindByID)
 	accountGroup.POST("/findByUsername", accountHandler.FindByUsername)
 

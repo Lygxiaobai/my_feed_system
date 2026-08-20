@@ -72,3 +72,30 @@ func (r *Repo) UpdateUsernameAndToken(id uint64, username string, token string) 
 		"token":    token,
 	}).Error
 }
+
+// FindByIdentity 按登录方式查找账号。
+func (r *Repo) FindByIdentity(provider string, subject string) (*Account, error) {
+	var identity Identity
+	if err := r.db.Where("provider = ? AND subject = ?", provider, subject).First(&identity).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return r.FindByID(identity.AccountID)
+}
+
+// CreateWithEmailIdentity 在同一事务里创建账号并绑定邮箱。
+func (r *Repo) CreateWithEmailIdentity(account *Account, email string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(account).Error; err != nil {
+			return err
+		}
+		identity := Identity{
+			AccountID: account.ID,
+			Provider:  ProviderEmail,
+			Subject:   email,
+		}
+		return tx.Create(&identity).Error
+	})
+}

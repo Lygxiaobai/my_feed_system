@@ -9,6 +9,14 @@ export function login(username: string, password: string) {
   return postJson<TokenResponse>('/account/login', { username, password })
 }
 
+export function sendEmailCode(email: string) {
+  return postJson<null>('/account/email/sendCode', { email })
+}
+
+export function verifyEmail(email: string, code: string) {
+  return postJson<TokenResponse>('/account/email/verify', { email, code })
+}
+
 export function logout() {
   return postJson<null>('/account/logout', {}, { authRequired: true })
 }

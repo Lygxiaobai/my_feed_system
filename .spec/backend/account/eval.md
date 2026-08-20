@@ -15,3 +15,18 @@ scenarios:
     expected: The old password is rejected after the change, the new password can log in, and the account identity is preserved.
     tags:
       - backend-api
+  - name: email-login-registers-once
+    description: A new ordinary email requests a code, then verifies the correct six-digit code.
+    expected: Mail is sent, the first verify creates an account and session, and a later verify on the same email opens that same account.
+    tags:
+      - backend-api
+  - name: test-mailbox-accepts-any-six-digits
+    description: A visitor sends a code to a digits-only address on the test domain and then verifies any six-digit code.
+    expected: No mail is sent, any six-digit code succeeds while the send session is valid, and a non-digit or missing session is rejected as an incorrect code.
+    tags:
+      - backend-api
+  - name: email-code-is-not-distinguished-on-failure
+    description: A caller verifies with a wrong code, an expired session, or without sending first.
+    expected: Each case returns the same caller-facing incorrect-code outcome and does not reveal whether the address exists.
+    tags:
+      - backend-api

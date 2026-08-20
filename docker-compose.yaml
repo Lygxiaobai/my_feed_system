@@ -87,6 +87,14 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       AUDIT_ENABLED: ${AUDIT_ENABLED:-false}
+      AUTH_EMAIL_TEST_DOMAIN: ${AUTH_EMAIL_TEST_DOMAIN:-lmr.com}
+      AUTH_EMAIL_CODE_TTL: ${AUTH_EMAIL_CODE_TTL:-600}
+      SMTP_HOST: ${SMTP_HOST:-smtp.163.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_TLS: ${SMTP_TLS:-ssl}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     restart: unless-stopped
     depends_on:
       mysql:

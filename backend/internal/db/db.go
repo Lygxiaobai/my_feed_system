@@ -56,6 +56,7 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	// 幂等表跟业务表一起自动迁移，保证接口发布新版本后数据库结构能同步补齐。
 	if err := db.AutoMigrate(
 		&account.Account{},
+		&account.Identity{},
 		&video.Video{},
 		&like.VideoLike{},
 		&media.Task{},
@@ -70,6 +71,9 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	); err != nil {
 		return nil, fmt.Errorf("auto migrate tables: %w", err)
 	}
+	if err := ensureAccountSchema(db); err != nil {
+		return nil, fmt.Errorf("ensure account schema: %w", err)
+	}
 	if err := ensureCommentSchema(db); err != nil {
 		return nil, fmt.Errorf("ensure comment schema: %w", err)
 	}
@@ -81,6 +85,14 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	}
 
 	return db, nil
+}
+
+func ensureAccountSchema(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&account.Account{}) {
+		return nil
+	}
+	// 邮箱账号没有密码。GORM AutoMigrate 不会把已有 NOT NULL 改成可空。
+	return db.Exec("ALTER TABLE accounts MODIFY password VARCHAR(255) NULL").Error
 }
 
 func ensureCommentSchema(db *gorm.DB) error {

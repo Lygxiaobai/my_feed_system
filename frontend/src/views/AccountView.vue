@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { track } from '../analytics/track'
@@ -23,6 +23,11 @@ const toast = useToastStore()
 
 const busy = ref(false)
 const loginForm = reactive({ username: '', password: '' })
+const emailForm = reactive({ email: '', code: '' })
+const passwordOpen = ref(false)
+const sendingCode = ref(false)
+const countdown = ref(0)
+let countdownTimer: number | undefined
 
 const me = computed(() => ({
   id: auth.claims?.account_id ?? 0,
@@ -145,6 +150,72 @@ function openLikedVideos() {
   void loadLikedVideos()
 }
 
+onUnmounted(() => {
+  if (countdownTimer !== undefined) window.clearInterval(countdownTimer)
+})
+
+function startCountdown() {
+  countdown.value = 60
+  if (countdownTimer !== undefined) window.clearInterval(countdownTimer)
+  countdownTimer = window.setInterval(() => {
+    countdown.value -= 1
+    if (countdown.value <= 0 && countdownTimer !== undefined) {
+      window.clearInterval(countdownTimer)
+      countdownTimer = undefined
+    }
+  }, 1000)
+}
+
+async function onSendCode() {
+  const email = emailForm.email.trim()
+  if (!email) {
+    toast.error('请输入邮箱')
+    return
+  }
+  if (sendingCode.value || countdown.value > 0) return
+  sendingCode.value = true
+  try {
+    await accountApi.sendEmailCode(email)
+    startCountdown()
+    toast.success('验证码已发送')
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : String(e)
+    toast.error(msg)
+  } finally {
+    sendingCode.value = false
+  }
+}
+
+async function onEmailLogin() {
+  if (busy.value) return
+  const email = emailForm.email.trim()
+  const code = emailForm.code.trim()
+  if (!email || !code) {
+    toast.error('请输入邮箱和验证码')
+    return
+  }
+
+  busy.value = true
+  try {
+    const res = await accountApi.verifyEmail(email, code)
+    auth.setToken(res.token)
+    if (res.created) track('register')
+    track('login')
+    toast.success(res.created ? '注册并登录成功' : '登录成功')
+    await social.refreshMine()
+    await Promise.all([loadMyVideos(), loadLikedVideos()])
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : String(e)
+    toast.error(msg)
+  } finally {
+    busy.value = false
+  }
+}
+
+function onOauthSoon() {
+  toast.info('即将开放')
+}
+
 async function onLogin() {
   if (busy.value) return
   const username = loginForm.username.trim()
@@ -168,10 +239,6 @@ async function onLogin() {
   } finally {
     busy.value = false
   }
-}
-
-async function goRegister() {
-  await router.push('/account/register')
 }
 
 async function goChangePassword() {
@@ -260,21 +327,49 @@ watch(
   <AppShell>
     <div v-if="!auth.isLoggedIn" class="login-wrap">
       <div class="card login-card">
-        <p class="title">登录</p>
+        <p class="title">登录 / 注册</p>
         <div class="grid" style="margin-top: 10px">
           <div>
-            <label>username</label>
+            <label>邮箱</label>
+            <input v-model.trim="emailForm.email" type="email" autocomplete="email" />
+          </div>
+          <div>
+            <label>验证码</label>
+            <div class="code-row">
+              <input
+                v-model.trim="emailForm.code"
+                inputmode="numeric"
+                maxlength="6"
+                autocomplete="one-time-code"
+                @keydown.enter="onEmailLogin"
+              />
+              <button class="ghost" type="button" :disabled="sendingCode || countdown > 0" @click="onSendCode">
+                {{ countdown > 0 ? `${countdown}s` : '发送验证码' }}
+              </button>
+            </div>
+          </div>
+          <button class="primary" type="button" :disabled="busy" @click="onEmailLogin">登录 / 注册</button>
+        </div>
+
+        <div class="oauth-row">
+          <button class="ghost oauth" type="button" @click="onOauthSoon">微信登录</button>
+          <button class="ghost oauth" type="button" @click="onOauthSoon">QQ 登录</button>
+        </div>
+
+        <button class="linkish" type="button" @click="passwordOpen = !passwordOpen">
+          {{ passwordOpen ? '收起账号密码登录' : '账号密码登录' }}
+        </button>
+
+        <div v-if="passwordOpen" class="grid" style="margin-top: 10px">
+          <div>
+            <label>用户名</label>
             <input v-model.trim="loginForm.username" autocomplete="username" />
           </div>
           <div>
-            <label>password</label>
+            <label>密码</label>
             <input v-model.trim="loginForm.password" type="password" autocomplete="current-password" @keydown.enter="onLogin" />
           </div>
           <button class="primary" type="button" :disabled="busy" @click="onLogin">登录</button>
-        </div>
-
-        <div class="row" style="justify-content: space-between; margin-top: 14px">
-          <button class="ghost" type="button" :disabled="busy" @click="goRegister">注册账号</button>
           <button class="ghost" type="button" :disabled="busy" @click="goChangePassword">修改密码</button>
         </div>
       </div>
@@ -409,6 +504,37 @@ watch(
 
 .login-card {
   width: min(420px, 100%);
+}
+
+.code-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.oauth-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.oauth {
+  text-align: center;
+}
+
+.linkish {
+  margin-top: 14px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.linkish:hover {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .ghost {

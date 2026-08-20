@@ -1,4 +1,4 @@
-﻿export type TokenResponse = { token: string }
+﻿export type TokenResponse = { token: string; created?: boolean }
 
 export type Account = {
   id: number

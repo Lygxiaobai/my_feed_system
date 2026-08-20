@@ -7,12 +7,17 @@ related:
   - backend/internal/account/handler.go
   - backend/internal/account/repo.go
   - backend/internal/account/entity.go
+  - backend/internal/account/email.go
+  - backend/internal/account/otp.go
+  - backend/internal/account/smtp.go
   - backend/internal/account/token_cache.go
 ---
 # account
 
 ## raw source
-Accounts support registration, login, identity lookup, logout, password changes, and profile changes with authenticated state enforced by the backend.
+Accounts support password login, email one-time-code login that also registers, identity lookup, logout, password changes, and profile changes with authenticated state enforced by the backend.
 
 ## expanded spec
-Passwords are not stored as plaintext. Login establishes the service's current authentication state, logout invalidates it, and account mutations must preserve the relationship between identity, token state, and persisted account data. HTTP handlers, persistence, entities, and token caching are supporting implementation details of this contract.
+Passwords are not stored as plaintext. Login establishes the service's current authentication state, logout invalidates it, and account mutations must preserve the relationship between identity, token state, and persisted account data.
+
+An account may have no password when it was created by email verification. Email login is login-or-register: a verified address binds to one identity row (`provider=email`) and either opens the existing account or creates one. Ordinary addresses receive a six-digit code by SMTP; the code is stored only as a hash with a short lifetime and is consumed on success. Addresses whose local part is only digits and whose domain is the configured test domain do not send mail and accept any six-digit code after a send session has been opened. Failed verification does not distinguish missing, expired, or wrong codes. WeChat and QQ identities are reserved in the binding table and are not accepted as login providers yet.

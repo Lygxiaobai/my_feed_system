@@ -23,6 +23,8 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/register", h.Register)
 	rg.POST("/login", h.Login)
+	rg.POST("/email/sendCode", h.SendEmailCode)
+	rg.POST("/email/verify", h.VerifyEmail)
 	rg.POST("/findByID", h.FindByID)
 	rg.POST("/findByUsername", h.FindByUsername)
 }
@@ -84,6 +86,60 @@ func (h *Handler) Login(c *gin.Context) {
 		"account": accountView(account.Account.ID, account.Account.Username),
 		"token":   account.Token,
 	})
+}
+
+// SendEmailCode 发送或建立邮箱验证码会话。
+func (h *Handler) SendEmailCode(c *gin.Context) {
+	var req SendEmailCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
+		return
+	}
+
+	if err := h.service.SendEmailCode(c.Request.Context(), req); err != nil {
+		writeEmailError(c, err)
+		return
+	}
+	response.OK(c, nil)
+}
+
+// VerifyEmail 用验证码登录或注册。
+func (h *Handler) VerifyEmail(c *gin.Context) {
+	var req VerifyEmailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
+		return
+	}
+
+	result, err := h.service.VerifyEmail(c.Request.Context(), req)
+	if err != nil {
+		writeEmailError(c, err)
+		return
+	}
+	response.OK(c, gin.H{
+		"account": accountView(result.Account.ID, result.Account.Username),
+		"token":   result.Token,
+		"created": result.Created,
+	})
+}
+
+func writeEmailError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, ErrEmailInvalid):
+		response.FailTip(c, http.StatusBadRequest, response.ParamFormatError, "邮箱格式不正确", err)
+	case errors.Is(err, ErrEmailCodeInvalid):
+		response.FailTip(c, http.StatusBadRequest, response.ParamError, "验证码不正确", err)
+	case errors.Is(err, ErrEmailCooldown):
+		response.FailTip(c, http.StatusTooManyRequests, response.RateLimited, "验证码发送过于频繁，请稍后再试", err)
+	case errors.Is(err, ErrMailNotConfigured):
+		response.FailTip(c, http.StatusServiceUnavailable, response.SystemError, "邮件服务未配置", err)
+	case errors.Is(err, ErrMailSendFailed):
+		response.FailTip(c, http.StatusServiceUnavailable, response.ThirdPartyError, "验证码发送失败，请稍后重试", err)
+	case errors.Is(err, ErrEmailStoreMissing):
+		response.Fail(c, http.StatusServiceUnavailable, response.CacheError, err)
+	default:
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
+	}
 }
 
 // FindByID 根据账号 ID 查询公开资料。

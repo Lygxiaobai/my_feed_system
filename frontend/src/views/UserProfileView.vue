@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
 import AppShell from '../components/AppShell.vue'
 import Skeleton from '../components/Skeleton.vue'
 import UserAvatar from '../components/UserAvatar.vue'
@@ -161,9 +162,11 @@ async function toggleFollow() {
     applyFollowerOptimisticChange(nextShouldFollow)
     if (!nextShouldFollow) {
       await social.unfollow(userId.value)
+      track('unfollow', { author_id: userId.value, from: 'profile' })
       toast.info('已取关')
     } else {
       await social.follow(userId.value, state.user?.username)
+      track('follow', { author_id: userId.value, from: 'profile' })
       toast.success('已关注')
     }
     void syncSocialCountsUntil(nextShouldFollow)

@@ -2,6 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
+import { createWatchSession } from '../analytics/watch'
 import AppShell from '../components/AppShell.vue'
 import CommentListSkeleton from '../components/CommentListSkeleton.vue'
 import FeedStageSkeleton from '../components/FeedStageSkeleton.vue'
@@ -35,6 +37,7 @@ const state = reactive({
 
 const muted = ref(true)
 const player = ref<VideoPlayerHandle | null>(null)
+const watchSession = createWatchSession()
 let tapTimer: number | undefined
 let videoLoadRequestId = 0
 
@@ -142,6 +145,7 @@ async function toggleLike() {
   state.video.likes_count = Math.max(0, state.video.likes_count + (nextLiked ? 1 : -1))
   try {
     await likeApi.setLikedAndConfirm(videoId, nextLiked)
+    track(nextLiked ? 'video_like' : 'video_unlike', { video_id: videoId, from: 'detail' })
   } catch (e) {
     if (state.video?.id === videoId) {
       state.isLiked = previousLiked
@@ -165,9 +169,11 @@ async function toggleFollow() {
   try {
     if (social.isFollowing(state.video.author_id)) {
       await social.unfollow(state.video.author_id)
+      track('unfollow', { author_id: state.video.author_id, from: 'detail' })
       toast.info('已取关')
     } else {
       await social.follow(state.video.author_id, state.video.username)
+      track('follow', { author_id: state.video.author_id, from: 'detail' })
       toast.success('已关注')
     }
   } catch (e) {
@@ -314,6 +320,7 @@ async function publishComment() {
     applyComments(insertPublishedComment(drawer.comments, res.comment))
     expandReplies(res.comment.root_comment_id || res.comment.parent_comment_id)
     void syncCommentsUntil(res.comment.id, true)
+    track('comment_submit', { video_id: videoId, is_reply: !!res.comment.parent_comment_id, from: 'detail' })
     toast.success('评论已发布')
   } catch (e) {
     if (!drawer.open || state.video?.id !== videoId) return
@@ -357,6 +364,7 @@ async function deleteComment(commentId: number) {
 watch(
   () => id.value,
   async () => {
+    watchSession.end(player.value ?? undefined, { from: 'detail' })
     player.value?.pause()
     closeDrawer()
     await loadVideo()
@@ -388,6 +396,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (tapTimer !== undefined) window.clearTimeout(tapTimer)
+  watchSession.end(player.value ?? undefined, { from: 'detail' })
   player.value?.pause()
 })
 </script>
@@ -415,6 +424,7 @@ onBeforeUnmount(() => {
             :poster="state.video.cover_url"
             :active="true"
             :muted="muted"
+            @playing="state.video && watchSession.play(state.video.id, { from: 'detail' })"
           />
           <div class="grad" />
 

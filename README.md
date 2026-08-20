@@ -168,6 +168,7 @@ ssh -L 3000:127.0.0.1:3000 <your-server>
 - **按请求追踪**：拿用户报错里的 `requestId`，在 Grafana 的 Loki 面板执行
   `{service=~"backend|worker"} |= "<requestId>"`
 - **只看错误**：`{service=~"backend|worker", level=~"ERROR|WARN"}`
+- **产品埋点**：`{service="backend"} |= "product_event"`，再按 `event`、`visitor_id`、`account_id` 过滤
 - **不开 Grafana 时**：`docker logs my-feed-system-backend 2>&1 | grep '"level":"ERROR"'`
 
 ## 配置与部署边界

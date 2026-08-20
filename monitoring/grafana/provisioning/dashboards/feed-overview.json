@@ -170,6 +170,23 @@
         "wrapLogMessage": true,
         "sortOrder": "Descending"
       }
+    },
+    {
+      "type": "logs",
+      "title": "产品埋点（page_view / play / like / follow …）",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 30 },
+      "datasource": { "type": "loki", "uid": "loki_uid" },
+      "targets": [
+        {
+          "expr": "{service=\"backend\"} |= \"product_event\"",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
     }
   ],
   "templating": {

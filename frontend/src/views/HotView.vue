@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, watch } from 'vue'
 
+import { track } from '../analytics/track'
 import { ApiError } from '../api/client'
 import * as feedApi from '../api/feed'
 import * as likeApi from '../api/like'
@@ -86,6 +87,7 @@ async function toggleLike(item: FeedVideoItem) {
     else await likeApi.like(item.id)
     item.is_liked = !item.is_liked
     item.likes_count = Math.max(0, item.likes_count + (item.is_liked ? 1 : -1))
+    track(item.is_liked ? 'video_like' : 'video_unlike', { video_id: item.id, from: 'hot' })
   } catch (e) {
     const msg = e instanceof ApiError ? e.message : String(e)
     toast.error(msg)

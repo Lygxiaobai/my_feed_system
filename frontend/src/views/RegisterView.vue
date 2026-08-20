@@ -2,6 +2,7 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
 import AppShell from '../components/AppShell.vue'
 import { ApiError } from '../api/client'
 import * as accountApi from '../api/account'
@@ -25,6 +26,7 @@ async function submit() {
   busy.value = true
   try {
     await accountApi.register(username, password)
+    track('register')
     toast.success('注册成功，请登录')
     await router.push('/account')
   } catch (e) {

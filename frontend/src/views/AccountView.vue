@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
 import AppShell from '../components/AppShell.vue'
 import Skeleton from '../components/Skeleton.vue'
 import UserAvatar from '../components/UserAvatar.vue'
@@ -157,6 +158,7 @@ async function onLogin() {
   try {
     const res = await accountApi.login(username, password)
     auth.setToken(res.token)
+    track('login')
     toast.success('登录成功')
     await social.refreshMine()
     await Promise.all([loadMyVideos(), loadLikedVideos()])

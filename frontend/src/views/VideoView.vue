@@ -2,6 +2,7 @@
 import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
 import AppShell from '../components/AppShell.vue'
 import { AbortedError, ApiError } from '../api/client'
 import * as videoApi from '../api/video'
@@ -159,6 +160,7 @@ async function onPublish() {
     )
 
     published.value = res
+    track('video_publish', { video_id: res.id })
     publishRequestKey.value = ''
     publishForm.title = ''
     publishForm.description = ''

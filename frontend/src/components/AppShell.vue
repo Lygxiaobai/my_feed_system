@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
 import { useAuthStore } from '../stores/auth'
 import { useSocialStore } from '../stores/social'
 import Toaster from './Toaster.vue'
@@ -42,6 +43,7 @@ watch(
 async function onSearch() {
   const q = search.value.trim()
   searchOpen.value = false
+  if (q) track('search', { query: q })
   await router.push({ path: '/', query: q ? { q } : {} })
 }
 

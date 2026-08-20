@@ -2,6 +2,7 @@
 import { computed, nextTick, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
 import AppShell from '../components/AppShell.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { ApiError } from '../api/client'
@@ -76,6 +77,7 @@ async function onLogout() {
     toast.error(`登出失败：${msg}`)
   } finally {
     auth.clearToken()
+    track('logout')
     rename.open = false
     toast.info('已退出登录')
     busy.value = false

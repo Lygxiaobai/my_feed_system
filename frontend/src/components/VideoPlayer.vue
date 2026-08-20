@@ -9,7 +9,13 @@ export type VideoPlayerHandle = {
   toggle: () => Promise<boolean>
   setMuted: (muted: boolean) => void
   isPaused: () => boolean
+  currentTime: () => number
+  duration: () => number
 }
+
+const emit = defineEmits<{
+  playing: []
+}>()
 
 const props = withDefaults(
   defineProps<{
@@ -102,6 +108,16 @@ function onCanPlay() {
 
 function onPlaying() {
   setStatus('playing')
+  emit('playing')
+}
+
+function currentTime() {
+  return videoEl.value?.currentTime ?? 0
+}
+
+function duration() {
+  const value = videoEl.value?.duration
+  return Number.isFinite(value) ? (value as number) : 0
 }
 
 function onPause() {
@@ -168,6 +184,8 @@ defineExpose<VideoPlayerHandle>({
   toggle,
   setMuted,
   isPaused,
+  currentTime,
+  duration,
 })
 </script>
 

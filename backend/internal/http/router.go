@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"my_feed_system/internal/account"
+	"my_feed_system/internal/analytics"
 	"my_feed_system/internal/audit"
 	"my_feed_system/internal/config"
 	"my_feed_system/internal/comment"
@@ -59,7 +60,7 @@ func NewRouterWithLocalCaches(
 	r.Use(requestid.New())
 	r.Use(accesslog.New(accesslog.Options{
 		// 健康检查每十秒一次，指标端点由 Prometheus 定期抓取，都属于记录了也无人查看的噪音。
-		SkipPaths:     []string{"/ping", "/metrics"},
+		SkipPaths:     []string{"/ping", "/metrics", "/event/report"},
 		SlowThreshold: time.Second,
 	}))
 
@@ -167,6 +168,16 @@ func NewRouterWithLocalCaches(
 		Window:   time.Minute,
 		FailOpen: true,
 	})
+
+	eventReportIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "event.report.ip",
+		Limit:    80,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	eventGroup := r.Group("/event")
+	eventGroup.Use(jwtmiddleware.OptionalJWTAuth(jwtSecret), eventReportIPLimit)
+	analytics.NewHandler().RegisterRoutes(eventGroup)
 
 	accountHandler := account.NewHandler(account.NewServiceWithTokenCache(db, tokenCache, jwtSecret))
 	accountGroup := r.Group("/account")

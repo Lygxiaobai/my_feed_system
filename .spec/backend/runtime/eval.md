@@ -40,6 +40,11 @@ scenarios:
     expected: Neither produces access-log records, so log volume reflects real traffic rather than monitoring.
     tags:
       - backend-api
+  - name: product-event-reports-skip-access-logs
+    description: The client reports a batch of product events.
+    expected: The report request does not produce an access-log record; each accepted event appears as a product_event log record that can be found by visitor or account identity.
+    tags:
+      - backend-api
   - name: startup-fails-when-required-secrets-are-absent
     description: A process starts with no credential values supplied by the environment.
     expected: Startup aborts and names every missing variable in one message; no component receives an empty password or an empty signing key.

@@ -2,6 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
+import { createWatchSession } from '../analytics/watch'
 import AppShell from '../components/AppShell.vue'
 import CommentListSkeleton from '../components/CommentListSkeleton.vue'
 import FeedStageSkeleton from '../components/FeedStageSkeleton.vue'
@@ -61,6 +63,7 @@ const following = reactive({
 
 const likeBusy = reactive<Record<string, boolean>>({})
 const followBusy = reactive<Record<string, boolean>>({})
+const watchSession = createWatchSession()
 
 const muted = ref(true)
 const activeIndex = ref(0)
@@ -342,6 +345,7 @@ async function toggleLike(item: FeedVideoItem) {
   item.likes_count = Math.max(0, item.likes_count + (nextLiked ? 1 : -1))
   try {
     await likeApi.setLikedAndConfirm(item.id, nextLiked)
+    track(nextLiked ? 'video_like' : 'video_unlike', { video_id: item.id, feed: tab.value })
   } catch (e) {
     item.is_liked = previousLiked
     item.likes_count = Math.max(0, item.likes_count + (previousLiked ? 1 : -1))
@@ -360,10 +364,12 @@ async function toggleFollow(authorId: number) {
   try {
     if (social.isFollowing(authorId)) {
       await social.unfollow(authorId)
+      track('unfollow', { author_id: authorId, feed: tab.value })
       toast.info('已取关')
     } else {
       const author = currentState.value.items.find((item) => item.author.id === authorId)?.author
       await social.follow(authorId, author?.username)
+      track('follow', { author_id: authorId, feed: tab.value })
       toast.success('已关注')
     }
   } catch (e) {
@@ -530,6 +536,7 @@ async function publishComment() {
     applyComments(insertPublishedComment(drawer.comments, res.comment))
     expandReplies(res.comment.root_comment_id || res.comment.parent_comment_id)
     void syncCommentsUntil(res.comment.id, true)
+    track('comment_submit', { video_id: videoId, is_reply: !!res.comment.parent_comment_id })
     toast.success('评论已发布')
   } catch (e) {
     if (!drawer.open || drawer.video?.id !== videoId) return
@@ -603,15 +610,22 @@ function onStageDoubleClick(item: FeedVideoItem) {
   void toggleLike(item)
 }
 
-watch(activeItem, async () => {
-  await nextTick()
-  await playActive()
-  await loadMoreIfNeeded()
-})
+watch(
+  () => activeItem.value?.id,
+  async (currentId, previousId) => {
+    if (previousId && previousId !== currentId) {
+      watchSession.end(playerMap.get(previousId) ?? undefined, { feed: tab.value })
+    }
+    await nextTick()
+    await playActive()
+    await loadMoreIfNeeded()
+  },
+)
 
 watch(
   () => tab.value,
   async () => {
+    watchSession.end(activeItem.value ? playerMap.get(activeItem.value.id) : undefined, { feed: tab.value })
     activeIndex.value = 0
     pauseAllPlayers()
     playerMap.clear()
@@ -680,6 +694,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (tapTimer !== undefined) window.clearTimeout(tapTimer)
+  watchSession.end(activeItem.value ? playerMap.get(activeItem.value.id) : undefined, { feed: tab.value })
   slideObserver?.disconnect()
   slideObserver = null
   pauseAllPlayers()
@@ -726,6 +741,7 @@ onBeforeUnmount(() => {
               :active="idx === activeIndex"
               :enabled="Math.abs(idx - activeIndex) <= 1"
               :muted="muted"
+              @playing="watchSession.play(item.id, { feed: tab })"
             />
             <div class="grad" />
 

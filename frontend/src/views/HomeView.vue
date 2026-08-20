@@ -395,6 +395,7 @@ const drawer = reactive({
   comments: [] as Comment[],
   content: '',
   replyTarget: null as Comment | CommentReply | null,
+  expandedReplies: {} as Record<number, boolean>,
 })
 
 const commentSyncAttempts = 6
@@ -402,6 +403,18 @@ const commentSyncDelayMs = 400
 
 function clearReplyTarget() {
   drawer.replyTarget = null
+}
+
+function isRepliesOpen(commentId: number) {
+  return !!drawer.expandedReplies[commentId]
+}
+
+function toggleReplies(commentId: number) {
+  drawer.expandedReplies[commentId] = !drawer.expandedReplies[commentId]
+}
+
+function expandReplies(commentId: number) {
+  if (commentId > 0) drawer.expandedReplies[commentId] = true
 }
 
 function applyComments(comments: Comment[]) {
@@ -427,6 +440,7 @@ function closeDrawer() {
   drawer.comments = []
   drawer.content = ''
   drawer.error = ''
+  drawer.expandedReplies = {}
   clearReplyTarget()
 }
 
@@ -468,6 +482,8 @@ function isDrawerBusy() {
 
 function startReply(target: Comment | CommentReply) {
   drawer.replyTarget = target
+  const rootId = 'replies' in target ? target.id : target.root_comment_id || target.parent_comment_id
+  expandReplies(rootId)
 }
 
 async function syncCommentsUntil(commentId: number, shouldExist: boolean) {
@@ -512,6 +528,7 @@ async function publishComment() {
     drawer.content = ''
     clearReplyTarget()
     applyComments(insertPublishedComment(drawer.comments, res.comment))
+    expandReplies(res.comment.root_comment_id || res.comment.parent_comment_id)
     void syncCommentsUntil(res.comment.id, true)
     toast.success('评论已发布')
   } catch (e) {
@@ -788,9 +805,12 @@ onBeforeUnmount(() => {
                 <button v-if="canDeleteComment(c)" class="chip danger" type="button" :disabled="isDrawerBusy()" @click="deleteComment(c.id)">
                   删除
                 </button>
+                <button v-if="c.replies.length > 0" class="chip" type="button" @click="toggleReplies(c.id)">
+                  {{ isRepliesOpen(c.id) ? '收起' : `展开 ${c.replies.length} 条回复` }}
+                </button>
               </div>
 
-              <div v-if="c.replies.length > 0" class="reply-list">
+              <div v-if="c.replies.length > 0 && isRepliesOpen(c.id)" class="reply-list">
                 <div class="reply" v-for="reply in c.replies" :key="reply.id">
                   <div class="comment-top">
                     <div class="comment-user">{{ reply.username }}</div>

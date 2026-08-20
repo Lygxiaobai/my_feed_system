@@ -103,6 +103,10 @@ function cancel() {
   abortController?.abort()
 }
 
+function awaitingReview(video: Video | null) {
+  return video?.audit_status === 'pending' || video?.audit_status === 'reviewing'
+}
+
 async function onPublish() {
   if (busy.value) return
   if (!auth.isLoggedIn) {
@@ -159,9 +163,8 @@ async function onPublish() {
     publishForm.title = ''
     publishForm.description = ''
     clearVideo()
-    // 发布后内容处于待审状态，仅作者本人可见，审核通过才进入信息流。
-    // 这里如实告知，避免用户以为发布失败而反复重传。
-    toast.success('已提交，审核通过后将出现在信息流中')
+    // 审核开启时发布为待审，关闭时发布即公开。按返回状态提示，避免用户误以为失败。
+    toast.success(awaitingReview(res) ? '已提交，审核通过后将出现在信息流中' : '发布成功')
   } catch (error) {
     // 用户主动取消属于正常操作，不当作失败处理。
     if (error instanceof AbortedError) {
@@ -244,7 +247,13 @@ async function onPublish() {
           <div class="row" style="justify-content: space-between; align-items: center">
             <div>
               <div class="title" style="margin: 0">{{ published.title }}</div>
-              <div class="audit-tip">审核通过后才会出现在信息流中，你可以先在「我的」里查看</div>
+              <div class="audit-tip">
+                {{
+                  awaitingReview(published)
+                    ? '审核通过后才会出现在信息流中，你可以先在「我的」里查看'
+                    : '已出现在信息流中'
+                }}
+              </div>
             </div>
             <RouterLink class="pill" :to="`/video/${published.id}`">去播放</RouterLink>
           </div>

@@ -86,6 +86,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      AUDIT_ENABLED: ${AUDIT_ENABLED:-false}
     restart: unless-stopped
     depends_on:
       mysql:
@@ -121,6 +122,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      AUDIT_ENABLED: ${AUDIT_ENABLED:-false}
     restart: unless-stopped
     command: ["/app/worker"]
     depends_on:

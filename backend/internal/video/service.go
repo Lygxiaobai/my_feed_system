@@ -47,22 +47,24 @@ type Service struct {
 	localDetail     *LocalDetailCache
 	publisher       *mq.Publisher
 	mediaValidator  MediaValidator
+	approval        *ApprovalPublisher
+	auditEnabled    bool
 	detailGroup     singleflight.Group
 }
 
 func NewService(db *gorm.DB, popularityService *popularity.Service, uploadDir string) *Service {
-	return NewServiceWithCachesAndPublisher(db, popularityService, nil, nil, nil, uploadDir)
+	return NewServiceWithCachesAndPublisher(db, popularityService, nil, nil, nil, uploadDir, false)
 }
 
 func NewServiceWithDetailCache(db *gorm.DB, popularityService *popularity.Service, detailCache *DetailCache, uploadDir string) *Service {
-	return NewServiceWithCachesAndPublisher(db, popularityService, detailCache, nil, nil, uploadDir)
+	return NewServiceWithCachesAndPublisher(db, popularityService, detailCache, nil, nil, uploadDir, false)
 }
 
 func NewServiceWithDetailCacheAndPublisher(db *gorm.DB, popularityService *popularity.Service, detailCache *DetailCache, publisher *mq.Publisher, uploadDir string) *Service {
-	return NewServiceWithCachesAndPublisher(db, popularityService, detailCache, nil, publisher, uploadDir)
+	return NewServiceWithCachesAndPublisher(db, popularityService, detailCache, nil, publisher, uploadDir, false)
 }
 
-func NewServiceWithCachesAndPublisher(db *gorm.DB, popularityService *popularity.Service, detailCache *DetailCache, localDetail *LocalDetailCache, publisher *mq.Publisher, uploadDir string) *Service {
+func NewServiceWithCachesAndPublisher(db *gorm.DB, popularityService *popularity.Service, detailCache *DetailCache, localDetail *LocalDetailCache, publisher *mq.Publisher, uploadDir string, auditEnabled bool) *Service {
 	return &Service{
 		db:              db,
 		repo:            NewRepo(db),
@@ -73,6 +75,8 @@ func NewServiceWithCachesAndPublisher(db *gorm.DB, popularityService *popularity
 		localDetail:     localDetail,
 		publisher:       publisher,
 		mediaValidator:  NewMediaValidator(uploadDir),
+		approval:        NewApprovalPublisher(db),
+		auditEnabled:    auditEnabled,
 	}
 }
 
@@ -140,27 +144,16 @@ func (s *Service) Publish(accountID uint64, username string, idemKey string, req
 			PlayURL:     playURL,
 			CoverURL:    coverURL,
 			Popularity:  int64(popularity.PublishWeight),
-			// 发布即待审：此刻内容仅作者本人可见，不进入任何公开信息流。
-			AuditStatus: audit.StatusPending,
+			// 审核关闭时发布即公开；打开时先待审，仅作者可见。
+			AuditStatus: s.initialAuditStatus(),
 		}
 
 		if err := s.repo.Create(tx, video); err != nil {
 			return err
 		}
 
-		// 这里只发审核事件。推送全局时间线与计入热度都属于「让内容公开可见」，
-		// 必须推迟到审核通过之后，否则未过审内容会经 Redis 时间线与热度榜
-		// 绕过数据库层的过滤泄漏出去。
-		event, err := mq.NewEnvelope(mq.EventTypeAuditRequested, mq.ProducerAPIServer, mq.AuditRequestedPayload{
-			TargetType: string(audit.TargetVideo),
-			TargetID:   video.ID,
-			AuthorID:   video.AuthorID,
-		})
-		if err != nil {
-			return fmt.Errorf("build audit outbox event: %w", err)
-		}
-		if err := s.outboxRepo.Enqueue(tx, event); err != nil {
-			return fmt.Errorf("enqueue audit outbox event: %w", err)
+		if err := s.enqueueAfterCreate(tx, video); err != nil {
+			return err
 		}
 
 		responseVideo := *video
@@ -180,8 +173,8 @@ func (s *Service) Publish(accountID uint64, username string, idemKey string, req
 	}
 
 	if createdNew && s.popularity != nil {
-		// 只在本地对象上带出初始热度供响应展示，不写入 Redis 排行榜——
-		// 写入排行榜等同于公开，必须等审核通过后由审核流程触发。
+		// 只在本地对象上带出初始热度供响应展示。
+		// 审核开启时排行榜由过审流程写入；关闭时由下方的公开化事件写入。
 		video.Popularity = int64(popularity.PublishWeight)
 	}
 	if createdNew {
@@ -189,6 +182,37 @@ func (s *Service) Publish(accountID uint64, username string, idemKey string, req
 	}
 
 	return video, nil
+}
+
+func (s *Service) initialAuditStatus() audit.Status {
+	if s.auditEnabled {
+		return audit.StatusPending
+	}
+	return audit.StatusApproved
+}
+
+// enqueueAfterCreate 在同一事务里投递发布后的后续事件。
+// 审核开启时只发审核事件，公开化推迟到过审；关闭时直接公开。
+func (s *Service) enqueueAfterCreate(tx *gorm.DB, video *Video) error {
+	if !s.auditEnabled {
+		if err := s.approval.EnqueueOnPublish(tx, video.ID, video.AuthorID); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	event, err := mq.NewEnvelope(mq.EventTypeAuditRequested, mq.ProducerAPIServer, mq.AuditRequestedPayload{
+		TargetType: string(audit.TargetVideo),
+		TargetID:   video.ID,
+		AuthorID:   video.AuthorID,
+	})
+	if err != nil {
+		return fmt.Errorf("build audit outbox event: %w", err)
+	}
+	if err := s.outboxRepo.Enqueue(tx, event); err != nil {
+		return fmt.Errorf("enqueue audit outbox event: %w", err)
+	}
+	return nil
 }
 
 // ListByAuthorID 返回作者的作品列表。

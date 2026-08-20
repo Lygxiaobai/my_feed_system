@@ -44,6 +44,8 @@ log:
   format: ${LOG_FORMAT:-json}
 
 audit:
+  # 审核总开关，默认关闭。打开后发布进入待审，通过才进入信息流。
+  enabled: ${AUDIT_ENABLED:-false}
   block_word_file: /app/configs/audit/block-words.txt
   review_word_file: /app/configs/audit/review-words.txt
   # 未接入媒体审核能力时视频与封面的处置方式：review 转人工 / pass 直接放行。

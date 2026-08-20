@@ -27,6 +27,9 @@ type Config struct {
 // 词库文件本身属于敏感资产（会被用来反推规则并试探绕过），
 // 与密钥同等对待：不进版本库，通过路径引用。
 type AuditConfig struct {
+	// Enabled 是审核总开关。未配置或为 false 时发布即公开，
+	// 不投递审核事件、不启动机审消费者、不挂人工复审接口。
+	Enabled bool `yaml:"enabled"`
 	// BlockWordFile 命中即拒绝的词库路径。
 	BlockWordFile string `yaml:"block_word_file"`
 	// ReviewWordFile 命中转人工的词库路径。

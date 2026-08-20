@@ -103,14 +103,20 @@ func main() {
 	popularityWorker := workerpkg.NewPopularityWorker(database, popularityService, detailCache)
 	timelineConsumer := workerpkg.NewTimelineConsumer(timelineStore, latestCache, publisher)
 	mediaWorker := workerpkg.NewMediaWorker(database, cfg.Upload.Dir)
-	auditService := audit.NewService(
-		database,
-		video.NewAuditStore(database),
-		buildModerator(cfg.Audit),
-		video.NewApprovalPublisher(database),
-		cfg.Audit.ReviewerAccountIDs,
-	)
-	auditWorker := workerpkg.NewAuditWorker(auditService)
+	var auditWorker *workerpkg.AuditWorker
+	if cfg.Audit.Enabled {
+		auditService := audit.NewService(
+			database,
+			video.NewAuditStore(database),
+			buildModerator(cfg.Audit),
+			video.NewApprovalPublisher(database),
+			cfg.Audit.ReviewerAccountIDs,
+		)
+		auditWorker = workerpkg.NewAuditWorker(auditService)
+		slog.Info("content audit enabled")
+	} else {
+		slog.Info("content audit disabled, audit consumer will not start")
+	}
 	popularityProjectionPoller := popularity.NewProjectionPoller(popularity.NewProjectionRepo(database), popularityService)
 
 	consumerTagPrefix := strings.TrimSpace(cfg.RabbitMQ.ConsumerTag)
@@ -141,7 +147,9 @@ func main() {
 	start(mq.QueuePopularityUpdate, "popularity", popularityWorker.Handle)
 	start(mq.QueueTimelineUpdate, "timeline", timelineConsumer.Handle)
 	start(mq.QueueMediaTranscode, "media", mediaWorker.Handle)
-	start(mq.QueueAuditModerate, "audit", auditWorker.Handle)
+	if auditWorker != nil {
+		start(mq.QueueAuditModerate, "audit", auditWorker.Handle)
+	}
 
 	for _, spec := range mq.QueueSpecs() {
 		spec := spec

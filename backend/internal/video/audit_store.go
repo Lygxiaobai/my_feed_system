@@ -96,6 +96,15 @@ func NewApprovalPublisher(db *gorm.DB) *ApprovalPublisher {
 }
 
 func (p *ApprovalPublisher) EnqueueApproved(tx *gorm.DB, videoID uint64, authorID uint64) error {
+	return p.enqueuePublic(tx, videoID, authorID, "audit.approved")
+}
+
+// EnqueueOnPublish 在审核关闭时于发布事务内直接公开内容。
+func (p *ApprovalPublisher) EnqueueOnPublish(tx *gorm.DB, videoID uint64, authorID uint64) error {
+	return p.enqueuePublic(tx, videoID, authorID, "video.published")
+}
+
+func (p *ApprovalPublisher) enqueuePublic(tx *gorm.DB, videoID uint64, authorID uint64, reason string) error {
 	// 推入全局时间线，内容自此出现在最新流中。
 	timelineEvent, err := mq.NewEnvelope(mq.EventTypeVideoTimelinePush, mq.ProducerAPIServer, mq.VideoTimelinePayload{
 		VideoID:   videoID,
@@ -103,23 +112,23 @@ func (p *ApprovalPublisher) EnqueueApproved(tx *gorm.DB, videoID uint64, authorI
 		CreatedAt: time.Now().UTC(),
 	})
 	if err != nil {
-		return fmt.Errorf("build timeline event after approval: %w", err)
+		return fmt.Errorf("build timeline event after %s: %w", reason, err)
 	}
 	if err := p.outboxRepo.Enqueue(tx, timelineEvent); err != nil {
-		return fmt.Errorf("enqueue timeline event after approval: %w", err)
+		return fmt.Errorf("enqueue timeline event after %s: %w", reason, err)
 	}
 
-	// 计入热度榜。发布权重在审核通过时才记，未过审内容不参与热度竞争。
+	// 计入热度榜。未过审内容不参与热度竞争，因此只在公开这一刻写入。
 	popularityEvent, err := mq.NewEnvelope(mq.EventTypePopularityChanged, mq.ProducerAPIServer, mq.PopularityChangedPayload{
 		VideoID: videoID,
 		Delta:   int64(popularity.PublishWeight),
-		Reason:  "audit.approved",
+		Reason:  reason,
 	})
 	if err != nil {
-		return fmt.Errorf("build popularity event after approval: %w", err)
+		return fmt.Errorf("build popularity event after %s: %w", reason, err)
 	}
 	if err := p.outboxRepo.Enqueue(tx, popularityEvent); err != nil {
-		return fmt.Errorf("enqueue popularity event after approval: %w", err)
+		return fmt.Errorf("enqueue popularity event after %s: %w", reason, err)
 	}
 
 	return nil

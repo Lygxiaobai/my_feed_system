@@ -19,7 +19,7 @@ type Video struct {
 	CommentCount int64     `gorm:"not null;default:0" json:"comment_count"`
 	Popularity   int64     `gorm:"not null;default:0;index:idx_videos_popularity" json:"popularity"`
 	// AuditStatus 决定内容能否进入公开信息流。
-	// 默认 pending：发布后仅作者可见，机审或人工通过后才公开。
+	// 列默认 pending，业务层按 audit.enabled 写入：关闭时直接 approved。
 	// 与 created_at 组成联合索引，因为所有信息流查询都会带上这个过滤条件。
 	AuditStatus audit.Status `gorm:"size:20;not null;default:'pending';index:idx_videos_audit_created,priority:1" json:"audit_status"`
 	CreatedAt   time.Time    `gorm:"index:idx_videos_audit_created,priority:2" json:"created_at"`

@@ -186,6 +186,7 @@ func NewRouterWithLocalCaches(
 		localDetailCache,
 		publisher,
 		uploadDir,
+		auditCfg.Enabled,
 	), uploadDir, media.NewService(db, uploadDir, maxVideoBytes))
 	videoGroup := r.Group("/video")
 	// 公开路由挂可选鉴权：作者本人需要能看到自己尚未过审的内容，
@@ -197,17 +198,22 @@ func NewRouterWithLocalCaches(
 	protectedVideoGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	videoHandler.RegisterProtectedRoutes(protectedVideoGroup)
 
-	auditService := audit.NewService(
-		db,
-		video.NewAuditStore(db),
-		buildModerator(auditCfg),
-		video.NewApprovalPublisher(db),
-		auditCfg.ReviewerAccountIDs,
-	)
-	auditHandler := audit.NewHandler(auditService)
-	auditGroup := r.Group("/audit")
-	auditGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
-	auditHandler.RegisterProtectedRoutes(auditGroup)
+	if auditCfg.Enabled {
+		auditService := audit.NewService(
+			db,
+			video.NewAuditStore(db),
+			buildModerator(auditCfg),
+			video.NewApprovalPublisher(db),
+			auditCfg.ReviewerAccountIDs,
+		)
+		auditHandler := audit.NewHandler(auditService)
+		auditGroup := r.Group("/audit")
+		auditGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
+		auditHandler.RegisterProtectedRoutes(auditGroup)
+		slog.Info("content audit enabled")
+	} else {
+		slog.Info("content audit disabled, publish goes public immediately")
+	}
 
 	likeHandler := like.NewHandler(like.NewServiceWithCachesAndPublisher(db, popularityService, detailCache, localDetailCache, publisher))
 	likeGroup := r.Group("/like")

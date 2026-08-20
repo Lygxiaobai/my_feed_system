@@ -106,7 +106,7 @@ async function onLogout() {
           <div class="row" style="gap: 12px; align-items: center">
             <UserAvatar :username="me.username" :id="me.id" :size="56" />
             <div>
-              <div class="title" style="margin: 0">@{{ me.username }}</div>
+              <div class="title" style="margin: 0">{{ me.username }}</div>
             </div>
           </div>
         </div>

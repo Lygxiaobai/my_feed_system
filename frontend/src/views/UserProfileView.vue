@@ -245,7 +245,7 @@ onMounted(loadProfile)
           <div>
             <div class="title" style="margin: 0">
               <Skeleton v-if="state.loading && !state.user" width="120px" height="18px" />
-              <template v-else>@{{ state.user?.username ?? '-' }}</template>
+              <template v-else>{{ state.user?.username ?? '-' }}</template>
             </div>
           </div>
         </div>

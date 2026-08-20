@@ -351,6 +351,15 @@ func (s *Service) isTestEmail(email string) bool {
 	return isTestEmailDomain(email, s.emailCfg.TestDomain)
 }
 
+// HasTestEmailIdentity 判断账号是否绑定了测试域邮箱，用于开放运维台。
+func (s *Service) HasTestEmailIdentity(accountID uint64) (bool, error) {
+	email, err := s.repo.FindEmailSubject(accountID)
+	if err != nil || email == "" {
+		return false, err
+	}
+	return s.isTestEmail(email), nil
+}
+
 func (s *Service) otpTTLMinutes() int {
 	seconds := s.emailCfg.CodeTTLSeconds
 	if seconds <= 0 {

@@ -73,6 +73,18 @@ func (r *Repo) UpdateUsernameAndToken(id uint64, username string, token string) 
 	}).Error
 }
 
+// FindEmailSubject 返回账号绑定的邮箱。未绑定则空字符串。
+func (r *Repo) FindEmailSubject(accountID uint64) (string, error) {
+	var identity Identity
+	if err := r.db.Where("account_id = ? AND provider = ?", accountID, ProviderEmail).First(&identity).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil
+		}
+		return "", err
+	}
+	return identity.Subject, nil
+}
+
 // FindByIdentity 按登录方式查找账号。
 func (r *Repo) FindByIdentity(provider string, subject string) (*Account, error) {
 	var identity Identity

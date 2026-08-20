@@ -194,6 +194,8 @@ func (h *Handler) Me(c *gin.Context) {
 // Logout 清空数据库中的 token，实现服务端登出。
 func (h *Handler) Logout(c *gin.Context) {
 	accountID := c.GetUint64("account_id")
+	// 与 jwt.OpsCookieName 保持一致，避免 account 再引用 jwt 造成循环导入。
+	c.SetCookie("feed_ops", "", -1, "/", "", false, true)
 	if err := h.service.Logout(accountID); err != nil {
 		if errors.Is(err, ErrAccountNotFound) {
 			response.Fail(c, http.StatusNotFound, response.AccountNotFound, err)

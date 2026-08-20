@@ -65,3 +65,7 @@ auth:
     user: ${SMTP_USER:-}
     password: ${SMTP_PASSWORD:-}
     from: ${SMTP_FROM:-}
+
+ops:
+  loki_url: ${LOKI_URL:-http://loki:3100}
+  prometheus_url: ${PROMETHEUS_URL:-http://prometheus:9090}

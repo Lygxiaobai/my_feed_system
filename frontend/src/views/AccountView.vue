@@ -10,6 +10,7 @@ import UserListSkeleton from '../components/UserListSkeleton.vue'
 import VideoGridSkeleton from '../components/VideoGridSkeleton.vue'
 import { ApiError } from '../api/client'
 import * as accountApi from '../api/account'
+import * as opsApi from '../api/ops'
 import type { AuditStatus, SocialRelation, Video } from '../api/types'
 import * as videoApi from '../api/video'
 import { useAuthStore } from '../stores/auth'
@@ -26,6 +27,7 @@ const loginForm = reactive({ username: '', password: '' })
 const emailForm = reactive({ email: '', code: '' })
 const passwordOpen = ref(false)
 const sendingCode = ref(false)
+const opsAllowed = ref(false)
 const countdown = ref(0)
 let countdownTimer: number | undefined
 
@@ -249,6 +251,23 @@ async function goSettings() {
   await router.push('/settings')
 }
 
+async function goOps() {
+  await router.push('/ops')
+}
+
+async function loadOpsAccess() {
+  if (!auth.isLoggedIn) {
+    opsAllowed.value = false
+    return
+  }
+  try {
+    const access = await opsApi.opsAccess()
+    opsAllowed.value = access.allowed
+  } catch {
+    opsAllowed.value = false
+  }
+}
+
 type ListTab = 'followers' | 'following'
 const drawer = reactive({
   open: false,
@@ -307,6 +326,7 @@ watch(
       likedVideos.error = ''
 
       videoTab.value = 'works'
+      opsAllowed.value = false
     }
   },
 )
@@ -317,6 +337,9 @@ watch(
     if (auth.isLoggedIn && id) {
       void loadMyVideos()
       void loadLikedVideos()
+      void loadOpsAccess()
+    } else {
+      opsAllowed.value = false
     }
   },
   { immediate: true },
@@ -386,6 +409,7 @@ watch(
           </div>
 
           <div class="row">
+            <button v-if="opsAllowed" class="ghost" type="button" @click="goOps">运维</button>
             <button class="ghost" type="button" @click="goSettings">设置</button>
           </div>
         </div>

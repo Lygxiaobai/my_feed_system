@@ -23,6 +23,7 @@ import (
 	"my_feed_system/internal/middleware/requestid"
 	"my_feed_system/internal/mq"
 	"my_feed_system/internal/observability"
+	"my_feed_system/internal/ops"
 	"my_feed_system/internal/popularity"
 	"my_feed_system/internal/response"
 	"my_feed_system/internal/social"
@@ -37,7 +38,7 @@ func NewRouter(
 	jwtSecret string,
 	uploadDir string,
 ) *gin.Engine {
-	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir, 0, config.AuditConfig{}, config.AuthConfig{})
+	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir, 0, config.AuditConfig{}, config.AuthConfig{}, config.OpsConfig{})
 }
 
 func NewRouterWithLocalCaches(
@@ -53,6 +54,7 @@ func NewRouterWithLocalCaches(
 	maxVideoBytes int64,
 	auditCfg config.AuditConfig,
 	authCfg config.AuthConfig,
+	opsCfg config.OpsConfig,
 ) *gin.Engine {
 	// 不用 gin.Default()：它固定绑定 gin.Logger()，而后者只能输出拼好的文本行，
 	// 无法交给 slog 分级和结构化。这里自行组装等价的中间件链。
@@ -61,7 +63,7 @@ func NewRouterWithLocalCaches(
 	r.Use(requestid.New())
 	r.Use(accesslog.New(accesslog.Options{
 		// 健康检查每十秒一次，指标端点由 Prometheus 定期抓取，都属于记录了也无人查看的噪音。
-		SkipPaths:     []string{"/ping", "/metrics", "/event/report"},
+		SkipPaths:     []string{"/ping", "/metrics", "/event/report", "/ops/gate"},
 		SlowThreshold: time.Second,
 	}))
 
@@ -219,6 +221,21 @@ func NewRouterWithLocalCaches(
 	protectedAccountGroup := accountGroup.Group("")
 	protectedAccountGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	accountHandler.RegisterProtectedRoutes(protectedAccountGroup)
+
+	opsHandler := ops.NewHandler(ops.NewService(accountService, opsCfg), db, tokenCache, jwtSecret)
+	opsGroup := r.Group("/ops")
+	opsGroup.GET("/gate", opsHandler.Gate)
+	opsProtected := opsGroup.Group("")
+	opsProtected.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
+	opsLogsLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "ops.logs.ip",
+		Limit:    30,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	opsProtected.GET("/access", opsHandler.Access)
+	opsProtected.GET("/metrics", opsHandler.Metrics)
+	opsProtected.POST("/logs", opsLogsLimit, opsHandler.Logs)
 
 	videoHandler := video.NewHandler(video.NewServiceWithCachesAndPublisher(
 		db,

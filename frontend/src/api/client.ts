@@ -93,6 +93,25 @@ export function resolveAssetUrl(url?: string) {
   return new URL(url, apiOrigin()).toString()
 }
 
+export async function getJson<T>(path: string, options?: { authRequired?: boolean }): Promise<T> {
+  const auth = useAuthStore()
+  const token = auth.token
+
+  if (options?.authRequired && !token) {
+    throw new ApiError(getMissingTokenMessage(), 401)
+  }
+
+  const headers: Record<string, string> = {}
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  const res = await fetch(`${API_BASE}${path}`, { method: 'GET', headers })
+  const data = parseResponseBody(await res.text())
+  if (res.status === 401) {
+    auth.clearToken()
+  }
+  return unwrap<T>(data, res.status)
+}
+
 export async function postJson<T>(
   path: string,
   body: unknown,

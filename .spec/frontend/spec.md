@@ -27,7 +27,7 @@ The frontend is a Vue application with a single bootstrap entry, client-side rou
 
 `api/client.ts` owns the wire contract. It unwraps the backend's response envelope in one place, so API modules and their types describe only the payload and never the envelope. A non-success business code becomes a thrown error carrying the backend's user-facing message, its business code, and the request identifier; views display that message rather than composing their own wording for server-side failures. Because unwrapping is centralized, adding or changing an endpoint does not require each caller to re-implement success detection.
 
-`components/AppShell.vue` owns the navigation surface. Every destination is reachable from a persistent control on both the desktop sidebar and the compact bottom navigation; there is no overflow menu duplicating destinations that persistent controls already expose. The compact "mine" destination resolves to the account hub, which is where settings is reached. The chrome shows no routing or diagnostic identifiers.
+`components/AppShell.vue` owns the navigation surface. Every destination is reachable from a persistent control on both the desktop sidebar and the compact bottom navigation; there is no overflow menu duplicating destinations that persistent controls already expose. The compact "mine" destination resolves to the account hub, which is where settings and the test-email operations surface are reached. The chrome shows no routing or diagnostic identifiers.
 
 The child nodes own the detailed feed, video, account, interaction, and analytics contracts. This parent spec owns application startup, routing, cross-view state boundaries, and the rule that capability behavior remains in its owning child node.
 

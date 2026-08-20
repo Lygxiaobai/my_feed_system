@@ -8,6 +8,7 @@ import AccountView from '../views/AccountView.vue'
 import ChangePasswordView from '../views/ChangePasswordView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import SettingsView from '../views/SettingsView.vue'
+import OpsView from '../views/OpsView.vue'
 import UserProfileView from '../views/UserProfileView.vue'
 
 const router = createRouter({
@@ -24,6 +25,7 @@ const router = createRouter({
     { path: '/account/register', name: 'account-register', component: RegisterView },
     { path: '/account/change-password', name: 'account-change-password', component: ChangePasswordView },
     { path: '/settings', name: 'settings', component: SettingsView },
+    { path: '/ops', name: 'ops', component: OpsView },
     { path: '/u/:id', name: 'user-profile', component: UserProfileView, props: true },
   ],
 })

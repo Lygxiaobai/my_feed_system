@@ -21,6 +21,13 @@ type Config struct {
 	Log      LogConfig      `yaml:"log"`
 	Audit    AuditConfig    `yaml:"audit"`
 	Auth     AuthConfig     `yaml:"auth"`
+	Ops      OpsConfig      `yaml:"ops"`
+}
+
+// OpsConfig 是测试邮箱运维台用的只读观测地址。
+type OpsConfig struct {
+	LokiURL       string `yaml:"loki_url"`
+	PrometheusURL string `yaml:"prometheus_url"`
 }
 
 // AuthConfig 控制登录方式。密钥类字段一律从环境变量展开。

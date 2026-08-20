@@ -71,3 +71,7 @@ auth:
     user: ${SMTP_USER:-}
     password: ${SMTP_PASSWORD:-}
     from: ${SMTP_FROM:-}
+
+ops:
+  loki_url: ${LOKI_URL:-http://127.0.0.1:3100}
+  prometheus_url: ${PROMETHEUS_URL:-http://127.0.0.1:9090}

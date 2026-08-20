@@ -247,11 +247,12 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD is required}
-      # 只走 SSH 隧道访问，关闭注册与匿名访问
       GF_USERS_ALLOW_SIGN_UP: "false"
       # 匿名仅 Viewer，且只给已过站点运维门禁的 /grafana/ 使用。
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      # 默认 deny 会让浏览器把 iframe 显示成「拒绝了我们的连接请求」。
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-/grafana/}
       GF_ANALYTICS_REPORTING_ENABLED: "false"

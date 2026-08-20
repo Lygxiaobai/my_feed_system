@@ -451,10 +451,10 @@ onBeforeUnmount(() => {
             <div v-else-if="drawer.error" class="drawer-hint bad">{{ drawer.error }}</div>
             <div v-else-if="drawer.comments.length === 0" class="drawer-hint">暂无评论</div>
 
-            <div class="comment" v-for="(c, index) in drawer.comments" :key="c.id">
+            <div class="comment" v-for="c in drawer.comments" :key="c.id">
               <div class="comment-top">
                 <div class="comment-user">{{ c.username }}</div>
-                <div class="comment-meta mono">#{{ index + 1 }} · {{ new Date(c.created_at).toLocaleString() }}</div>
+                <div class="comment-meta mono">{{ new Date(c.created_at).toLocaleString() }}</div>
               </div>
               <div class="comment-content">{{ c.content }}</div>
               <div class="comment-actions comment-actions-left">

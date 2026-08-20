@@ -52,8 +52,8 @@ API 负责同步请求和公开 HTTP 接口，Worker 独立消费异步任务。
 ### Compose 启动
 
 ```bash
-git clone git@github.com:Lygxiaobai/my_feed_sytem.git
-cd my_feed_sytem
+git clone git@github.com:Lygxiaobai/my_feed_system.git
+cd my_feed_system
 
 # 准备凭据：仓库中不含任何真实密钥，必须先生成
 cp .env.example .env

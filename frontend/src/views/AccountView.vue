@@ -446,7 +446,6 @@ watch(
             <button class="ghost" type="button" @click="router.push('/checkin')">签到</button>
             <button class="ghost" type="button" @click="router.push('/lottery')">抽奖</button>
             <button class="ghost" type="button" @click="goWallet">钱包</button>
-            <button class="ghost" type="button" :class="{ active: videoTab === 'history' }" @click="openHistory()">浏览历史</button>
             <button v-if="opsAllowed" class="ghost" type="button" @click="goOps">运维</button>
             <button class="ghost" type="button" @click="goSettings">设置</button>
           </div>
@@ -481,25 +480,23 @@ watch(
             </div>
             <div class="metric-label">获赞</div>
           </div>
-          <button class="metric" type="button" :class="{ active: videoTab === 'history' }" @click="openHistory()">
-            <div class="metric-num">历史</div>
-            <div class="metric-label">未看完 / 已看完</div>
-          </button>
           <div v-if="socialErrorHint" class="subtle" style="margin-left: 8px">社交信息加载失败：{{ socialErrorHint }}</div>
         </div>
       </div>
 
       <div class="card" style="margin-top: 14px">
-        <p class="title" style="margin: 0">
-          {{ videoTab === 'works' ? '作品' : videoTab === 'likes' ? '点赞视频' : '浏览历史' }}
-        </p>
-        <div class="list-tabs">
-          <button class="ghost" type="button" :class="{ active: videoTab === 'works' }" @click="openWorksVideos">作品</button>
-          <button class="ghost" type="button" :class="{ active: videoTab === 'likes' }" @click="openLikedVideos">
-            点赞视频
-            <span class="subtle">({{ likedVideoCountText }})</span>
-          </button>
-          <button class="ghost" type="button" :class="{ active: videoTab === 'history' }" @click="openHistory()">浏览历史</button>
+        <div class="list-head">
+          <p class="title" style="margin: 0">
+            {{ videoTab === 'works' ? '作品' : videoTab === 'likes' ? '点赞视频' : '历史' }}
+          </p>
+          <div class="list-tabs">
+            <button class="ghost" type="button" :class="{ active: videoTab === 'works' }" @click="openWorksVideos">作品</button>
+            <button class="ghost" type="button" :class="{ active: videoTab === 'likes' }" @click="openLikedVideos">
+              点赞视频
+              <span class="subtle">({{ likedVideoCountText }})</span>
+            </button>
+            <button class="ghost" type="button" :class="{ active: videoTab === 'history' }" @click="openHistory()">历史</button>
+          </div>
         </div>
 
         <template v-if="videoTab === 'history'">
@@ -693,11 +690,24 @@ watch(
   cursor: default;
 }
 
+.list-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
 .list-tabs {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
-  margin-top: 12px;
+  flex: 1 1 220px;
+}
+
+.list-tabs .ghost {
+  flex: 0 0 auto;
 }
 
 .metric:disabled {

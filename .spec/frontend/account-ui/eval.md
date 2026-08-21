@@ -38,7 +38,7 @@ scenarios:
       - desktop
   - name: account-history-entry
     description: A signed-in user opens browsing history from the account hub.
-    expected: The hub shows 浏览历史 with the wallet actions and as a metric next to works. Unfinished and completed lists are separate, unfinished cards show resume progress, and a completed card does not offer a leftover seek position.
+    expected: The works card tabs are 作品, 点赞视频, and 历史. Unfinished and completed lists are separate, unfinished cards show resume progress, and a completed card does not offer a leftover seek position.
     tags:
       - frontend-e2e
       - desktop

@@ -103,6 +103,14 @@ async function onDraw() {
             {{ item.label }}
           </div>
         </div>
+        <button
+          class="hub"
+          type="button"
+          :disabled="busy || spinning || claimed"
+          @click="onDraw"
+        >
+          {{ claimed ? '今日已抽过' : spinning ? '开奖中' : '抽一次' }}
+        </button>
       </div>
 
       <div class="odds">
@@ -112,15 +120,6 @@ async function onDraw() {
         </div>
       </div>
       <div v-if="result" class="hint" :class="tone">{{ result }}</div>
-      <button
-        class="primary"
-        type="button"
-        :disabled="busy || spinning || claimed"
-        style="margin-top: 16px"
-        @click="onDraw"
-      >
-        {{ claimed ? '今日已抽过' : spinning ? '开奖中…' : '抽一次' }}
-      </button>
     </div>
   </AppShell>
 </template>
@@ -176,6 +175,35 @@ async function onDraw() {
 
 .wheel.spinning {
   pointer-events: none;
+}
+
+.hub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  width: 88px;
+  height: 88px;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border: 4px solid rgba(255, 255, 255, 0.88);
+  border-radius: 50%;
+  background: #fe2c55;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(254, 44, 85, 0.36);
+}
+
+.hub:disabled {
+  cursor: default;
+  background: #8a3144;
+  box-shadow: none;
 }
 
 .slice-label {

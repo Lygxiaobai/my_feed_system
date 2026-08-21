@@ -20,7 +20,7 @@ scenarios:
       - desktop
   - name: wallet-checkin-lottery
     description: A signed-in user opens the check-in and lottery pages from the account hub or wallet.
-    expected: Check-in shows this month's Monday–Sunday calendar with claimed-day coins, claims 1–20 coins once per Beijing day, and then shows today's prize. Lottery shows the six published tiers, spins to the server prize_index after a successful draw, and does not spin when already claimed.
+    expected: Check-in shows this month's Monday–Sunday calendar with claimed-day coins, claims 1–20 coins once per Beijing day, and then shows today's prize. Lottery shows the six published tiers with the draw control in the hub, spins to the server prize_index after a successful draw, and does not spin when already claimed.
     tags:
       - frontend-e2e
       - desktop

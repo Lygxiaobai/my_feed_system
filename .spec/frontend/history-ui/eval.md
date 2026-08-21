@@ -2,7 +2,7 @@
 scenarios:
   - name: account-history-tabs
     description: A signed-in user opens browsing history and switches between unfinished and completed.
-    expected: Each tab shows only that status, unfinished cards show a progress bar, completed cards show 已看完, and opening a card goes to the video detail.
+    expected: The account hub exposes 浏览历史 beside the wallet actions and as a metric. Each tab shows only that status, unfinished cards show a progress bar, completed cards show 已看完, and opening a card goes to the video detail.
     tags:
       - frontend-e2e
       - desktop

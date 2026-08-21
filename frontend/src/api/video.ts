@@ -192,7 +192,7 @@ export async function getShareInfo(id: number) {
  */
 export function buildShareText(share: ShareInfo) {
   const url = `${location.origin}/s/${share.code}`
-  return `${share.code}:/ 复制这段内容，打开站点粘贴到搜索框即可观看\n【${share.username}的作品】${share.title}\n${url}`
+  return `${share.code}:/ 复制打开本站，看看【${share.username}】的作品\n${share.title}\n${url}`
 }
 
 export function buildShareUrl(share: ShareInfo) {
@@ -220,4 +220,42 @@ export function shareTextConfidence(text: string): 'certain' | 'maybe' | 'none' 
   if (/[0-9A-Za-z]{8}:\//.test(trimmed) || /\/s\/[0-9A-Za-z]{8}/.test(trimmed)) return 'certain'
   if (/^[0-9A-Za-z]{8}$/.test(trimmed)) return 'maybe'
   return 'none'
+}
+
+const SHARE_SEEN_KEY = 'feed.share.seen'
+const SHARE_SKIP_KEY = 'feed.share.skip'
+
+function shareTextKey(text: string) {
+  return text.trim().slice(0, 512)
+}
+
+/** 自己刚复制的口令不要立刻当成「别人分享来的」弹识别卡片。 */
+export function rememberCopiedShare(text: string) {
+  const key = shareTextKey(text)
+  if (!key) return
+  try {
+    sessionStorage.setItem(SHARE_SKIP_KEY, key)
+    sessionStorage.setItem(SHARE_SEEN_KEY, key)
+  } catch {
+    // 隐私模式写不了也没关系，最多自己弹出一次识别卡片。
+  }
+}
+
+export function clipboardShareAlreadyHandled(text: string) {
+  const key = shareTextKey(text)
+  try {
+    return sessionStorage.getItem(SHARE_SKIP_KEY) === key || sessionStorage.getItem(SHARE_SEEN_KEY) === key
+  } catch {
+    return false
+  }
+}
+
+export function rememberHandledShare(text: string) {
+  const key = shareTextKey(text)
+  if (!key) return
+  try {
+    sessionStorage.setItem(SHARE_SEEN_KEY, key)
+  } catch {
+    // 忽略：只影响本会话是否重复提示。
+  }
 }

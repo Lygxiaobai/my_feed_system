@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 
 import { ApiError } from '../api/client'
-import { buildShareText, buildShareUrl, getShareInfo, type ShareInfo } from '../api/video'
+import { buildShareText, buildShareUrl, getShareInfo, rememberCopiedShare, type ShareInfo } from '../api/video'
 import { useToastStore } from '../stores/toast'
 
 const toast = useToastStore()
@@ -42,8 +42,10 @@ async function copy(text: string, okTip: string) {
   if (!text) return
   try {
     await navigator.clipboard.writeText(text)
+    rememberCopiedShare(text)
     toast.success(okTip)
   } catch {
+    rememberCopiedShare(text)
     window.prompt('复制下面的内容', text)
   }
 }
@@ -58,7 +60,7 @@ defineExpose({ openFor, close })
         <div class="head">
           <div>
             <p class="title">分享</p>
-            <p class="subtle">复制口令发给好友，对方粘贴到搜索框即可打开</p>
+            <p class="subtle">复制后发给好友，对方打开本站即可识别</p>
           </div>
           <button class="x" type="button" aria-label="关闭" @click="close">×</button>
         </div>
@@ -73,8 +75,8 @@ defineExpose({ openFor, close })
 
           <pre class="preview">{{ shareText }}</pre>
 
-          <button class="primary wide" type="button" @click="copy(shareText, '口令已复制，去粘贴给好友吧')">
-            复制口令文案
+          <button class="primary wide" type="button" @click="copy(shareText, '口令已复制，发给好友打开本站即可')">
+            复制口令
           </button>
           <button class="ghost wide" type="button" @click="copy(shareUrl, '链接已复制')">仅复制链接</button>
         </template>

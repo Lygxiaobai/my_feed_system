@@ -5,6 +5,7 @@ code:
   - frontend/src/main.ts
 related:
   - frontend/src/App.vue
+  - frontend/src/components/ShareInbox.vue
   - frontend/src/components/AppIcon.vue
   - frontend/src/components/AppShell.vue
   - frontend/src/router/index.ts
@@ -23,7 +24,7 @@ desc: Vue web application bootstrap and cross-view architecture boundary.
 The frontend is a Vue application with a single bootstrap entry, client-side routing, Pinia stores, API modules, and behavior-facing views for feed, video, account, wallet, check-in, lottery, interactions, and notifications.
 
 ## expanded spec
-`frontend/src/main.ts` owns application bootstrap: it creates the Vue application, installs Pinia and the router, loads global styling, and mounts the root component. `frontend/src/App.vue` remains the root composition boundary and delegates page selection to the router.
+`frontend/src/main.ts` owns application bootstrap: it creates the Vue application, installs Pinia and the router, loads global styling, and mounts the root component. `frontend/src/App.vue` remains the root composition boundary and delegates page selection to the router. Share recognition is mounted here so a paste or clipboard offer survives navigation and does not depend on a particular view wrapping `AppShell`.
 
 `frontend/src/router/index.ts` owns the URL-to-view contract. Views own user workflows, API modules own HTTP calls and response types, and Pinia stores own state shared across views. Authentication state has one client-side owner in `stores/auth.ts`; account and interaction flows must not maintain competing token state.
 

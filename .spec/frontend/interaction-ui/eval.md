@@ -18,9 +18,16 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
-  - name: share-passage-round-trips-through-the-search-field
-    description: A user shares a video, copies the passage, and pastes it into the search field in a fresh session.
-    expected: The passage contains the code, author, title, and a link built from the current origin, and pasting it navigates to the shared video rather than running a text search.
+  - name: share-passage-is-recognized-without-search
+    description: A user shares a video, copies the passage, and pastes it on the page in a fresh session, including outside the search field.
+    expected: The passage contains the code, author, title, and a link built from the current origin. Pasting it opens the shared video and does not run a text search or leave the passage in the search field.
+    tags:
+      - frontend-e2e
+      - desktop
+      - mobile
+  - name: clipboard-share-is-offered-on-return
+    description: A user copies a share passage elsewhere and then focuses the site in a session that can read the clipboard.
+    expected: The site offers the shared video as a recognition card without opening search. Dismissing the card does not navigate. Opening it lands on the video. When the clipboard cannot be read, an explicit paste still opens the video.
     tags:
       - frontend-e2e
       - desktop

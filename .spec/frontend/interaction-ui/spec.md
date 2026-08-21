@@ -7,6 +7,7 @@ code:
 related:
   - frontend/src/components/TipSheet.vue
   - frontend/src/components/ShareSheet.vue
+  - frontend/src/components/ShareInbox.vue
   - frontend/src/components/ReportSheet.vue
   - frontend/src/components/DanmakuLayer.vue
   - frontend/src/components/AppShell.vue
@@ -41,6 +42,6 @@ Feedback is reserved for outcomes the user cannot otherwise observe. A control w
 
 Sharing produces a passage of text containing a code, the author and title, and a link, and the user copies the whole passage. The link prefix follows the entry point the user is currently on, because the site is reachable through more than one origin and a share that names the wrong one is useless to the recipient. Copying degrades to a manual-copy prompt when the clipboard is unavailable, which is the normal case on the non-secure entry point rather than an edge case. The code itself is displayed, so a user can read it out or retype it.
 
-The recipient redeems a share by pasting into the search field, which is where a user naturally puts copied text. The application never reads the clipboard on its own: doing so requires a secure context that one of the entry points does not provide. Pasted text that unambiguously carries a code navigates to the video, and a failure to resolve it is reported rather than silently searched for, because searching for a whole share passage returns nothing meaningful. Text that merely resembles a code falls back to an ordinary search when it does not resolve, so a real search term is never swallowed. A share link opened directly resolves and lands on the video without leaving the intermediate step in history.
+The recipient redeems a share the way Douyin does: opening the site or pasting the passage on the page is enough. A clipboard that unambiguously carries a code is offered as a recognition card with the cover, title, and an open action; an explicit paste of that passage opens the video immediately. Neither path runs a text search or leaves the passage in the search field. The application tries to read the clipboard when the page becomes visible, and treats a missing clipboard API or a denied paste permission as normal on the non-secure entry point — the user can still paste. Comment, danmaku, and other typing fields keep their paste. Searching remains only a fallback for an eight-character token that might be an ordinary query: a certain share that fails to resolve is reported rather than searched, and a look-alike search term is not swallowed. A share link opened directly resolves and lands on the video without leaving the intermediate step in history. The person who just copied a share is not immediately shown their own recognition card.
 
 Reporting is offered on content the viewer does not own and requires choosing from the offered reasons; the catch-all reason requires an explanation before the form can be submitted. The interface states before and after submission that the content is not removed immediately and that a person will review it, because a report produces no observable change and a user who expects one will assume the submission failed and repeat it.

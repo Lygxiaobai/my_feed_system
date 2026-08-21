@@ -123,20 +123,6 @@ function routeTab(): TabKey {
   return 'recommend'
 }
 
-function tabRoutePath(nextTab: TabKey) {
-  if (nextTab === 'hot') return '/likes'
-  if (nextTab === 'following') return '/following'
-  return '/'
-}
-
-async function switchTab(nextTab: TabKey) {
-  if (route.path === tabRoutePath(nextTab)) {
-    tab.value = nextTab
-    return
-  }
-  await router.push(tabRoutePath(nextTab))
-}
-
 async function syncLikedState(items: FeedVideoItem[]) {
   if (!items.length) return
   if (!auth.isLoggedIn) {
@@ -759,17 +745,6 @@ onBeforeUnmount(() => {
 <template>
   <AppShell full>
     <div class="page">
-      <div class="tabs">
-        <button class="tab" :class="{ on: tab === 'recommend' }" type="button" @click="switchTab('recommend')">推荐</button>
-        <button class="tab" :class="{ on: tab === 'following' }" type="button" @click="switchTab('following')">关注</button>
-        <button class="tab" :class="{ on: tab === 'hot' }" type="button" @click="switchTab('hot')">点赞榜</button>
-
-        <div class="tabs-right">
-          <button class="chip" type="button" @click="toggleDanmaku">{{ danmakuEnabled ? '弹幕开' : '弹幕关' }}</button>
-          <button class="chip" type="button" @click="toggleMute">{{ muted ? '静音' : '有声' }}</button>
-        </div>
-      </div>
-
       <div ref="scroller" class="scroller" @scroll="onScroll">
         <section v-if="currentState.loading && currentState.items.length === 0" class="slide">
           <FeedStageSkeleton />
@@ -786,7 +761,7 @@ onBeforeUnmount(() => {
           :data-index="idx"
           :class="{ active: idx === activeIndex }"
         >
-          <div class="stage" :class="{ 'has-danmaku': danmakuEnabled && idx === activeIndex }" @click="onStageClick" @dblclick.prevent="onStageDoubleClick(item)">
+          <div class="stage" :class="{ 'has-composer': idx === activeIndex }" @click="onStageClick" @dblclick.prevent="onStageDoubleClick(item)">
             <VideoPlayer
               :ref="(el) => setPlayerRef(item.id, el as VideoPlayerHandle | null)"
               :src="item.play_url"
@@ -799,11 +774,14 @@ onBeforeUnmount(() => {
               @timeupdate="onPlayerTime(item.id, $event)"
             />
             <DanmakuLayer
-              v-if="idx === activeIndex && danmakuEnabled"
+              v-if="idx === activeIndex"
               :video-id="item.id"
               :current-time="activePlayTime"
               :playing="activePlaying"
-              :enabled="true"
+              :enabled="danmakuEnabled"
+              :muted="muted"
+              @toggle-enabled="toggleDanmaku"
+              @toggle-muted="toggleMute"
             />
             <div class="grad" />
 
@@ -972,38 +950,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
 }
 
-.tabs {
-  height: 52px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(16px);
-}
-
-.tab {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.88);
-  border-radius: 999px;
-  padding: 8px 14px;
-  cursor: pointer;
-}
-
-.tab.on {
-  border-color: rgba(254, 44, 85, 0.5);
-  background: rgba(254, 44, 85, 0.16);
-}
-
-.tabs-right {
-  margin-left: auto;
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
 .scroller {
   flex: 1;
   min-height: 0;
@@ -1043,7 +989,7 @@ onBeforeUnmount(() => {
 
 .stage {
   width: min(980px, calc(100vw - 28px));
-  height: min(100%, calc(var(--app-height, 100dvh) - var(--topbar-h, 56px) - 52px - 36px - var(--bottom-nav-h, 0px)));
+  height: min(100%, calc(var(--app-height, 100dvh) - var(--topbar-h, 56px) - 36px - var(--bottom-nav-h, 0px)));
   position: relative;
   border-radius: 18px;
   overflow: hidden;
@@ -1075,7 +1021,7 @@ onBeforeUnmount(() => {
   max-width: min(620px, calc(100% - 96px));
 }
 
-.stage.has-danmaku .meta {
+.stage.has-composer .meta {
   bottom: 68px;
 }
 
@@ -1338,26 +1284,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 900px) {
-  .tabs {
-    height: 48px;
-    gap: 6px;
-    padding: 0 10px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    flex-wrap: nowrap;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .tab {
-    flex: 0 0 auto;
-    padding: 7px 12px;
-    font-size: 13px;
-  }
-
-  .tabs-right {
-    gap: 6px;
-  }
-
   .chip {
     padding: 6px 9px;
     font-size: 12px;
@@ -1382,7 +1308,7 @@ onBeforeUnmount(() => {
     max-width: none;
   }
 
-  .stage.has-danmaku .meta {
+  .stage.has-composer .meta {
     bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   }
 

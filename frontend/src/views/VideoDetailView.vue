@@ -461,17 +461,14 @@ onBeforeUnmount(() => {
         <div class="top-left">
           <RouterLink class="chip" to="/">← 返回推荐</RouterLink>
         </div>
-        <div class="top-right">
-          <button class="chip" type="button" @click="toggleDanmaku">{{ danmakuEnabled ? '弹幕开' : '弹幕关' }}</button>
-          <button class="chip" type="button" @click="toggleMute">{{ muted ? '静音' : '有声' }}</button>
-        </div>
+        <div class="top-right" />
       </div>
 
       <div class="wrap">
         <FeedStageSkeleton v-if="state.loading" />
         <div v-else-if="state.error" class="center-hint bad">{{ state.error }}</div>
 
-        <div v-else-if="state.video" class="stage" :class="{ 'has-danmaku': danmakuEnabled }" @click="onStageClick" @dblclick.prevent="onStageDoubleClick">
+        <div v-else-if="state.video" class="stage has-composer" @click="onStageClick" @dblclick.prevent="onStageDoubleClick">
           <VideoPlayer
             ref="player"
             :src="state.video.play_url"
@@ -483,11 +480,13 @@ onBeforeUnmount(() => {
             @timeupdate="onPlayerTime"
           />
           <DanmakuLayer
-            v-if="danmakuEnabled"
             :video-id="state.video.id"
             :current-time="playTime"
             :playing="playing"
-            :enabled="true"
+            :enabled="danmakuEnabled"
+            :muted="muted"
+            @toggle-enabled="toggleDanmaku"
+            @toggle-muted="toggleMute"
           />
           <div class="grad" />
 
@@ -694,7 +693,7 @@ onBeforeUnmount(() => {
   max-width: min(620px, calc(100% - 96px));
 }
 
-.stage.has-danmaku .meta {
+.stage.has-composer .meta {
   bottom: 68px;
 }
 
@@ -975,7 +974,7 @@ onBeforeUnmount(() => {
     max-width: none;
   }
 
-  .stage.has-danmaku .meta {
+  .stage.has-composer .meta {
     bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   }
 

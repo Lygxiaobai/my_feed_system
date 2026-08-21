@@ -20,7 +20,7 @@ scenarios:
       - desktop
   - name: feed-has-no-detail-chip
     description: A user views the recommendation feed chrome.
-    expected: The top bar has mute but no detail shortcut; tipping and the signed-in tip-list control remain on the video action rail.
+    expected: The playback surface has no feed-mode tabs and no mute or danmaku chip above the video; those two controls sit with the danmaku composer, and tipping stays on the video action rail.
     tags:
       - frontend-e2e
       - desktop

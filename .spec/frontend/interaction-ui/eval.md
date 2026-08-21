@@ -52,7 +52,7 @@ scenarios:
       - mobile
   - name: danmaku-flies-with-playback
     description: A signed-in user turns danmaku on, watches a video that already has timed items, joins after those offsets, and sends a short one at the current moment.
-    expected: Items still crossing the screen appear without dumping earlier history, the new text flies immediately, a failed send removes the local item and shows the server message, and turning danmaku off hides the overlay and the composer.
+    expected: Items still crossing the screen appear without dumping earlier history, the new text flies immediately, a failed send removes the local item and shows the server message, and turning danmaku off hides the flying overlay but leaves the composer so it can be turned back on.
     tags:
       - frontend-e2e
       - desktop

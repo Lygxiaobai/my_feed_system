@@ -21,6 +21,12 @@ const props = defineProps<{
   currentTime: number
   playing: boolean
   enabled: boolean
+  muted: boolean
+}>()
+
+const emit = defineEmits<{
+  toggleEnabled: []
+  toggleMuted: []
 }>()
 
 const router = useRouter()
@@ -266,8 +272,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="enabled" ref="layerEl" class="danmaku-root">
-    <div class="stage" :style="{ '--travel': `${travelPx}px` }" aria-hidden="true">
+  <div ref="layerEl" class="danmaku-root">
+    <div v-if="enabled" class="stage" :style="{ '--travel': `${travelPx}px` }" aria-hidden="true">
       <span
         v-for="item in flying"
         :key="item.key"
@@ -287,7 +293,24 @@ onBeforeUnmount(() => {
     </div>
 
     <form class="composer" @click.stop @dblclick.stop.prevent @submit.prevent="submit">
-      <span class="mark" aria-hidden="true">弹</span>
+      <button
+        class="ctrl"
+        :class="{ on: enabled }"
+        type="button"
+        :aria-pressed="enabled"
+        @click="emit('toggleEnabled')"
+      >
+        弹
+      </button>
+      <button
+        class="ctrl wide"
+        :class="{ on: !muted }"
+        type="button"
+        :aria-pressed="!muted"
+        @click="emit('toggleMuted')"
+      >
+        {{ muted ? '静音' : '有声' }}
+      </button>
       <input
         v-model="draft"
         class="box"
@@ -371,17 +394,30 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
-.mark {
+.ctrl {
   flex: none;
-  width: 28px;
-  height: 28px;
+  height: 38px;
+  min-width: 38px;
+  padding: 0 10px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
-  background: rgba(254, 44, 85, 0.92);
-  color: #fff;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.42);
+  color: rgba(255, 255, 255, 0.82);
   font-size: 13px;
   font-weight: 800;
+  cursor: pointer;
+}
+
+.ctrl.wide {
+  min-width: 52px;
+}
+
+.ctrl.on {
+  border-color: rgba(254, 44, 85, 0.5);
+  background: rgba(254, 44, 85, 0.88);
+  color: #fff;
 }
 
 .box {
@@ -430,8 +466,25 @@ onBeforeUnmount(() => {
     font-size: 16px;
   }
 
-  .box {
+  .ctrl {
+    height: 34px;
+    min-width: 34px;
+    padding: 0 8px;
     font-size: 12px;
+  }
+
+  .ctrl.wide {
+    min-width: 44px;
+  }
+
+  .box {
+    height: 34px;
+    font-size: 12px;
+  }
+
+  .send {
+    height: 34px;
+    padding: 0 12px;
   }
 }
 </style>

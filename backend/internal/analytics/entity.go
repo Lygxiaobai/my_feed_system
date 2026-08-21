@@ -22,6 +22,7 @@ var allowedEvents = map[string]struct{}{
 	"video_watch":    {},
 	"video_like":     {},
 	"video_unlike":   {},
+	"video_share":    {},
 	"comment_submit": {},
 	"follow":         {},
 	"unfollow":       {},

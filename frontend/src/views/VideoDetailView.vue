@@ -7,6 +7,8 @@ import { createWatchSession } from '../analytics/watch'
 import AppShell from '../components/AppShell.vue'
 import CommentListSkeleton from '../components/CommentListSkeleton.vue'
 import FeedStageSkeleton from '../components/FeedStageSkeleton.vue'
+import ReportSheet from '../components/ReportSheet.vue'
+import ShareSheet from '../components/ShareSheet.vue'
 import TipSheet from '../components/TipSheet.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import VideoPlayer, { type VideoPlayerHandle } from '../components/VideoPlayer.vue'
@@ -202,15 +204,18 @@ function openTips() {
   tipSheet.value?.openInbox()
 }
 
-async function share() {
+const shareSheet = ref<InstanceType<typeof ShareSheet> | null>(null)
+const reportSheet = ref<InstanceType<typeof ReportSheet> | null>(null)
+
+function share() {
   if (!state.video) return
-  const url = `${location.origin}/video/${state.video.id}`
-  try {
-    await navigator.clipboard.writeText(url)
-    toast.success('链接已复制')
-  } catch {
-    window.prompt('复制链接', url)
-  }
+  track('video_share', { video_id: state.video.id, from: 'detail' })
+  shareSheet.value?.openFor(state.video.id)
+}
+
+function openReport() {
+  if (!state.video) return
+  reportSheet.value?.openFor(state.video.id)
 }
 
 function clearReplyTarget() {
@@ -489,6 +494,11 @@ onBeforeUnmount(() => {
               <span class="icon">赏</span>
               <span class="count">打赏记录</span>
             </button>
+
+            <button v-if="!isOwnVideo" class="act" type="button" @click.stop="openReport">
+              <span class="icon">⚑</span>
+              <span class="count">举报</span>
+            </button>
           </div>
         </div>
       </div>
@@ -500,6 +510,8 @@ onBeforeUnmount(() => {
         :author-username="state.video.username"
         :is-author="isOwnVideo"
       />
+      <ShareSheet ref="shareSheet" />
+      <ReportSheet ref="reportSheet" />
 
       <div v-if="drawer.open" class="drawer-backdrop" @click.self="closeDrawer">
         <div class="drawer">

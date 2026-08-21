@@ -1,0 +1,192 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+
+import { ApiError } from '../api/client'
+import { buildShareText, buildShareUrl, getShareInfo, type ShareInfo } from '../api/video'
+import { useToastStore } from '../stores/toast'
+
+const toast = useToastStore()
+
+const open = ref(false)
+const loading = ref(false)
+const share = ref<ShareInfo | null>(null)
+
+const shareText = computed(() => (share.value ? buildShareText(share.value) : ''))
+const shareUrl = computed(() => (share.value ? buildShareUrl(share.value) : ''))
+
+async function openFor(videoId: number) {
+  open.value = true
+  loading.value = true
+  share.value = null
+  try {
+    share.value = await getShareInfo(videoId)
+  } catch (e) {
+    toast.error(e instanceof ApiError ? e.message : String(e))
+    open.value = false
+  } finally {
+    loading.value = false
+  }
+}
+
+function close() {
+  open.value = false
+}
+
+/**
+ * 复制到剪贴板，失败时降级到 prompt。
+ *
+ * 降级分支不是防御性冗余：navigator.clipboard 只在安全上下文存在，
+ * 而本站的明文 IP 入口不是安全上下文，那条路径下它就是 undefined。
+ */
+async function copy(text: string, okTip: string) {
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.success(okTip)
+  } catch {
+    window.prompt('复制下面的内容', text)
+  }
+}
+
+defineExpose({ openFor, close })
+</script>
+
+<template>
+  <Teleport to="body">
+    <div v-if="open" class="mask" @click.self="close">
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="分享">
+        <div class="head">
+          <div>
+            <p class="title">分享</p>
+            <p class="subtle">复制口令发给好友，对方粘贴到搜索框即可打开</p>
+          </div>
+          <button class="x" type="button" aria-label="关闭" @click="close">×</button>
+        </div>
+
+        <div v-if="loading" class="empty">生成中…</div>
+
+        <template v-else-if="share">
+          <div class="code-row">
+            <span class="code">{{ share.code }}</span>
+            <span class="code-tip">专属口令</span>
+          </div>
+
+          <pre class="preview">{{ shareText }}</pre>
+
+          <button class="primary wide" type="button" @click="copy(shareText, '口令已复制，去粘贴给好友吧')">
+            复制口令文案
+          </button>
+          <button class="ghost wide" type="button" @click="copy(shareUrl, '链接已复制')">仅复制链接</button>
+        </template>
+      </div>
+    </div>
+  </Teleport>
+</template>
+
+<style scoped>
+.mask {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(10px);
+}
+
+.sheet {
+  width: min(420px, 100%);
+  max-height: min(80vh, 720px);
+  overflow: auto;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #16161c;
+  display: grid;
+  gap: 12px;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.subtle {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+}
+
+.x {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.code-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.code {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #fe2c55;
+}
+
+.code-tip {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.preview {
+  margin: 0;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: inherit;
+}
+
+.wide {
+  width: 100%;
+}
+
+.ghost {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  cursor: pointer;
+}
+
+.empty {
+  padding: 28px 8px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.62);
+}
+</style>

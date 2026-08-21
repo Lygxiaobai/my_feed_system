@@ -34,6 +34,8 @@ var (
 const (
 	videoPublishBizType     = "video.publish"
 	maxIdempotencyKeyLength = 128
+	// takedownModerator 标记流水来源是举报处置，便于与机审、常规人工复审区分。
+	takedownModerator = "report"
 )
 
 // Service encapsulates video publish and query workflows.
@@ -316,6 +318,104 @@ func (s *Service) GetDetail(viewerID uint64, req GetDetailRequest) (*Video, erro
 		return nil, ErrVideoNotFound
 	}
 	return loadResult.video, nil
+}
+
+// Share 返回视频的分享口令。
+//
+// 刻意复用 GetDetail 而不是直接查库：分享入口必须和详情页遵守同一套
+// 可见性规则，否则未过审内容会通过「生成口令」这条旁路泄漏出去。
+func (s *Service) Share(viewerID uint64, req ShareRequest) (*ShareInfo, error) {
+	video, err := s.GetDetail(viewerID, GetDetailRequest{ID: req.ID})
+	if err != nil {
+		return nil, err
+	}
+
+	code, err := EncodeShareCode(video.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ShareInfo{
+		VideoID:  video.ID,
+		Code:     code,
+		Title:    video.Title,
+		Username: video.Username,
+		CoverURL: video.CoverURL,
+	}, nil
+}
+
+// ResolveShare 从粘贴文本中还原出视频。
+//
+// 同样走 GetDetail：口令只是寻址方式，不是访问凭据，
+// 拿着有效口令也不能看到未过审或已下架的内容。
+func (s *Service) ResolveShare(viewerID uint64, req ResolveShareRequest) (*Video, error) {
+	videoID, err := ExtractShareCode(req.Text)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetDetail(viewerID, GetDetailRequest{ID: videoID})
+}
+
+// LoadForReport 让 video 满足 report.ContentStore 的内容查询部分。
+//
+// 复用 GetDetail 而不是直接查库：举报入口只能作用于举报人本来就看得见的内容，
+// 否则它会退化成一个「探测任意 ID 是否存在」的旁路。
+func (s *Service) LoadForReport(viewerID uint64, targetID uint64) (uint64, bool, error) {
+	video, err := s.GetDetail(viewerID, GetDetailRequest{ID: targetID})
+	if errors.Is(err, ErrVideoNotFound) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return video.AuthorID, true, nil
+}
+
+// Takedown 依据人工结论下架视频，让 video 满足 report.ContentStore 的处置部分。
+//
+// 状态变更与流水必须同事务：只改状态而流水丢失，事后就无法回答
+// 「这条内容是谁、依据什么下架的」，而处置记录的留存期是合规要求，
+// 远长于日志的轮转周期。
+func (s *Service) Takedown(ctx context.Context, videoID uint64, operatorID uint64, note string) error {
+	video, err := s.repo.FindByID(videoID)
+	if err != nil {
+		return err
+	}
+	if video == nil {
+		return ErrVideoNotFound
+	}
+	// 已经是拒绝态时只需补一条流水说明本次处置依据，不重复写状态。
+	fromStatus := video.AuditStatus
+
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := NewAuditStore(s.db).UpdateStatus(tx, videoID, audit.StatusRejected); err != nil {
+			return err
+		}
+		return audit.NewRepo(s.db).Append(tx, &audit.Record{
+			TargetType: audit.TargetVideo,
+			TargetID:   videoID,
+			FromStatus: fromStatus,
+			ToStatus:   audit.StatusRejected,
+			Source:     audit.SourceManual,
+			Moderator:  takedownModerator,
+			OperatorID: operatorID,
+			Label:      takedownModerator,
+			Detail:     note,
+		})
+	}); err != nil {
+		return err
+	}
+
+	// 必须在事务提交后失效缓存：LocalDetailCache 是进程内的，只改数据库的话
+	// 已下架的视频还会继续从 L1 返回，看起来像「下架没生效」。
+	s.invalidateDetailCache(videoID)
+
+	slog.InfoContext(ctx, "video taken down after report review",
+		slog.Uint64("video_id", videoID),
+		slog.Uint64("operator_id", operatorID),
+		slog.String("from_status", string(fromStatus)))
+
+	return nil
 }
 
 // visibleTo 判断查看者能否看到该视频。

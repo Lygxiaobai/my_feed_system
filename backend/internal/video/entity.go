@@ -47,3 +47,27 @@ type ListLikedRequest struct{}
 type GetDetailRequest struct {
 	ID uint64 `json:"id" binding:"required"`
 }
+
+type ShareRequest struct {
+	ID uint64 `json:"id" binding:"required"`
+}
+
+// ResolveShareRequest 携带用户粘贴的原始文本。
+// 不要求调用方先自行提取口令：解析规则由服务端独占，
+// 前端各写一份解析逻辑必然与后端漂移。
+type ResolveShareRequest struct {
+	Text string `json:"text" binding:"required"`
+}
+
+// ShareInfo 是拼装分享文案所需的最小字段集。
+//
+// 只回 code 与展示用字段，不回完整链接：站点同时存在 HTTPS 域名和
+// 明文 IP 两个入口，服务端拼 URL 就得去信任 X-Forwarded-* 头，
+// 而前端用 location.origin 天然与用户当前入口一致。
+type ShareInfo struct {
+	VideoID  uint64 `json:"video_id"`
+	Code     string `json:"code"`
+	Title    string `json:"title"`
+	Username string `json:"username"`
+	CoverURL string `json:"cover_url"`
+}

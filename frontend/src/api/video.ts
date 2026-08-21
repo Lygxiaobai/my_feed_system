@@ -169,3 +169,55 @@ export async function getDetail(id: number) {
   const res = await postJson<BackendVideoEnvelope>('/video/getDetail', { id })
   return normalizeVideo(res.video)
 }
+
+export type ShareInfo = {
+  video_id: number
+  code: string
+  title: string
+  username: string
+  cover_url: string
+}
+
+export async function getShareInfo(id: number) {
+  const res = await postJson<{ share: ShareInfo }>('/video/share', { id })
+  return res.share
+}
+
+/**
+ * 用口令拼出可分享的整段文案。
+ *
+ * 在前端拼而不是让后端返回整串，是因为链接前缀必须跟随用户当前入口：
+ * 站点同时有 HTTPS 域名和明文 IP 两个入口，location.origin 天然正确，
+ * 后端要做到这点就得去信任 X-Forwarded-* 请求头。
+ */
+export function buildShareText(share: ShareInfo) {
+  const url = `${location.origin}/s/${share.code}`
+  return `${share.code}:/ 复制这段内容，打开站点粘贴到搜索框即可观看\n【${share.username}的作品】${share.title}\n${url}`
+}
+
+export function buildShareUrl(share: ShareInfo) {
+  return `${location.origin}/s/${share.code}`
+}
+
+/** 把任意粘贴文本交给后端识别。解析规则由服务端独占，前端不重复实现。 */
+export async function resolveShare(text: string) {
+  const res = await postJson<BackendVideoEnvelope>('/video/resolveShare', { text })
+  return normalizeVideo(res.video)
+}
+
+/**
+ * 判断一段文本该不该按分享口令处理。
+ *
+ * 分成两档，因为解析失败后的处理方式不同：
+ * - 'certain'：带 `口令:/` 标记或 `/s/xxx` 链接，用户意图明确。解析失败要报错，
+ *   拿整段分享文案去做全文搜索毫无意义。
+ * - 'maybe'：整个输入恰好是 8 位字母数字。可能是口令，也可能就是个搜索词
+ *   （"baseball" 也是 8 位），解析失败时要静默退回搜索。
+ */
+export function shareTextConfidence(text: string): 'certain' | 'maybe' | 'none' {
+  const trimmed = text.trim()
+  if (!trimmed) return 'none'
+  if (/[0-9A-Za-z]{8}:\//.test(trimmed) || /\/s\/[0-9A-Za-z]{8}/.test(trimmed)) return 'certain'
+  if (/^[0-9A-Za-z]{8}$/.test(trimmed)) return 'maybe'
+  return 'none'
+}

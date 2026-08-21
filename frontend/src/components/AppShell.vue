@@ -3,14 +3,18 @@ import { ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { track } from '../analytics/track'
+import { ApiError } from '../api/client'
+import * as videoApi from '../api/video'
 import { useAuthStore } from '../stores/auth'
 import { useSocialStore } from '../stores/social'
+import { useToastStore } from '../stores/toast'
 import Toaster from './Toaster.vue'
 
 const props = defineProps<{ full?: boolean }>()
 
 const auth = useAuthStore()
 const social = useSocialStore()
+const toast = useToastStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -40,11 +44,40 @@ watch(
   { immediate: true },
 )
 
+/**
+ * 搜索框同时承担「粘贴口令直达」的职责，这与抖音的交互位置一致：
+ * 用户拿到的是一整段文案，最自然的动作就是往搜索框里一贴。
+ *
+ * 不做「打开页面时自动嗅探剪贴板」：navigator.clipboard.readText 只在安全上下文
+ * 可用，而本站的明文 IP 入口不是安全上下文，那条路径下必然失败。
+ */
 async function onSearch() {
   const q = search.value.trim()
   searchOpen.value = false
-  if (q) track('search', { query: q })
-  await router.push({ path: '/', query: q ? { q } : {} })
+  if (!q) {
+    await router.push({ path: '/', query: {} })
+    return
+  }
+
+  const confidence = videoApi.shareTextConfidence(q)
+  if (confidence !== 'none') {
+    try {
+      const video = await videoApi.resolveShare(q)
+      search.value = ''
+      await router.push(`/video/${video.id}`)
+      return
+    } catch (e) {
+      // 口令形态明确却解析不出来，多半是内容已下架或口令抄错，直接告诉用户；
+      // 只是「碰巧 8 位」的普通搜索词则静默退回搜索。
+      if (confidence === 'certain') {
+        toast.error(e instanceof ApiError ? e.message : '口令无效或内容已下架')
+        return
+      }
+    }
+  }
+
+  track('search', { query: q })
+  await router.push({ path: '/', query: { q } })
 }
 
 async function goLogin() {

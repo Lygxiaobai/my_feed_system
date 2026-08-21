@@ -14,6 +14,7 @@ import WalletView from '../views/WalletView.vue'
 import PasswordLoginView from '../views/PasswordLoginView.vue'
 import CheckinView from '../views/CheckinView.vue'
 import LotteryView from '../views/LotteryView.vue'
+import ShareLandingView from '../views/ShareLandingView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -25,6 +26,8 @@ const router = createRouter({
     { path: '/hot', name: 'hot', component: HotView },
     { path: '/video', name: 'video', component: VideoView },
     { path: '/video/:id', name: 'video-detail', component: VideoDetailView, props: true },
+    // 分享链接的落地页，解析口令后跳转到真正的详情页。
+    { path: '/s/:code', name: 'share-landing', component: ShareLandingView, props: true },
     { path: '/account', name: 'account', component: AccountView },
     { path: '/wallet', name: 'wallet', component: WalletView },
     { path: '/checkin', name: 'checkin', component: CheckinView },

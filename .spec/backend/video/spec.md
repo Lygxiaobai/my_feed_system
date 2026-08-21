@@ -12,6 +12,7 @@ related:
   - backend/internal/video/local_detail_cache.go
   - backend/internal/video/media_validator.go
   - backend/internal/video/invalidation_consumer.go
+  - backend/internal/video/sharecode.go
   - backend/internal/media/entity.go
   - backend/internal/media/repo.go
   - backend/internal/media/service.go
@@ -26,7 +27,7 @@ related:
 # video
 
 ## raw source
-The video subsystem validates uploads, publishes videos, serves details, and exposes author and liked-video views. Content review is optional and off by default; when enabled, published content is reviewed before it becomes publicly discoverable.
+The video subsystem validates uploads, publishes videos, serves details, exposes author and liked-video views, and issues shareable codes that resolve back to a video. Content review is optional and off by default; when enabled, published content is reviewed before it becomes publicly discoverable.
 
 ## expanded spec
 Video publishing is authenticated and idempotent. A video upload creates an account-owned `processing` media task and returns no playable URL until the Worker has produced a standard MP4 and JPEG poster. Tasks finish as `ready` with `/static/videos/*.mp4` and `/static/covers/*.jpg` URLs or as `failed` with a bounded error message.
@@ -42,3 +43,9 @@ Approval — or publish itself when review is disabled — is the single point w
 A rejection tells the author only that the content did not pass. The matched rule, category, or any other decision detail stays internal, because disclosing it lets an author probe the boundary by resubmitting variations.
 
 The review capability is an interface with one local implementation; substituting or chaining a different provider must not require changes to the state machine, the audit trail, or the read-path filtering.
+
+A video can be addressed by a share code as well as by its identifier. The code is derived from the video itself and stores nothing, so a code never expires, never drifts from the content it names, and needs no cleanup. Codes are fixed width and carry a check character, so a code that was truncated or mistyped is reported as invalid rather than silently resolving to a different video — resolving to the wrong video is worse than refusing, because the viewer has no way to notice.
+
+The code is an addressing scheme, not a credential. It grants nothing: resolving a code applies exactly the same visibility rules as requesting the video directly, so a code for content that is unapproved or removed resolves as though the content does not exist, and issuing a code for a video the requester cannot see is likewise impossible. Consequently the encoding may obscure the identifier's sequence but must never be relied on to conceal it.
+
+Both directions of the mapping live on the server, and resolution accepts the surrounding text a user pasted rather than requiring a pre-extracted code. Recognition is deliberately conservative: text is only treated as carrying a code when it is unambiguously one, because a scheme that guesses will occasionally send a viewer to an unrelated video. Text submitted for resolution is bounded, and every failure to recognize, validate, or resolve a code is reported to the caller as the same outcome, so a caller holding arbitrary codes learns nothing about which ones name real content.

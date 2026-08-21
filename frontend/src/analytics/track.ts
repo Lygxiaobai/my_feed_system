@@ -5,6 +5,7 @@ export const PRODUCT_EVENTS = [
   'video_watch',
   'video_like',
   'video_unlike',
+  'video_share',
   'comment_submit',
   'follow',
   'unfollow',

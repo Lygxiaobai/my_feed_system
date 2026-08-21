@@ -54,6 +54,26 @@ scenarios:
     expected: The non-reviewer is refused, the second decision is rejected as already handled, and every state change is recorded with its cause and operator.
     tags:
       - backend-api
+  - name: share-code-round-trips
+    description: A share code is issued for a video and then resolved, both alone and embedded in the surrounding text a user would paste.
+    expected: Every form resolves to the same video the code was issued for.
+    tags:
+      - backend-api
+  - name: damaged-share-code-is-refused-not-misresolved
+    description: A share code is truncated, extended, and altered by one character, then each variant is resolved.
+    expected: Every variant is refused as invalid; none resolves to a different video.
+    tags:
+      - backend-api
+  - name: ordinary-text-is-not-mistaken-for-a-code
+    description: Plain search text containing eight-character words is submitted for resolution.
+    expected: No video is resolved, so pasting ordinary text cannot redirect a viewer to an unrelated video.
+    tags:
+      - backend-api
+  - name: share-code-grants-no-access
+    description: A code is issued for a video that is later removed, and a non-author resolves it; separately a non-author requests a code for an unapproved video.
+    expected: Both answer as though the content does not exist, and the failure is indistinguishable from an unrecognized code.
+    tags:
+      - backend-api
   - name: pre-existing-content-survives-the-rollout
     description: The review feature is introduced into a system that already contains published videos.
     expected: Existing content stays publicly visible instead of disappearing behind a default awaiting-review state.

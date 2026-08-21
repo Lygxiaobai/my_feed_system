@@ -25,6 +25,7 @@ import (
 	"my_feed_system/internal/observability"
 	"my_feed_system/internal/ops"
 	"my_feed_system/internal/popularity"
+	"my_feed_system/internal/report"
 	"my_feed_system/internal/response"
 	"my_feed_system/internal/social"
 	"my_feed_system/internal/video"
@@ -243,7 +244,7 @@ func NewRouterWithLocalCaches(
 	opsProtected.GET("/metrics", opsHandler.Metrics)
 	opsProtected.POST("/logs", opsLogsLimit, opsHandler.Logs)
 
-	videoHandler := video.NewHandler(video.NewServiceWithCachesAndPublisher(
+	videoService := video.NewServiceWithCachesAndPublisher(
 		db,
 		popularityService,
 		detailCache,
@@ -251,7 +252,8 @@ func NewRouterWithLocalCaches(
 		publisher,
 		uploadDir,
 		auditCfg.Enabled,
-	), uploadDir, media.NewService(db, uploadDir, maxVideoBytes))
+	)
+	videoHandler := video.NewHandler(videoService, uploadDir, media.NewService(db, uploadDir, maxVideoBytes))
 	videoGroup := r.Group("/video")
 	// 公开路由挂可选鉴权：作者本人需要能看到自己尚未过审的内容，
 	// 匿名访问则只看得到已过审的。
@@ -278,6 +280,27 @@ func NewRouterWithLocalCaches(
 	} else {
 		slog.Info("content audit disabled, publish goes public immediately")
 	}
+
+	// 举报独立于 audit.enabled：机审是可选能力，而举报是常设的用户通道，
+	// 不能因为机审关闭就连带消失——那会让平台失去接收违规通知的唯一入口。
+	reportSubmitIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "report.submit.ip",
+		Limit:    20,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	reportSubmitAccountLimit := ratelimit.ByAccountID(rateLimiter, ratelimit.Policy{
+		Name:     "report.submit.account",
+		Limit:    10,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	// 审核员白名单复用审核配置：这里只有「是/不是审核员」一个区分，
+	// 为它再引入一套配置或 RBAC 属于过度设计。
+	reportHandler := report.NewHandler(report.NewService(db, videoService, auditCfg.ReviewerAccountIDs))
+	reportGroup := r.Group("/report")
+	reportGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
+	reportHandler.RegisterProtectedRoutes(reportGroup, reportSubmitIPLimit, reportSubmitAccountLimit)
 
 	likeHandler := like.NewHandler(like.NewServiceWithCachesAndPublisher(db, popularityService, detailCache, localDetailCache, publisher))
 	likeGroup := r.Group("/like")

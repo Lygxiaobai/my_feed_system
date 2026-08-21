@@ -28,6 +28,8 @@ func NewHandler(service *Service, uploadDir string, mediaService *media.Service)
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/listByAuthorID", h.ListByAuthorID)
 	rg.POST("/getDetail", h.GetDetail)
+	rg.POST("/share", h.Share)
+	rg.POST("/resolveShare", h.ResolveShare)
 }
 
 func (h *Handler) RegisterProtectedRoutes(rg *gin.RouterGroup) {
@@ -149,6 +151,52 @@ func (h *Handler) GetDetail(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, ErrVideoNotFound) {
 			response.FailTip(c, http.StatusNotFound, response.ResourceNotFound, "视频不存在或已被删除", err)
+			return
+		}
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
+		return
+	}
+
+	response.OK(c, gin.H{"video": video})
+}
+
+func (h *Handler) Share(c *gin.Context) {
+	var req ShareRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
+		return
+	}
+
+	share, err := h.service.Share(c.GetUint64("account_id"), req)
+	if err != nil {
+		if errors.Is(err, ErrVideoNotFound) {
+			response.FailTip(c, http.StatusNotFound, response.ResourceNotFound, "视频不存在或已被删除", err)
+			return
+		}
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
+		return
+	}
+
+	response.OK(c, gin.H{"share": share})
+}
+
+func (h *Handler) ResolveShare(c *gin.Context) {
+	var req ResolveShareRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
+		return
+	}
+
+	video, err := h.service.ResolveShare(c.GetUint64("account_id"), req)
+	if err != nil {
+		if errors.Is(err, ErrShareTextTooLong) {
+			response.FailTip(c, http.StatusBadRequest, response.ParamFormatError, "内容过长，请只粘贴分享口令", err)
+			return
+		}
+		// 口令无法识别、校验位不符、内容已下架，对外统一是「口令无效」：
+		// 区分这几种情况会把「该视频确实存在」告诉持有随机口令的人。
+		if errors.Is(err, ErrShareCodeNotFound) || errors.Is(err, ErrInvalidShareCode) || errors.Is(err, ErrVideoNotFound) {
+			response.FailTip(c, http.StatusNotFound, response.ResourceNotFound, "口令无效或内容已下架", err)
 			return
 		}
 		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)

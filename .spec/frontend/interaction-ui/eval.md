@@ -18,6 +18,38 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
+  - name: share-passage-round-trips-through-the-search-field
+    description: A user shares a video, copies the passage, and pastes it into the search field in a fresh session.
+    expected: The passage contains the code, author, title, and a link built from the current origin, and pasting it navigates to the shared video rather than running a text search.
+    tags:
+      - frontend-e2e
+      - desktop
+      - mobile
+  - name: share-copy-degrades-without-a-clipboard
+    description: A user shares a video from the entry point where the clipboard API is unavailable.
+    expected: A manual-copy prompt containing the full passage appears instead of a failure, and the code stays readable on screen.
+    tags:
+      - frontend-e2e
+      - desktop
+  - name: unresolvable-paste-is-reported-but-a-search-term-is-not-swallowed
+    description: A user pastes a share passage whose video was removed, then separately searches for an eight-character word.
+    expected: The first reports that the code is invalid instead of searching for the passage; the second performs an ordinary search.
+    tags:
+      - frontend-e2e
+      - desktop
+  - name: share-link-opens-directly
+    description: A user opens a share link in the address bar and then presses back.
+    expected: The link lands on the video, and back returns to where the user came from rather than to the intermediate resolving step.
+    tags:
+      - frontend-e2e
+      - desktop
+  - name: reporting-sets-expectations-and-is-not-offered-on-own-content
+    description: A viewer reports another user's video, submits the catch-all reason without an explanation, then reports the same video again; the author checks their own video.
+    expected: The catch-all reason cannot be submitted without an explanation, a successful submission says a person will review it and that the content is not removed immediately, the repeat submission is refused as already reported, the video stays visible throughout, and the author is offered no report control on their own video.
+    tags:
+      - frontend-e2e
+      - desktop
+      - mobile
   - name: playback-surface-has-no-instructional-overlay
     description: A user views a feed video and a video detail page, then toggles mute.
     expected: No gesture or keyboard-shortcut hints are drawn over the video, mute produces no transient message because the control's own label shows the state, and the underlying gestures and shortcuts still work.

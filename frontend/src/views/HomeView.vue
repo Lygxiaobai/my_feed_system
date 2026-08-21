@@ -7,6 +7,8 @@ import { createWatchSession } from '../analytics/watch'
 import AppShell from '../components/AppShell.vue'
 import CommentListSkeleton from '../components/CommentListSkeleton.vue'
 import FeedStageSkeleton from '../components/FeedStageSkeleton.vue'
+import ReportSheet from '../components/ReportSheet.vue'
+import ShareSheet from '../components/ShareSheet.vue'
 import TipSheet from '../components/TipSheet.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import VideoPlayer, { type VideoPlayerHandle } from '../components/VideoPlayer.vue'
@@ -70,6 +72,8 @@ const muted = ref(true)
 const activeIndex = ref(0)
 const tipSheet = ref<InstanceType<typeof TipSheet> | null>(null)
 const tipTarget = ref<FeedVideoItem | null>(null)
+const shareSheet = ref<InstanceType<typeof ShareSheet> | null>(null)
+const reportSheet = ref<InstanceType<typeof ReportSheet> | null>(null)
 
 function openGiveTip(item: FeedVideoItem) {
   tipTarget.value = item
@@ -393,14 +397,13 @@ async function toggleFollow(authorId: number) {
   }
 }
 
-async function share(item: FeedVideoItem) {
-  const url = `${location.origin}/video/${item.id}`
-  try {
-    await navigator.clipboard.writeText(url)
-    toast.success('链接已复制')
-  } catch {
-    window.prompt('复制链接', url)
-  }
+function share(item: FeedVideoItem) {
+  track('video_share', { video_id: item.id, feed: tab.value })
+  shareSheet.value?.openFor(item.id)
+}
+
+function openReport(item: FeedVideoItem) {
+  reportSheet.value?.openFor(item.id)
 }
 
 const drawer = reactive({
@@ -821,6 +824,16 @@ onBeforeUnmount(() => {
                 <span class="icon">赏</span>
                 <span class="count">打赏记录</span>
               </button>
+
+              <button
+                v-if="!auth.isLoggedIn || myAccountId !== item.author.id"
+                class="act"
+                type="button"
+                @click.stop="openReport(item)"
+              >
+                <span class="icon">⚑</span>
+                <span class="count">举报</span>
+              </button>
             </div>
           </div>
         </section>
@@ -900,6 +913,8 @@ onBeforeUnmount(() => {
       :author-username="tipTarget.author.username"
       :is-author="!!myAccountId && myAccountId === tipTarget.author.id"
     />
+    <ShareSheet ref="shareSheet" />
+    <ReportSheet ref="reportSheet" />
   </AppShell>
 </template>
 

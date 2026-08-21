@@ -19,6 +19,7 @@ import (
 	"my_feed_system/internal/mq"
 	"my_feed_system/internal/outbox"
 	"my_feed_system/internal/popularity"
+	"my_feed_system/internal/report"
 	"my_feed_system/internal/social"
 	"my_feed_system/internal/video"
 	"my_feed_system/internal/wallet"
@@ -69,6 +70,7 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		&outbox.Message{},
 		&popularity.Projection{},
 		&audit.Record{},
+		&report.Report{},
 		&wallet.Lot{},
 		&wallet.Ledger{},
 		&wallet.DailyAction{},

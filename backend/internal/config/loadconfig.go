@@ -22,6 +22,17 @@ type Config struct {
 	Audit    AuditConfig    `yaml:"audit"`
 	Auth     AuthConfig     `yaml:"auth"`
 	Ops      OpsConfig      `yaml:"ops"`
+	Alipay   AlipayConfig   `yaml:"alipay"`
+}
+
+// AlipayConfig 是电脑网站支付沙箱配置。密钥全部从环境变量展开，缺省时空字符串，充值接口返回未配置。
+type AlipayConfig struct {
+	AppID           string `yaml:"app_id"`
+	PrivateKey      string `yaml:"private_key"`
+	AlipayPublicKey string `yaml:"alipay_public_key"`
+	Gateway         string `yaml:"gateway"`
+	NotifyURL       string `yaml:"notify_url"`
+	ReturnURL       string `yaml:"return_url"`
 }
 
 // OpsConfig 是测试邮箱运维台用的只读观测地址。
@@ -153,11 +164,40 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("unmarshal config file: %w", err)
 	}
 
+	cfg.Alipay.fillFromEnv()
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
 
 	return &cfg, nil
+}
+
+func (c *AlipayConfig) fillFromEnv() {
+	if strings.TrimSpace(c.AppID) == "" {
+		c.AppID = os.Getenv("ALIPAY_APP_ID")
+	}
+	if strings.TrimSpace(c.PrivateKey) == "" {
+		c.PrivateKey = os.Getenv("ALIPAY_PRIVATE_KEY")
+	}
+	if strings.TrimSpace(c.AlipayPublicKey) == "" {
+		c.AlipayPublicKey = os.Getenv("ALIPAY_PUBLIC_KEY")
+	}
+	if strings.TrimSpace(c.Gateway) == "" {
+		c.Gateway = firstNonEmptyEnv("ALIPAY_GATEWAY", "https://openapi-sandbox.dl.alipaydev.com/gateway.do")
+	}
+	if strings.TrimSpace(c.NotifyURL) == "" {
+		c.NotifyURL = os.Getenv("ALIPAY_NOTIFY_URL")
+	}
+	if strings.TrimSpace(c.ReturnURL) == "" {
+		c.ReturnURL = os.Getenv("ALIPAY_RETURN_URL")
+	}
+}
+
+func firstNonEmptyEnv(name, fallback string) string {
+	if v := strings.TrimSpace(os.Getenv(name)); v != "" {
+		return v
+	}
+	return fallback
 }
 
 // placeholderPattern 匹配 ${VAR} 与 ${VAR:-default} 两种写法。

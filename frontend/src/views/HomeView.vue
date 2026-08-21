@@ -7,6 +7,7 @@ import { createWatchSession } from '../analytics/watch'
 import AppShell from '../components/AppShell.vue'
 import CommentListSkeleton from '../components/CommentListSkeleton.vue'
 import FeedStageSkeleton from '../components/FeedStageSkeleton.vue'
+import TipSheet from '../components/TipSheet.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import VideoPlayer, { type VideoPlayerHandle } from '../components/VideoPlayer.vue'
 import { ApiError } from '../api/client'
@@ -67,6 +68,18 @@ const watchSession = createWatchSession()
 
 const muted = ref(true)
 const activeIndex = ref(0)
+const tipSheet = ref<InstanceType<typeof TipSheet> | null>(null)
+const tipTarget = ref<FeedVideoItem | null>(null)
+
+function openGiveTip(item: FeedVideoItem) {
+  tipTarget.value = item
+  void nextTick(() => tipSheet.value?.openGive())
+}
+
+function openInboxTip(item: FeedVideoItem) {
+  tipTarget.value = item
+  void nextTick(() => tipSheet.value?.openInbox())
+}
 const playerMap = new Map<number, VideoPlayerHandle>()
 let slideObserver: IntersectionObserver | null = null
 let tapTimer: number | undefined
@@ -713,7 +726,6 @@ onBeforeUnmount(() => {
 
         <div class="tabs-right">
           <button class="chip" type="button" @click="toggleMute">{{ muted ? '静音' : '有声' }}</button>
-          <RouterLink class="chip" :to="activeItem ? `/video/${activeItem.id}` : '/video'">详情</RouterLink>
         </div>
       </div>
 
@@ -790,6 +802,25 @@ onBeforeUnmount(() => {
                 <span class="icon">↗</span>
                 <span class="count">分享</span>
               </button>
+
+              <button
+                v-if="!auth.isLoggedIn || myAccountId !== item.author.id"
+                class="act"
+                type="button"
+                @click.stop="openGiveTip(item)"
+              >
+                <span class="icon">赏</span>
+                <span class="count">打赏</span>
+              </button>
+              <button
+                v-if="auth.isLoggedIn"
+                class="act"
+                type="button"
+                @click.stop="openInboxTip(item)"
+              >
+                <span class="icon">赏</span>
+                <span class="count">打赏记录</span>
+              </button>
             </div>
           </div>
         </section>
@@ -862,6 +893,13 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+    <TipSheet
+      v-if="tipTarget"
+      ref="tipSheet"
+      :video-id="tipTarget.id"
+      :author-username="tipTarget.author.username"
+      :is-author="!!myAccountId && myAccountId === tipTarget.author.id"
+    />
   </AppShell>
 </template>
 

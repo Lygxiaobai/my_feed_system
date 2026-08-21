@@ -21,6 +21,7 @@ import (
 	"my_feed_system/internal/popularity"
 	"my_feed_system/internal/social"
 	"my_feed_system/internal/video"
+	"my_feed_system/internal/wallet"
 )
 
 func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
@@ -68,6 +69,12 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		&outbox.Message{},
 		&popularity.Projection{},
 		&audit.Record{},
+		&wallet.Lot{},
+		&wallet.Ledger{},
+		&wallet.DailyAction{},
+		&wallet.RechargeOrder{},
+		&wallet.TipRecord{},
+		&wallet.PlatformEntry{},
 	); err != nil {
 		return nil, fmt.Errorf("auto migrate tables: %w", err)
 	}

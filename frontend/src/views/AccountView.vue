@@ -23,9 +23,7 @@ const social = useSocialStore()
 const toast = useToastStore()
 
 const busy = ref(false)
-const loginForm = reactive({ username: '', password: '' })
 const emailForm = reactive({ email: '', code: '' })
-const passwordOpen = ref(false)
 const sendingCode = ref(false)
 const opsAllowed = ref(false)
 const countdown = ref(0)
@@ -218,37 +216,12 @@ function onOauthSoon() {
   toast.info('即将开放')
 }
 
-async function onLogin() {
-  if (busy.value) return
-  const username = loginForm.username.trim()
-  const password = loginForm.password.trim()
-  if (!username || !password) {
-    toast.error('请输入用户名和密码')
-    return
-  }
-
-  busy.value = true
-  try {
-    const res = await accountApi.login(username, password)
-    auth.setToken(res.token)
-    track('login')
-    toast.success('登录成功')
-    await social.refreshMine()
-    await Promise.all([loadMyVideos(), loadLikedVideos()])
-  } catch (e) {
-    const msg = e instanceof ApiError ? e.message : String(e)
-    toast.error(msg)
-  } finally {
-    busy.value = false
-  }
-}
-
-async function goChangePassword() {
-  await router.push('/account/change-password')
-}
-
 async function goSettings() {
   await router.push('/settings')
+}
+
+async function goWallet() {
+  await router.push('/wallet')
 }
 
 async function goOps() {
@@ -379,22 +352,7 @@ watch(
           <button class="ghost oauth" type="button" @click="onOauthSoon">QQ 登录</button>
         </div>
 
-        <button class="linkish" type="button" @click="passwordOpen = !passwordOpen">
-          {{ passwordOpen ? '收起账号密码登录' : '账号密码登录' }}
-        </button>
-
-        <div v-if="passwordOpen" class="grid" style="margin-top: 10px">
-          <div>
-            <label>用户名</label>
-            <input v-model.trim="loginForm.username" autocomplete="username" />
-          </div>
-          <div>
-            <label>密码</label>
-            <input v-model.trim="loginForm.password" type="password" autocomplete="current-password" @keydown.enter="onLogin" />
-          </div>
-          <button class="primary" type="button" :disabled="busy" @click="onLogin">登录</button>
-          <button class="ghost" type="button" :disabled="busy" @click="goChangePassword">修改密码</button>
-        </div>
+        <button class="linkish" type="button" @click="router.push('/account/password')">账号密码登录</button>
       </div>
     </div>
 
@@ -409,6 +367,9 @@ watch(
           </div>
 
           <div class="row">
+            <button class="ghost" type="button" @click="router.push('/checkin')">签到</button>
+            <button class="ghost" type="button" @click="router.push('/lottery')">抽奖</button>
+            <button class="ghost" type="button" @click="goWallet">钱包</button>
             <button v-if="opsAllowed" class="ghost" type="button" @click="goOps">运维</button>
             <button class="ghost" type="button" @click="goSettings">设置</button>
           </div>

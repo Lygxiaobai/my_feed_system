@@ -18,6 +18,12 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
+  - name: feed-has-no-detail-chip
+    description: A user views the recommendation feed chrome.
+    expected: The top bar has mute but no detail shortcut; tipping and the signed-in tip-list control remain on the video action rail.
+    tags:
+      - frontend-e2e
+      - desktop
   - name: feed-playback-navigation
     description: A user can move between full-screen feed items using scroll or keyboard navigation.
     expected: The active item follows visibility, old items pause, only nearby items keep media sources enabled, and a single tap does not fire together with a double-tap like.

@@ -10,6 +10,10 @@ import RegisterView from '../views/RegisterView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import OpsView from '../views/OpsView.vue'
 import UserProfileView from '../views/UserProfileView.vue'
+import WalletView from '../views/WalletView.vue'
+import PasswordLoginView from '../views/PasswordLoginView.vue'
+import CheckinView from '../views/CheckinView.vue'
+import LotteryView from '../views/LotteryView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -22,6 +26,10 @@ const router = createRouter({
     { path: '/video', name: 'video', component: VideoView },
     { path: '/video/:id', name: 'video-detail', component: VideoDetailView, props: true },
     { path: '/account', name: 'account', component: AccountView },
+    { path: '/wallet', name: 'wallet', component: WalletView },
+    { path: '/checkin', name: 'checkin', component: CheckinView },
+    { path: '/lottery', name: 'lottery', component: LotteryView },
+    { path: '/account/password', name: 'account-password', component: PasswordLoginView },
     { path: '/account/register', name: 'account-register', component: RegisterView },
     { path: '/account/change-password', name: 'account-change-password', component: ChangePasswordView },
     { path: '/settings', name: 'settings', component: SettingsView },

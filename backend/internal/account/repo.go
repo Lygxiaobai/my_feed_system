@@ -6,9 +6,14 @@ import (
 	"gorm.io/gorm"
 )
 
+// CreatedHook 在账号插入成功后、同一事务内执行。
+// 用来发放注册赠金，避免出现「账号已建、赠金没到」的半成品。
+type CreatedHook func(tx *gorm.DB, accountID uint64) error
+
 // Repo 负责账号表的数据库读写。
 type Repo struct {
-	db *gorm.DB
+	db        *gorm.DB
+	onCreated CreatedHook
 }
 
 // NewRepo 创建账号仓储。
@@ -16,9 +21,21 @@ func NewRepo(db *gorm.DB) *Repo {
 	return &Repo{db: db}
 }
 
+func (r *Repo) SetCreatedHook(hook CreatedHook) {
+	r.onCreated = hook
+}
+
 // Create 插入一条新的账号记录。
 func (r *Repo) Create(account *Account) error {
-	return r.db.Create(account).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(account).Error; err != nil {
+			return err
+		}
+		if r.onCreated != nil {
+			return r.onCreated(tx, account.ID)
+		}
+		return nil
+	})
 }
 
 // FindByUsername 按用户名查询账号，未命中时返回 nil。
@@ -108,6 +125,12 @@ func (r *Repo) CreateWithEmailIdentity(account *Account, email string) error {
 			Provider:  ProviderEmail,
 			Subject:   email,
 		}
-		return tx.Create(&identity).Error
+		if err := tx.Create(&identity).Error; err != nil {
+			return err
+		}
+		if r.onCreated != nil {
+			return r.onCreated(tx, account.ID)
+		}
+		return nil
 	})
 }

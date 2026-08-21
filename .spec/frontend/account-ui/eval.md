@@ -18,6 +18,18 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
+  - name: account-password-login-page
+    description: A visitor opens password login from the unsigned account surface.
+    expected: The password form is on its own page and is not mixed with the email code fields; a successful login returns to the authenticated hub.
+    tags:
+      - frontend-e2e
+      - desktop
+  - name: account-wallet-entry
+    description: A signed-in user opens the wallet from the account hub.
+    expected: The wallet page loads for that session and a signed-out visitor cannot stay on the wallet.
+    tags:
+      - frontend-e2e
+      - desktop
   - name: account-logout
     description: A logged-in user can log out and cannot continue using authenticated-only views.
     expected: Local authentication state is cleared and protected navigation requires login again.

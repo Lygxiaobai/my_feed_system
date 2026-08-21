@@ -25,6 +25,11 @@ scenarios:
     expected: No mail is sent, any six-digit code succeeds while the send session is valid, and a non-digit or missing session is rejected as an incorrect code.
     tags:
       - backend-api
+  - name: new-account-receives-register-gift
+    description: A password registration or first email verify creates an account.
+    expected: The new account has the registration gift and an existing account opened by a later login does not receive another gift.
+    tags:
+      - backend-api
   - name: email-code-is-not-distinguished-on-failure
     description: A caller verifies with a wrong code, an expired session, or without sending first.
     expected: Each case returns the same caller-facing incorrect-code outcome and does not reveal whether the address exists.

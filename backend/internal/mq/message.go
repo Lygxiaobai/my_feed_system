@@ -29,6 +29,7 @@ const (
 	EventTypeCacheInvalidated        = "cache.invalidated"
 	EventTypeMediaTranscodeRequested = "media.transcode.requested"
 	EventTypeAuditRequested          = "audit.requested"
+	EventTypeTipCreated              = "tip.created"
 )
 
 const (

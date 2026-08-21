@@ -69,3 +69,11 @@ auth:
 ops:
   loki_url: ${LOKI_URL:-http://loki:3100}
   prometheus_url: ${PROMETHEUS_URL:-http://prometheus:9090}
+
+alipay:
+  app_id: ${ALIPAY_APP_ID:-}
+  private_key: ${ALIPAY_PRIVATE_KEY:-}
+  alipay_public_key: ${ALIPAY_PUBLIC_KEY:-}
+  gateway: ${ALIPAY_GATEWAY:-https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+  notify_url: ${ALIPAY_NOTIFY_URL:-}
+  return_url: ${ALIPAY_RETURN_URL:-}

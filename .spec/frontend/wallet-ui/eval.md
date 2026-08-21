@@ -1,0 +1,38 @@
+---
+scenarios:
+  - name: account-opens-wallet
+    description: A signed-in user opens the wallet from the account hub.
+    expected: The wallet shows spendable coins and a recharge surface; a signed-out visitor is sent to the account page.
+    tags:
+      - frontend-e2e
+      - desktop
+  - name: wallet-recharge-shows-qr
+    description: A signed-in user starts a packaged recharge.
+    expected: The wallet shows a sandbox payment QR code and then success or closed from the server query, not from a browser redirect.
+    tags:
+      - frontend-e2e
+      - desktop
+  - name: feed-tip
+    description: A signed-in viewer opens the feed or a video page and confirms a tip on another person's public video.
+    expected: A successful tip shows a confirmation and a failure shows the server message without changing another viewer's video.
+    tags:
+      - frontend-e2e
+      - desktop
+  - name: wallet-checkin-lottery
+    description: A signed-in user opens the check-in and lottery pages from the account hub or wallet.
+    expected: Check-in shows this month's Monday–Sunday calendar with claimed-day coins, claims 1–20 coins once per Beijing day, and then shows today's prize. Lottery shows the six published tiers, spins to the server prize_index after a successful draw, and does not spin when already claimed.
+    tags:
+      - frontend-e2e
+      - desktop
+  - name: author-sees-video-tips
+    description: The author opens their own video and opens the tip list.
+    expected: The sheet title is 「本视频打赏」 and the list shows every tipper name and coin amount for that video.
+    tags:
+      - frontend-e2e
+      - desktop
+  - name: viewer-sees-own-video-tips
+    description: A signed-in viewer who has tipped a video opens the tip list from the feed or video page.
+    expected: The sheet title is 「我的打赏」 and only that viewer's tips on the video appear; a viewer who has not tipped sees an empty own-tip list rather than a forbidden error.
+    tags:
+      - frontend-e2e
+      - desktop

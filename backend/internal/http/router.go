@@ -28,6 +28,7 @@ import (
 	"my_feed_system/internal/response"
 	"my_feed_system/internal/social"
 	"my_feed_system/internal/video"
+	"my_feed_system/internal/wallet"
 )
 
 func NewRouter(
@@ -38,7 +39,7 @@ func NewRouter(
 	jwtSecret string,
 	uploadDir string,
 ) *gin.Engine {
-	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir, 0, config.AuditConfig{}, config.AuthConfig{}, config.OpsConfig{})
+	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir, 0, config.AuditConfig{}, config.AuthConfig{}, config.OpsConfig{}, config.AlipayConfig{})
 }
 
 func NewRouterWithLocalCaches(
@@ -55,6 +56,7 @@ func NewRouterWithLocalCaches(
 	auditCfg config.AuditConfig,
 	authCfg config.AuthConfig,
 	opsCfg config.OpsConfig,
+	alipayCfg config.AlipayConfig,
 ) *gin.Engine {
 	// 不用 gin.Default()：它固定绑定 gin.Logger()，而后者只能输出拼好的文本行，
 	// 无法交给 slog 分级和结构化。这里自行组装等价的中间件链。
@@ -195,7 +197,10 @@ func NewRouterWithLocalCaches(
 		FailOpen: true,
 	})
 
+	walletService := wallet.NewService(db, alipayCfg)
+	walletService.SetPublisher(publisher, popularityService)
 	accountService := account.NewServiceWithTokenCache(db, tokenCache, jwtSecret)
+	accountService.SetCreatedHook(walletService.GrantRegisterGiftTx)
 	var otpStore *account.OTPStore
 	if redisClient != nil {
 		ttl := time.Duration(authCfg.Email.CodeTTLSeconds) * time.Second
@@ -317,6 +322,47 @@ func NewRouterWithLocalCaches(
 	protectedFeedGroup := feedGroup.Group("")
 	protectedFeedGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	feedHandler.RegisterProtectedRoutes(protectedFeedGroup)
+
+	walletTipIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "wallet.tip.ip",
+		Limit:    40,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	walletTipAccountLimit := ratelimit.ByAccountID(rateLimiter, ratelimit.Policy{
+		Name:     "wallet.tip.account",
+		Limit:    20,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	walletPayIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "wallet.recharge.ip",
+		Limit:    20,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	walletDailyIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "wallet.daily.ip",
+		Limit:    20,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+
+	walletHandler := wallet.NewHandler(walletService)
+	walletGroup := r.Group("/wallet")
+	walletHandler.RegisterPublicRoutes(walletGroup)
+	protectedWallet := walletGroup.Group("")
+	protectedWallet.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
+	protectedWallet.POST("/summary", walletHandler.Summary)
+	protectedWallet.POST("/ledger", walletHandler.ListLedger)
+	protectedWallet.POST("/checkin", walletDailyIPLimit, walletHandler.Checkin)
+	protectedWallet.POST("/checkin/month", walletHandler.CheckinMonth)
+	protectedWallet.POST("/lottery", walletDailyIPLimit, walletHandler.Lottery)
+	protectedWallet.POST("/recharge/create", walletPayIPLimit, walletHandler.CreateRecharge)
+	protectedWallet.POST("/recharge/query", walletHandler.QueryOrder)
+	protectedWallet.POST("/tip", walletTipIPLimit, walletTipAccountLimit, walletHandler.Tip)
+	protectedWallet.POST("/tips/mine", walletHandler.ListMyTips)
+	protectedWallet.POST("/tips/byVideo", walletHandler.ListVideoTips)
 
 	return r
 }

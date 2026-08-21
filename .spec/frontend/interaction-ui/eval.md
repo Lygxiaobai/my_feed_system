@@ -1,8 +1,8 @@
 ---
 scenarios:
   - name: video-interactions
-    description: A user can like, comment, follow, and unfollow from the supported video surfaces.
-    expected: Each successful action updates the visible state and each failure is shown without a false success state.
+    description: A user can like, comment, follow, unfollow, tip, and open that video's tip list from the supported video surfaces.
+    expected: Each successful action updates the visible state and each failure is shown without a false success state. Authors see every tip; signed-in viewers see only their own.
     tags:
       - frontend-e2e
       - desktop

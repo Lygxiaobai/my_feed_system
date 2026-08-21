@@ -60,6 +60,11 @@ func (s *Service) SetEmail(otp *OTPStore, mailer Mailer, cfg config.EmailAuthCon
 	s.emailCfg = cfg
 }
 
+// SetCreatedHook 在新建账号的同一事务里回调，用于发放注册赠金。
+func (s *Service) SetCreatedHook(hook CreatedHook) {
+	s.repo.SetCreatedHook(hook)
+}
+
 // Register 创建新账号，并在写入前做用户名唯一性校验。
 func (s *Service) Register(req RegisterRequest) (*Account, error) {
 	existing, err := s.repo.FindByUsername(req.Username)

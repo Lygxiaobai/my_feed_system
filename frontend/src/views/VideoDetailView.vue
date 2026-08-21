@@ -7,6 +7,7 @@ import { createWatchSession } from '../analytics/watch'
 import AppShell from '../components/AppShell.vue'
 import CommentListSkeleton from '../components/CommentListSkeleton.vue'
 import FeedStageSkeleton from '../components/FeedStageSkeleton.vue'
+import TipSheet from '../components/TipSheet.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import VideoPlayer, { type VideoPlayerHandle } from '../components/VideoPlayer.vue'
 import { ApiError } from '../api/client'
@@ -182,6 +183,23 @@ async function toggleFollow() {
   } finally {
     state.busy = false
   }
+}
+
+const isOwnVideo = computed(() => !!state.video && auth.claims?.account_id === state.video.author_id)
+const canTip = computed(() => !!state.video && !isOwnVideo.value && (state.video.audit_status ?? 'approved') === 'approved')
+const tipSheet = ref<InstanceType<typeof TipSheet> | null>(null)
+
+function openTip() {
+  if (!state.video) return
+  if (!auth.isLoggedIn) return void needLogin()
+  if (!canTip.value) return
+  tipSheet.value?.openGive()
+}
+
+function openTips() {
+  if (!state.video) return
+  if (!auth.isLoggedIn) return void needLogin()
+  tipSheet.value?.openInbox()
 }
 
 async function share() {
@@ -462,9 +480,26 @@ onBeforeUnmount(() => {
               <span class="icon">↗</span>
               <span class="count">分享</span>
             </button>
+
+            <button v-if="canTip" class="act" type="button" :disabled="state.busy" @click.stop="openTip">
+              <span class="icon">赏</span>
+              <span class="count">打赏</span>
+            </button>
+            <button v-if="auth.isLoggedIn" class="act" type="button" @click.stop="openTips">
+              <span class="icon">赏</span>
+              <span class="count">打赏记录</span>
+            </button>
           </div>
         </div>
       </div>
+
+      <TipSheet
+        v-if="state.video"
+        ref="tipSheet"
+        :video-id="state.video.id"
+        :author-username="state.video.username"
+        :is-author="isOwnVideo"
+      />
 
       <div v-if="drawer.open" class="drawer-backdrop" @click.self="closeDrawer">
         <div class="drawer">

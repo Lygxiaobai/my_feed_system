@@ -38,12 +38,13 @@ const (
 	AccessDenied Code = "A0300"
 
 	// A04xx 用户请求参数错误
-	ParamError        Code = "A0400"
-	ParamMissing      Code = "A0402"
-	ParamFormatError  Code = "A0410"
-	ResourceNotFound  Code = "A0420"
-	UploadTypeInvalid Code = "A0421"
-	UploadTooLarge    Code = "A0422"
+	ParamError          Code = "A0400"
+	ParamMissing        Code = "A0402"
+	ParamFormatError    Code = "A0410"
+	ResourceNotFound    Code = "A0420"
+	UploadTypeInvalid   Code = "A0421"
+	UploadTooLarge      Code = "A0422"
+	InsufficientBalance Code = "A0431"
 
 	// A05xx 用户请求服务异常
 	RequestServiceError Code = "A0500"
@@ -92,12 +93,13 @@ var defaultUserTips = map[Code]string{
 
 	AccessDenied: "没有操作该内容的权限",
 
-	ParamError:        "请求参数有误",
-	ParamMissing:      "缺少必填参数",
-	ParamFormatError:  "参数格式不正确",
-	ResourceNotFound:  "内容不存在或已被删除",
-	UploadTypeInvalid: "文件类型不支持",
-	UploadTooLarge:    "文件超出大小限制",
+	ParamError:          "请求参数有误",
+	ParamMissing:        "缺少必填参数",
+	ParamFormatError:    "参数格式不正确",
+	ResourceNotFound:    "内容不存在或已被删除",
+	UploadTypeInvalid:   "文件类型不支持",
+	UploadTooLarge:      "文件超出大小限制",
+	InsufficientBalance: "积分不足",
 
 	RequestServiceError: "请求处理失败，请稍后重试",
 	RateLimited:         "操作过于频繁，请稍后再试",

@@ -4,6 +4,13 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { track } from '../analytics/track'
 import { createWatchSession } from '../analytics/watch'
+import {
+  bindWatchProgress,
+  flushWatchProgress,
+  noteWatchProgress,
+  resolveResumeSeconds,
+  unbindWatchProgress,
+} from '../history/progress'
 import AppIcon from '../components/AppIcon.vue'
 import AppShell from '../components/AppShell.vue'
 import CommentListSkeleton from '../components/CommentListSkeleton.vue'
@@ -136,10 +143,18 @@ function onPlayerPlaying() {
 
 function onPlayerPaused() {
   playing.value = false
+  if (state.video) flushWatchProgress(state.video.id)
 }
 
 function onPlayerTime(seconds: number) {
   playTime.value = seconds
+  if (state.video) noteWatchProgress(state.video.id, seconds, player.value?.duration() ?? 0)
+}
+
+async function applyResume(videoId: number) {
+  const seconds = await resolveResumeSeconds(videoId)
+  if (id.value !== videoId || seconds <= 0) return
+  player.value?.seek(seconds)
 }
 
 function togglePlayPause() {
@@ -414,6 +429,7 @@ async function deleteComment(commentId: number) {
 watch(
   () => id.value,
   async () => {
+    unbindWatchProgress()
     watchSession.end(player.value ?? undefined, { from: 'detail' })
     player.value?.pause()
     playTime.value = 0
@@ -422,6 +438,10 @@ watch(
     await loadVideo()
     await loadIsLiked()
     await nextTick()
+    if (state.video) {
+      await applyResume(state.video.id)
+      bindWatchProgress(state.video.id, player.value)
+    }
     await play()
   },
 )
@@ -445,11 +465,16 @@ onMounted(async () => {
   await loadVideo()
   await loadIsLiked()
   await nextTick()
+  if (state.video) {
+    await applyResume(state.video.id)
+    bindWatchProgress(state.video.id, player.value)
+  }
   await play()
 })
 
 onBeforeUnmount(() => {
   if (tapTimer !== undefined) window.clearTimeout(tapTimer)
+  unbindWatchProgress()
   watchSession.end(player.value ?? undefined, { from: 'detail' })
   player.value?.pause()
 })

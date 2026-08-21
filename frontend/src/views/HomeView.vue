@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { track } from '../analytics/track'
 import { createWatchSession } from '../analytics/watch'
+import { bindWatchProgress, flushWatchProgress, noteWatchProgress, unbindWatchProgress } from '../history/progress'
 import AppIcon from '../components/AppIcon.vue'
 import AppShell from '../components/AppShell.vue'
 import CommentListSkeleton from '../components/CommentListSkeleton.vue'
@@ -265,10 +266,12 @@ function onPlayerPlaying(videoId: number) {
 
 function onPlayerPaused(videoId: number) {
   if (activeItem.value?.id === videoId) activePlaying.value = false
+  flushWatchProgress(videoId)
 }
 
 function onPlayerTime(videoId: number, seconds: number) {
   if (activeItem.value?.id === videoId) activePlayTime.value = seconds
+  noteWatchProgress(videoId, seconds, playerMap.get(videoId)?.duration() ?? 0)
 }
 
 function onStageClick() {
@@ -648,11 +651,13 @@ watch(
   () => activeItem.value?.id,
   async (currentId, previousId) => {
     if (previousId && previousId !== currentId) {
+      unbindWatchProgress(previousId)
       watchSession.end(playerMap.get(previousId) ?? undefined, { feed: tab.value })
     }
     activePlayTime.value = 0
     activePlaying.value = false
     await nextTick()
+    if (currentId) bindWatchProgress(currentId, playerMap.get(currentId))
     await playActive()
     await loadMoreIfNeeded()
   },
@@ -661,6 +666,7 @@ watch(
 watch(
   () => tab.value,
   async () => {
+    unbindWatchProgress()
     watchSession.end(activeItem.value ? playerMap.get(activeItem.value.id) : undefined, { feed: tab.value })
     activeIndex.value = 0
     pauseAllPlayers()
@@ -734,6 +740,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (tapTimer !== undefined) window.clearTimeout(tapTimer)
+  unbindWatchProgress()
   watchSession.end(activeItem.value ? playerMap.get(activeItem.value.id) : undefined, { feed: tab.value })
   slideObserver?.disconnect()
   slideObserver = null

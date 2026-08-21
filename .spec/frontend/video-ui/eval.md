@@ -6,6 +6,12 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
+  - name: video-detail-resumes-unfinished
+    description: A signed-in user reopens a detail page for a video they left unfinished.
+    expected: The player seeks to the stored position after metadata is ready, and a completed or near-end video starts from the beginning.
+    tags:
+      - frontend-e2e
+      - desktop
   - name: video-playback-lifecycle
     description: The active feed or detail video can autoplay muted, pause when inactive, and expose loading, buffering, failure, and retry states.
     expected: Only the active feed video plays, immediate neighbors may preload, failed playback is visible and recoverable, and leaving the view releases playback resources.

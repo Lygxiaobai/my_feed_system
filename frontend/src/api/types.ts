@@ -119,6 +119,32 @@ export type DanmakuSendResponse = {
   item: DanmakuItem
 }
 
+export type HistoryStatus = 'unfinished' | 'completed'
+
+export type WatchProgress = {
+  video_id: number
+  position_ms: number
+  duration_ms: number
+  completed: boolean
+  resume_ms: number
+}
+
+export type HistoryItem = WatchProgress & {
+  last_watched_at: string
+  video: Video
+}
+
+export type HistoryListResponse = {
+  items: HistoryItem[]
+  next_cursor: string
+  has_more: boolean
+}
+
+export type HistoryUpsertResponse = {
+  saved: boolean
+  item?: HistoryItem | null
+}
+
 export type GetAllFollowersResponse = {
   followers: SocialRelation[]
 }

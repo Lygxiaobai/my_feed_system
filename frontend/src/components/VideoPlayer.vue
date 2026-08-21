@@ -11,6 +11,7 @@ export type VideoPlayerHandle = {
   isPaused: () => boolean
   currentTime: () => number
   duration: () => number
+  seek: (seconds: number) => void
 }
 
 const emit = defineEmits<{
@@ -38,6 +39,7 @@ const props = withDefaults(
 const videoEl = ref<HTMLVideoElement | null>(null)
 const status = ref<PlaybackStatus>('idle')
 const errorMessage = ref('')
+let pendingSeek: number | null = null
 
 function setStatus(nextStatus: PlaybackStatus) {
   status.value = nextStatus
@@ -100,8 +102,25 @@ function onLoadStart() {
   setStatus('loading')
 }
 
+function applyPendingSeek() {
+  const video = videoEl.value
+  if (!video || pendingSeek == null) return
+  if (video.readyState < 1) return
+  const durationValue = duration()
+  const next = durationValue > 0 ? Math.min(pendingSeek, Math.max(0, durationValue - 0.05)) : pendingSeek
+  video.currentTime = next
+  pendingSeek = null
+}
+
+function seek(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return
+  pendingSeek = seconds
+  applyPendingSeek()
+}
+
 function onLoadedMetadata() {
   if (status.value !== 'playing') setStatus('ready')
+  applyPendingSeek()
 }
 
 function onCanPlay() {
@@ -147,6 +166,7 @@ async function syncSource() {
 
   video.muted = props.muted
   if (!props.enabled || !props.src) {
+    pendingSeek = null
     video.pause()
     video.removeAttribute('src')
     video.load()
@@ -160,6 +180,7 @@ async function syncSource() {
 watch(
   [() => props.src, () => props.enabled],
   () => {
+    pendingSeek = null
     void syncSource()
   },
   { immediate: true },
@@ -193,6 +214,7 @@ defineExpose<VideoPlayerHandle>({
   isPaused,
   currentTime,
   duration,
+  seek,
 })
 </script>
 

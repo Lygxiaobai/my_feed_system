@@ -11,8 +11,10 @@ import VideoGridSkeleton from '../components/VideoGridSkeleton.vue'
 import { ApiError } from '../api/client'
 import * as accountApi from '../api/account'
 import * as opsApi from '../api/ops'
-import type { AuditStatus, SocialRelation, Video } from '../api/types'
+import * as historyApi from '../api/history'
+import type { AuditStatus, HistoryItem, HistoryStatus, SocialRelation, Video } from '../api/types'
 import * as videoApi from '../api/video'
+import { formatWatchClock } from '../history/rules'
 import { useAuthStore } from '../stores/auth'
 import { useSocialStore } from '../stores/social'
 import { useToastStore } from '../stores/toast'
@@ -42,8 +44,19 @@ const myVideos = reactive({
 
 const totalReceivedLikes = computed(() => myVideos.items.reduce((sum, item) => sum + (item.likes_count ?? 0), 0))
 
-type VideoTab = 'works' | 'likes'
+type VideoTab = 'works' | 'likes' | 'history'
 const videoTab = ref<VideoTab>('works')
+const historyStatus = ref<HistoryStatus>('unfinished')
+
+const historyList = reactive({
+  loading: false,
+  loadingMore: false,
+  error: '',
+  items: [] as HistoryItem[],
+  nextCursor: '',
+  hasMore: false,
+})
+let historyReq = 0
 
 let myVideosReq = 0
 async function loadMyVideos() {
@@ -150,6 +163,60 @@ function openLikedVideos() {
   void loadLikedVideos()
 }
 
+function openHistory(status: HistoryStatus = historyStatus.value) {
+  videoTab.value = 'history'
+  historyStatus.value = status
+  void loadHistory(true)
+}
+
+async function loadHistory(reset: boolean) {
+  if (!auth.isLoggedIn) {
+    historyList.items = []
+    historyList.error = ''
+    historyList.loading = false
+    historyList.loadingMore = false
+    historyList.nextCursor = ''
+    historyList.hasMore = false
+    return
+  }
+  if (historyList.loading || historyList.loadingMore) return
+
+  const req = ++historyReq
+  if (reset) historyList.loading = true
+  else historyList.loadingMore = true
+  historyList.error = ''
+  try {
+    const res = await historyApi.listHistory(historyStatus.value, reset ? '' : historyList.nextCursor)
+    if (req !== historyReq) return
+    historyList.items = reset ? res.items : historyList.items.concat(res.items)
+    historyList.nextCursor = res.next_cursor
+    historyList.hasMore = res.has_more
+  } catch (e) {
+    if (req !== historyReq) return
+    historyList.error = e instanceof ApiError ? e.message : String(e)
+    if (reset) historyList.items = []
+  } finally {
+    if (req === historyReq) {
+      historyList.loading = false
+      historyList.loadingMore = false
+    }
+  }
+}
+
+function historyProgressPercent(item: HistoryItem) {
+  if (item.duration_ms <= 0) return 0
+  return Math.min(100, Math.round((item.position_ms / item.duration_ms) * 100))
+}
+
+async function removeHistory(item: HistoryItem) {
+  try {
+    await historyApi.deleteHistory(item.video_id)
+    historyList.items = historyList.items.filter((row) => row.video_id !== item.video_id)
+  } catch (e) {
+    toast.error(e instanceof ApiError ? e.message : String(e))
+  }
+}
+
 onUnmounted(() => {
   if (countdownTimer !== undefined) window.clearInterval(countdownTimer)
 })
@@ -203,7 +270,7 @@ async function onEmailLogin() {
     track('login')
     toast.success(res.created ? '注册并登录成功' : '登录成功')
     await social.refreshMine()
-    await Promise.all([loadMyVideos(), loadLikedVideos()])
+    await Promise.all([loadMyVideos(), loadLikedVideos(), loadHistory(true)])
   } catch (e) {
     const msg = e instanceof ApiError ? e.message : String(e)
     toast.error(msg)
@@ -297,6 +364,15 @@ watch(
       likedVideos.loaded = false
       likedVideos.items = []
       likedVideos.error = ''
+
+      historyReq += 1
+      historyList.loading = false
+      historyList.loadingMore = false
+      historyList.items = []
+      historyList.error = ''
+      historyList.nextCursor = ''
+      historyList.hasMore = false
+      historyStatus.value = 'unfinished'
 
       videoTab.value = 'works'
       opsAllowed.value = false
@@ -410,17 +486,66 @@ watch(
 
       <div class="card" style="margin-top: 14px">
         <div class="row" style="justify-content: space-between">
-          <p class="title" style="margin: 0">{{ videoTab === 'works' ? '作品' : '点赞视频' }}</p>
+          <p class="title" style="margin: 0">
+            {{ videoTab === 'works' ? '作品' : videoTab === 'likes' ? '点赞视频' : '浏览历史' }}
+          </p>
           <div class="row" style="gap: 8px">
             <button class="ghost" type="button" :class="{ active: videoTab === 'works' }" @click="openWorksVideos">作品</button>
             <button class="ghost" type="button" :class="{ active: videoTab === 'likes' }" @click="openLikedVideos">
               点赞视频
               <span class="subtle">({{ likedVideoCountText }})</span>
             </button>
+            <button class="ghost" type="button" :class="{ active: videoTab === 'history' }" @click="openHistory()">浏览历史</button>
           </div>
         </div>
 
-        <template v-if="videoTab === 'works'">
+        <template v-if="videoTab === 'history'">
+          <div class="row" style="gap: 8px; margin-top: 12px">
+            <button class="ghost" type="button" :class="{ active: historyStatus === 'unfinished' }" @click="openHistory('unfinished')">
+              未看完
+            </button>
+            <button class="ghost" type="button" :class="{ active: historyStatus === 'completed' }" @click="openHistory('completed')">
+              已看完
+            </button>
+          </div>
+          <VideoGridSkeleton v-if="historyList.loading" style="margin-top: 12px" />
+          <div v-else-if="historyList.error" class="hint bad" style="margin-top: 12px">{{ historyList.error }}</div>
+          <div v-else-if="historyList.items.length === 0" class="hint" style="margin-top: 12px">
+            {{ historyStatus === 'unfinished' ? '还没有未看完的视频' : '还没有已看完的视频' }}
+          </div>
+          <div v-else class="video-grid" style="margin-top: 12px">
+            <div v-for="item in historyList.items" :key="item.video_id" class="video-card history-card">
+              <button class="video-hit" type="button" @click="goVideo(item.video_id)">
+                <span class="cover-wrap">
+                  <img class="video-cover" :src="item.video.cover_url" :alt="item.video.title" loading="lazy" />
+                  <span v-if="item.completed" class="watch-done">已看完</span>
+                  <span v-else class="watch-bar" aria-hidden="true">
+                    <i :style="{ width: `${historyProgressPercent(item)}%` }" />
+                  </span>
+                </span>
+                <div class="video-meta">
+                  <div class="video-title">{{ item.video.title }}</div>
+                  <div class="video-sub subtle">
+                    {{ item.completed ? '已看完' : `看到 ${formatWatchClock(item.position_ms)}` }}
+                    · {{ item.video.username }}
+                  </div>
+                </div>
+              </button>
+              <button class="history-remove" type="button" @click="removeHistory(item)">移除</button>
+            </div>
+          </div>
+          <button
+            v-if="historyList.hasMore"
+            class="ghost"
+            type="button"
+            style="margin-top: 12px"
+            :disabled="historyList.loadingMore"
+            @click="loadHistory(false)"
+          >
+            {{ historyList.loadingMore ? '加载中…' : '加载更多' }}
+          </button>
+        </template>
+        <template v-else-if="videoTab === 'works'">
           <VideoGridSkeleton v-if="myVideos.loading" style="margin-top: 12px" />
           <div v-else-if="myVideos.error" class="hint bad" style="margin-top: 12px">{{ myVideos.error }}</div>
           <div v-else-if="myVideos.items.length === 0" class="hint" style="margin-top: 12px">暂无作品</div>
@@ -679,6 +804,67 @@ watch(
   padding: 0;
   text-align: left;
   position: relative;
+}
+
+.history-card {
+  cursor: default;
+}
+
+.video-hit {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cover-wrap {
+  position: relative;
+  display: block;
+}
+
+.watch-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.watch-bar > i {
+  display: block;
+  height: 100%;
+  background: #fe2c55;
+}
+
+.watch-done {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.4;
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.history-remove {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
 }
 
 .audit-badge {

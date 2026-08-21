@@ -143,6 +143,25 @@ export async function postJson<T>(
   return unwrap<T>(data, res.status)
 }
 
+/** 关页或切后台时尽量把最后一次进度送出去，失败静默。 */
+export function postJsonKeepalive(path: string, body: unknown) {
+  const auth = useAuthStore()
+  const token = auth.token
+  if (!token) return
+
+  void fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body ?? {}),
+    keepalive: true,
+  }).catch(() => {
+    // 页面正在卸载，失败只能等下次心跳或本地缓存。
+  })
+}
+
 function parseResponseBody(text: string) {
   if (!text) return null
   try {

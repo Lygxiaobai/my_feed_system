@@ -16,6 +16,7 @@ import (
 	"my_feed_system/internal/config"
 	"my_feed_system/internal/danmaku"
 	"my_feed_system/internal/feed"
+	"my_feed_system/internal/history"
 	"my_feed_system/internal/like"
 	"my_feed_system/internal/media"
 	"my_feed_system/internal/middleware/accesslog"
@@ -365,6 +366,38 @@ func NewRouterWithLocalCaches(
 	protectedDanmakuGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	protectedDanmakuGroup.Use(danmakuSendIPLimit, danmakuSendAccountLimit)
 	danmakuHandler.RegisterProtectedRoutes(protectedDanmakuGroup)
+
+	historyUpsertIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "history.upsert.ip",
+		Limit:    90,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	historyUpsertAccountLimit := ratelimit.ByAccountID(rateLimiter, ratelimit.Policy{
+		Name:     "history.upsert.account",
+		Limit:    60,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	historyReadIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "history.read.ip",
+		Limit:    60,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	historyDeleteAccountLimit := ratelimit.ByAccountID(rateLimiter, ratelimit.Policy{
+		Name:     "history.delete.account",
+		Limit:    30,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	historyHandler := history.NewHandler(history.NewService(db, videoService))
+	historyGroup := r.Group("/history")
+	historyGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
+	historyGroup.POST("/upsert", historyUpsertIPLimit, historyUpsertAccountLimit, historyHandler.Upsert)
+	historyGroup.POST("/list", historyReadIPLimit, historyHandler.List)
+	historyGroup.POST("/progress", historyReadIPLimit, historyHandler.Progress)
+	historyGroup.POST("/delete", historyDeleteAccountLimit, historyHandler.Delete)
 
 	socialService := social.NewServiceWithPublisher(db, publisher)
 	socialService.SetNotifier(notifyWriter)

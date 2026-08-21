@@ -208,15 +208,6 @@ function historyProgressPercent(item: HistoryItem) {
   return Math.min(100, Math.round((item.position_ms / item.duration_ms) * 100))
 }
 
-async function removeHistory(item: HistoryItem) {
-  try {
-    await historyApi.deleteHistory(item.video_id)
-    historyList.items = historyList.items.filter((row) => row.video_id !== item.video_id)
-  } catch (e) {
-    toast.error(e instanceof ApiError ? e.message : String(e))
-  }
-}
-
 onUnmounted(() => {
   if (countdownTimer !== undefined) window.clearInterval(countdownTimer)
 })
@@ -514,25 +505,22 @@ watch(
             {{ historyStatus === 'unfinished' ? '还没有未看完的视频' : '还没有已看完的视频' }}
           </div>
           <div v-else class="video-grid" style="margin-top: 12px">
-            <div v-for="item in historyList.items" :key="item.video_id" class="video-card history-card">
-              <button class="video-hit" type="button" @click="goVideo(item.video_id)">
-                <span class="cover-wrap">
-                  <img class="video-cover" :src="item.video.cover_url" :alt="item.video.title" loading="lazy" />
-                  <span v-if="item.completed" class="watch-done">已看完</span>
-                  <span v-else class="watch-bar" aria-hidden="true">
-                    <i :style="{ width: `${historyProgressPercent(item)}%` }" />
-                  </span>
+            <button v-for="item in historyList.items" :key="item.video_id" class="video-card" type="button" @click="goVideo(item.video_id)">
+              <span class="cover-wrap">
+                <img class="video-cover" :src="item.video.cover_url" :alt="item.video.title" loading="lazy" />
+                <span v-if="item.completed" class="watch-done">已看完</span>
+                <span v-else class="watch-bar" aria-hidden="true">
+                  <i :style="{ width: `${historyProgressPercent(item)}%` }" />
                 </span>
-                <div class="video-meta">
-                  <div class="video-title">{{ item.video.title }}</div>
-                  <div class="video-sub subtle">
-                    {{ item.completed ? '已看完' : `看到 ${formatWatchClock(item.position_ms)}` }}
-                    · {{ item.video.username }}
-                  </div>
+              </span>
+              <div class="video-meta">
+                <div class="video-title">{{ item.video.title }}</div>
+                <div class="video-sub subtle">
+                  {{ item.completed ? '已看完' : `看到 ${formatWatchClock(item.position_ms)}` }}
+                  · {{ item.video.username }}
                 </div>
-              </button>
-              <button class="history-remove" type="button" @click="removeHistory(item)">移除</button>
-            </div>
+              </div>
+            </button>
           </div>
           <button
             v-if="historyList.hasMore"
@@ -826,21 +814,6 @@ watch(
   position: relative;
 }
 
-.history-card {
-  cursor: default;
-}
-
-.video-hit {
-  display: block;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
 .cover-wrap {
   position: relative;
   display: block;
@@ -872,19 +845,6 @@ watch(
   background: rgba(0, 0, 0, 0.55);
   color: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.18);
-}
-
-.history-remove {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(0, 0, 0, 0.55);
-  color: rgba(255, 255, 255, 0.9);
-  cursor: pointer;
 }
 
 .audit-badge {

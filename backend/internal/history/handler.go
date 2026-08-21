@@ -63,20 +63,6 @@ func (h *Handler) Progress(c *gin.Context) {
 	response.OK(c, gin.H{"items": items})
 }
 
-func (h *Handler) Delete(c *gin.Context) {
-	var req DeleteRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
-		return
-	}
-
-	if err := h.service.Delete(c.GetUint64("account_id"), req.VideoID); err != nil {
-		writeErr(c, err)
-		return
-	}
-	response.OK(c, nil)
-}
-
 func writeErr(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, video.ErrVideoNotFound):

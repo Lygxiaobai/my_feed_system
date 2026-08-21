@@ -44,7 +44,3 @@ export async function listProgress(videoIds: number[]) {
   )
   return res.items ?? []
 }
-
-export function deleteHistory(videoId: number) {
-  return postJson<null>('/history/delete', { video_id: videoId }, { authRequired: true })
-}

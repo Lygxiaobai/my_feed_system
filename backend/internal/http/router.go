@@ -385,19 +385,12 @@ func NewRouterWithLocalCaches(
 		Window:   time.Minute,
 		FailOpen: true,
 	})
-	historyDeleteAccountLimit := ratelimit.ByAccountID(rateLimiter, ratelimit.Policy{
-		Name:     "history.delete.account",
-		Limit:    30,
-		Window:   time.Minute,
-		FailOpen: true,
-	})
 	historyHandler := history.NewHandler(history.NewService(db, videoService))
 	historyGroup := r.Group("/history")
 	historyGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	historyGroup.POST("/upsert", historyUpsertIPLimit, historyUpsertAccountLimit, historyHandler.Upsert)
 	historyGroup.POST("/list", historyReadIPLimit, historyHandler.List)
 	historyGroup.POST("/progress", historyReadIPLimit, historyHandler.Progress)
-	historyGroup.POST("/delete", historyDeleteAccountLimit, historyHandler.Delete)
 
 	socialService := social.NewServiceWithPublisher(db, publisher)
 	socialService.SetNotifier(notifyWriter)

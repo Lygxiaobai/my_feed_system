@@ -54,10 +54,6 @@ type ProgressRequest struct {
 	VideoIDs []uint64 `json:"video_ids" binding:"required"`
 }
 
-type DeleteRequest struct {
-	VideoID uint64 `json:"video_id" binding:"required"`
-}
-
 // HistoryItem 是列表里的一行：进度 + 当时仍可见的视频卡片。
 type HistoryItem struct {
 	VideoID       uint64 `json:"video_id"`

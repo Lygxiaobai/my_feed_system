@@ -65,7 +65,3 @@ func (r *Repo) List(accountID uint64, completed bool, cursorMs int64, cursorID u
 	}
 	return rows, nil
 }
-
-func (r *Repo) Delete(accountID, videoID uint64) error {
-	return r.db.Where("account_id = ? AND video_id = ?", accountID, videoID).Delete(&WatchHistory{}).Error
-}

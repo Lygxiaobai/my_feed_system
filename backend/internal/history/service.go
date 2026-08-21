@@ -179,13 +179,6 @@ func (s *Service) Progress(accountID uint64, req ProgressRequest) ([]ProgressIte
 	return items, nil
 }
 
-func (s *Service) Delete(accountID uint64, videoID uint64) error {
-	if videoID == 0 {
-		return ErrInvalidProgress
-	}
-	return s.repo.Delete(accountID, videoID)
-}
-
 func (s *Service) itemFromRow(accountID uint64, row *WatchHistory) (*HistoryItem, error) {
 	v, err := s.videos.GetDetail(accountID, video.GetDetailRequest{ID: row.VideoID})
 	if err != nil {

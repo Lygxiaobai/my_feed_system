@@ -43,7 +43,7 @@ const bg = computed(() => {
   display: grid;
   place-items: center;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
   color: rgba(255, 255, 255, 0.92);
   font-weight: 900;

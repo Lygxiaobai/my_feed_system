@@ -165,9 +165,9 @@ async function onCheckin() {
 
 <style scoped>
 .ghost {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.18);
-  color: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(var(--fg), 0.14);
+  background: var(--fill);
+  color: rgba(var(--fg), 0.86);
   border-radius: 12px;
   padding: 10px 12px;
   cursor: pointer;
@@ -187,7 +187,7 @@ async function onCheckin() {
 .dow {
   text-align: center;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.56);
+  color: rgba(var(--fg), 0.56);
   padding: 4px 0;
 }
 
@@ -195,7 +195,7 @@ async function onCheckin() {
   min-height: 54px;
   border-radius: 12px;
   border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--fg), 0.04);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -235,7 +235,7 @@ async function onCheckin() {
   margin-top: 12px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--fg), 0.06);
 }
 
 .hint.ok {

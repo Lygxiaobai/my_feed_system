@@ -31,8 +31,8 @@ withDefaults(
 }
 
 .video-card {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: rgba(var(--fg), 0.05);
   border-radius: 16px;
   overflow: hidden;
 }

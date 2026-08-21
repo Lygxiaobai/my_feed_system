@@ -182,8 +182,8 @@ onUnmounted(() => {
   align-items: center;
   padding: 10px 10px 10px 10px;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(22, 22, 28, 0.94);
+  border: 1px solid rgba(var(--fg), 0.14);
+  background: var(--surface);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(16px);
 }
@@ -193,7 +193,7 @@ onUnmounted(() => {
   height: 74px;
   border-radius: 10px;
   object-fit: cover;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--fg), 0.06);
 }
 
 .meta {
@@ -219,7 +219,7 @@ onUnmounted(() => {
 
 .author {
   margin: 4px 0 0;
-  color: rgba(255, 255, 255, 0.56);
+  color: rgba(var(--fg), 0.56);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -242,9 +242,9 @@ onUnmounted(() => {
   width: 32px;
   height: 32px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(var(--fg), 0.14);
+  background: rgba(var(--fg), 0.06);
+  color: rgba(var(--fg), 0.88);
   font-size: 18px;
   line-height: 1;
   cursor: pointer;

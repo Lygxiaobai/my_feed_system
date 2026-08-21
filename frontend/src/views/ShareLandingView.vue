@@ -51,7 +51,7 @@ onMounted(async () => {
 
 .msg {
   margin: 0;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(var(--fg), 0.7);
 }
 
 .back {

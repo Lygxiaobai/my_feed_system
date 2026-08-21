@@ -126,9 +126,9 @@ async function onDraw() {
 
 <style scoped>
 .ghost {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.18);
-  color: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--border);
+  background: var(--fill);
+  color: var(--text);
   border-radius: 12px;
   padding: 10px 12px;
   cursor: pointer;
@@ -230,8 +230,8 @@ async function onDraw() {
 .odd {
   padding: 10px 8px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  background: var(--fill);
   text-align: center;
 }
 
@@ -244,7 +244,7 @@ async function onDraw() {
   margin-top: 12px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--fill);
 }
 
 .hint.ok {

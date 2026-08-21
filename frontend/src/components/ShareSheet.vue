@@ -103,8 +103,8 @@ defineExpose({ openFor, close })
   overflow: auto;
   padding: 18px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #16161c;
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: var(--surface);
   display: grid;
   gap: 12px;
 }
@@ -124,7 +124,7 @@ defineExpose({ openFor, close })
 
 .subtle {
   margin: 4px 0 0;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(var(--fg), 0.62);
   font-size: 13px;
 }
 
@@ -132,9 +132,9 @@ defineExpose({ openFor, close })
   width: 34px;
   height: 34px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(var(--fg), 0.14);
+  background: rgba(var(--fg), 0.06);
+  color: rgba(var(--fg), 0.9);
   cursor: pointer;
   font-size: 20px;
   line-height: 1;
@@ -156,16 +156,16 @@ defineExpose({ openFor, close })
 
 .code-tip {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(var(--fg), 0.5);
 }
 
 .preview {
   margin: 0;
   padding: 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(var(--fg), 0.1);
+  background: rgba(var(--fg), 0.05);
+  color: rgba(var(--fg), 0.82);
   font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -180,8 +180,8 @@ defineExpose({ openFor, close })
 .ghost {
   padding: 10px 14px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(var(--fg), 0.16);
+  background: rgba(var(--fg), 0.05);
   color: inherit;
   cursor: pointer;
 }
@@ -189,6 +189,6 @@ defineExpose({ openFor, close })
 .empty {
   padding: 28px 8px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(var(--fg), 0.62);
 }
 </style>

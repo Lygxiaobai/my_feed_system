@@ -373,21 +373,21 @@ onMounted(loadProfile)
 
 <style scoped>
 .ghost {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.18);
-  color: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(var(--fg), 0.14);
+  background: var(--fill);
+  color: rgba(var(--fg), 0.86);
   border-radius: 12px;
   padding: 10px 12px;
   cursor: pointer;
 }
 
 .ghost:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(var(--fg), 0.1);
 }
 
 .metric {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: rgba(var(--fg), 0.06);
   border-radius: 16px;
   padding: 12px 14px;
   min-width: 120px;
@@ -402,7 +402,7 @@ onMounted(loadProfile)
 }
 
 .metric:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(var(--fg), 0.1);
 }
 
 .metric:disabled {
@@ -418,11 +418,11 @@ onMounted(loadProfile)
 
 .metric-label {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.65);
+  color: rgba(var(--fg), 0.65);
 }
 
 .hint {
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(var(--fg), 0.78);
 }
 
 .hint.bad {
@@ -448,8 +448,8 @@ onMounted(loadProfile)
 }
 
 .video-card {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: rgba(var(--fg), 0.05);
   border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
@@ -458,7 +458,7 @@ onMounted(loadProfile)
 }
 
 .video-card:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--fg), 0.08);
 }
 
 .video-cover {
@@ -490,7 +490,7 @@ onMounted(loadProfile)
 .drawer-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--toast-bg);
   backdrop-filter: blur(10px);
   z-index: 120;
   display: grid;
@@ -503,7 +503,7 @@ onMounted(loadProfile)
   width: min(520px, calc(100vw - 18px));
   max-height: min(78vh, 720px);
   background: rgba(0, 0, 0, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(var(--fg), 0.12);
   border-radius: 18px;
   overflow: hidden;
   display: grid;
@@ -515,7 +515,7 @@ onMounted(loadProfile)
   align-items: center;
   justify-content: space-between;
   padding: 14px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(var(--fg), 0.1);
 }
 
 .drawer-title {
@@ -526,9 +526,9 @@ onMounted(loadProfile)
   width: 34px;
   height: 34px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(var(--fg), 0.14);
+  background: rgba(var(--fg), 0.06);
+  color: rgba(var(--fg), 0.9);
   cursor: pointer;
   font-size: 20px;
   line-height: 1;
@@ -542,7 +542,7 @@ onMounted(loadProfile)
 }
 
 .drawer-hint {
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(var(--fg), 0.78);
   padding: 12px 0;
 }
 
@@ -558,13 +558,13 @@ onMounted(loadProfile)
   align-items: center;
   padding: 10px 10px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(var(--fg), 0.1);
+  background: rgba(var(--fg), 0.05);
   cursor: pointer;
 }
 
 .user-row:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--fg), 0.08);
 }
 
 .user-meta {
@@ -577,7 +577,7 @@ onMounted(loadProfile)
 
 .user-id {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(var(--fg), 0.6);
 }
 
 .mono {

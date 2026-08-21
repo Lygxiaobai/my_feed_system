@@ -127,8 +127,8 @@ defineExpose({ openFor, close })
   overflow: auto;
   padding: 18px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #16161c;
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: var(--surface);
   display: grid;
   gap: 10px;
 }
@@ -148,7 +148,7 @@ defineExpose({ openFor, close })
 
 .subtle {
   margin: 4px 0 0;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(var(--fg), 0.62);
   font-size: 13px;
 }
 
@@ -156,9 +156,9 @@ defineExpose({ openFor, close })
   width: 34px;
   height: 34px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(var(--fg), 0.14);
+  background: rgba(var(--fg), 0.06);
+  color: rgba(var(--fg), 0.9);
   cursor: pointer;
   font-size: 20px;
   line-height: 1;
@@ -173,8 +173,8 @@ defineExpose({ openFor, close })
 .reason {
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: rgba(var(--fg), 0.05);
   color: inherit;
   cursor: pointer;
   font-size: 14px;
@@ -187,7 +187,7 @@ defineExpose({ openFor, close })
 
 .lab {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(var(--fg), 0.7);
 }
 
 .detail {
@@ -199,7 +199,7 @@ defineExpose({ openFor, close })
   margin: 0;
   text-align: right;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(var(--fg), 0.45);
 }
 
 .wide {

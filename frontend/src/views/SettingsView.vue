@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { track } from '../analytics/track'
 import AppShell from '../components/AppShell.vue'
+import ThemePicker from '../components/ThemePicker.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { ApiError } from '../api/client'
 import * as accountApi from '../api/account'
@@ -88,7 +89,15 @@ async function onLogout() {
 
 <template>
   <AppShell>
-    <div v-if="!auth.isLoggedIn" class="grid two">
+    <div class="card">
+      <p class="title">外观</p>
+      <p class="subtle">浅色、深色，或跟随系统。此选择只存在这台设备上，不用登录。</p>
+      <div style="margin-top: 12px">
+        <ThemePicker />
+      </div>
+    </div>
+
+    <div v-if="!auth.isLoggedIn" class="grid two" style="margin-top: 14px">
       <div class="card">
         <p class="title">设置</p>
         <p class="subtle">需要先登录后才能进行改名/退出等操作。</p>
@@ -102,7 +111,7 @@ async function onLogout() {
       </div>
     </div>
 
-    <div v-else>
+    <div v-else style="margin-top: 14px">
       <div class="card">
         <div class="row" style="justify-content: space-between; align-items: flex-start">
           <div class="row" style="gap: 12px; align-items: center">
@@ -145,15 +154,15 @@ async function onLogout() {
 
 <style scoped>
 .ghost {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.18);
-  color: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--border);
+  background: var(--fill);
+  color: var(--text);
   border-radius: 12px;
   padding: 10px 12px;
   cursor: pointer;
 }
 
 .ghost:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--fill-hover);
 }
 </style>

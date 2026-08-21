@@ -33,8 +33,8 @@ import Skeleton from './Skeleton.vue'
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
   gap: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: rgba(var(--fg), 0.06);
   border-radius: 16px;
   overflow: hidden;
 }

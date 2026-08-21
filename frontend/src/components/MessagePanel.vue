@@ -473,14 +473,14 @@ onUnmounted(stopTimers)
   display: flex;
   flex-direction: column;
   min-height: 0;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(var(--fg), 0.92);
 }
 
 .m-panel.dropdown {
   width: min(400px, calc(100vw - 24px));
   max-height: min(560px, calc(100dvh - 80px));
-  background: rgba(22, 22, 28, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--surface);
+  border: 1px solid rgba(var(--fg), 0.12);
   border-radius: 14px;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(18px);
@@ -494,8 +494,8 @@ onUnmounted(stopTimers)
 }
 
 .m-panel.page {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(var(--fg), 0.04);
+  border: 1px solid rgba(var(--fg), 0.1);
   border-radius: 16px;
   overflow: hidden;
   min-height: min(640px, calc(100dvh - 140px));
@@ -519,7 +519,7 @@ onUnmounted(stopTimers)
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(var(--fg), 0.08);
   flex-shrink: 0;
 }
 
@@ -549,7 +549,7 @@ onUnmounted(stopTimers)
 
 .m-row:hover,
 .m-row.unread {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--fg), 0.05);
 }
 
 .m-avatar {
@@ -570,7 +570,7 @@ onUnmounted(stopTimers)
 }
 
 .m-preview {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(var(--fg), 0.5);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -586,7 +586,7 @@ onUnmounted(stopTimers)
 }
 
 .m-time {
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(var(--fg), 0.4);
   font-size: 11px;
 }
 
@@ -602,7 +602,7 @@ onUnmounted(stopTimers)
   margin: 0;
   padding: 28px 16px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(var(--fg), 0.55);
   font-size: 13px;
 }
 
@@ -615,7 +615,7 @@ onUnmounted(stopTimers)
   flex-shrink: 0;
   overflow: auto;
   padding: 10px 8px;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid rgba(var(--fg), 0.08);
   display: grid;
   align-content: start;
   gap: 10px;
@@ -667,16 +667,16 @@ onUnmounted(stopTimers)
 }
 
 .m-who small {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(var(--fg), 0.5);
   font-size: 12px;
 }
 
 .m-ghost,
 .m-back,
 .m-x {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.18);
-  color: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(var(--fg), 0.14);
+  background: var(--fill);
+  color: rgba(var(--fg), 0.86);
   border-radius: 12px;
   padding: 7px 10px;
   cursor: pointer;
@@ -700,7 +700,7 @@ onUnmounted(stopTimers)
 
 .m-when {
   align-self: center;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(var(--fg), 0.4);
   font-size: 12px;
 }
 
@@ -729,7 +729,7 @@ onUnmounted(stopTimers)
 .m-bubble {
   padding: 9px 12px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(var(--fg), 0.1);
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.45;
@@ -741,7 +741,7 @@ onUnmounted(stopTimers)
 
 .m-receipt {
   min-height: 14px;
-  color: rgba(255, 255, 255, 0.42);
+  color: rgba(var(--fg), 0.42);
   font-size: 11px;
 }
 
@@ -751,7 +751,7 @@ onUnmounted(stopTimers)
 
 .m-quota {
   margin: 0 0 8px;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(var(--fg), 0.55);
   font-size: 12px;
   display: flex;
   align-items: center;
@@ -771,8 +771,8 @@ onUnmounted(stopTimers)
   grid-template-columns: 1fr auto;
   gap: 8px;
   align-items: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(var(--fg), 0.08);
+  border: 1px solid rgba(var(--fg), 0.1);
   border-radius: 999px;
   padding: 5px 5px 5px 14px;
 }

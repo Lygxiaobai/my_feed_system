@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppShell from '../components/AppShell.vue'
@@ -7,11 +7,14 @@ import { ApiError } from '../api/client'
 import * as opsApi from '../api/ops'
 import type { OpsLogLine, OpsMetrics } from '../api/ops'
 import { useAuthStore } from '../stores/auth'
+import { useThemeStore } from '../stores/theme'
 import { useToastStore } from '../stores/toast'
+import type { ResolvedTheme } from '../theme'
 
 const router = useRouter()
 const auth = useAuthStore()
 const toast = useToastStore()
+const theme = useThemeStore()
 
 const tab = ref<'monitor' | 'logs'>('monitor')
 const grafanaPath = ref('/grafana/d/feed-overview?kiosk=1&theme=dark')
@@ -71,6 +74,18 @@ function formatRate(value?: number | null) {
   if (value == null || Number.isNaN(value)) return '—'
   return value.toFixed(2)
 }
+
+function withGrafanaTheme(path: string, mode: ResolvedTheme) {
+  try {
+    const url = new URL(path, 'http://local.invalid')
+    url.searchParams.set('theme', mode)
+    return `${url.pathname}${url.search}${url.hash}`
+  } catch {
+    return path
+  }
+}
+
+const grafanaSrc = computed(() => withGrafanaTheme(grafanaPath.value, theme.resolved))
 </script>
 
 <template>
@@ -96,7 +111,7 @@ function formatRate(value?: number | null) {
             <div class="metric-label">5xx 占比</div>
           </div>
         </div>
-        <iframe class="grafana" :src="grafanaPath" title="Grafana 监控"></iframe>
+        <iframe class="grafana" :src="grafanaSrc" title="Grafana 监控"></iframe>
       </template>
 
       <template v-else>
@@ -128,9 +143,9 @@ function formatRate(value?: number | null) {
 
 <style scoped>
 .ghost {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.18);
-  color: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(var(--fg), 0.14);
+  background: var(--fill);
+  color: rgba(var(--fg), 0.86);
   border-radius: 12px;
   padding: 10px 12px;
   cursor: pointer;
@@ -142,8 +157,8 @@ function formatRate(value?: number | null) {
 }
 
 .metric {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: rgba(var(--fg), 0.06);
   border-radius: 16px;
   padding: 12px 14px;
   min-width: 120px;
@@ -156,14 +171,14 @@ function formatRate(value?: number | null) {
 
 .metric-label {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.65);
+  color: rgba(var(--fg), 0.65);
 }
 
 .grafana {
   width: 100%;
-  height: min(72vh, 760px);
+  height: min(85vh, 1200px);
   margin-top: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(var(--fg), 0.12);
   border-radius: 12px;
   background: #111;
 }
@@ -188,7 +203,7 @@ function formatRate(value?: number | null) {
 }
 
 .log-time {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(var(--fg), 0.5);
 }
 
 .log-labels {
@@ -197,7 +212,7 @@ function formatRate(value?: number | null) {
 }
 
 .log-text {
-  color: rgba(255, 255, 255, 0.88);
+  color: rgba(var(--fg), 0.88);
   overflow-wrap: anywhere;
 }
 </style>

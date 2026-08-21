@@ -297,8 +297,8 @@ async function onPublish() {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: rgba(var(--fg), 0.06);
   border-radius: 14px;
   min-height: 46px;
 }
@@ -315,17 +315,17 @@ async function onPublish() {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.88);
+  color: rgba(var(--fg), 0.88);
 }
 
 .muted {
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(var(--fg), 0.55);
 }
 
 .file-tip {
   margin-top: 6px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(var(--fg), 0.6);
 }
 
 .file-tip.bad {
@@ -335,7 +335,7 @@ async function onPublish() {
 .audit-tip {
   margin-top: 4px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(var(--fg), 0.6);
 }
 
 .big-input {
@@ -354,8 +354,8 @@ async function onPublish() {
 }
 
 .preview-card {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: rgba(var(--fg), 0.05);
   border-radius: 16px;
   padding: 12px;
 }
@@ -366,7 +366,7 @@ async function onPublish() {
   aspect-ratio: 16/9;
   object-fit: contain;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--fg), 0.1);
   background: rgba(0, 0, 0, 0.35);
 }
 
@@ -380,7 +380,7 @@ async function onPublish() {
   align-items: center;
   justify-content: space-between;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.86);
+  color: rgba(var(--fg), 0.86);
 }
 
 .cancel-btn {
@@ -393,7 +393,7 @@ async function onPublish() {
 .progress-track {
   height: 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(var(--fg), 0.1);
   overflow: hidden;
 }
 

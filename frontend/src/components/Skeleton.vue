@@ -30,9 +30,9 @@ withDefaults(
   vertical-align: middle;
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.06) 0%,
-    rgba(255, 255, 255, 0.14) 46%,
-    rgba(255, 255, 255, 0.06) 100%
+    rgba(var(--fg), 0.06) 0%,
+    rgba(var(--fg), 0.14) 46%,
+    rgba(var(--fg), 0.06) 100%
   );
   background-size: 200% 100%;
   animation: sk-shimmer 1.25s ease-in-out infinite;
@@ -49,7 +49,7 @@ withDefaults(
 @media (prefers-reduced-motion: reduce) {
   .sk {
     animation: none;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(var(--fg), 0.1);
   }
 }
 

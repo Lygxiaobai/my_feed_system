@@ -216,8 +216,8 @@ defineExpose({ openGive, openInbox, close })
   overflow: auto;
   padding: 18px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #16161c;
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: var(--surface);
   display: grid;
   gap: 12px;
 }
@@ -237,7 +237,7 @@ defineExpose({ openGive, openInbox, close })
 
 .subtle {
   margin: 4px 0 0;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(var(--fg), 0.62);
   font-size: 13px;
 }
 
@@ -245,9 +245,9 @@ defineExpose({ openGive, openInbox, close })
   width: 34px;
   height: 34px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(var(--fg), 0.14);
+  background: rgba(var(--fg), 0.06);
+  color: rgba(var(--fg), 0.9);
   cursor: pointer;
   font-size: 20px;
   line-height: 1;
@@ -268,8 +268,8 @@ defineExpose({ openGive, openInbox, close })
   text-align: left;
   padding: 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: rgba(var(--fg), 0.05);
   color: inherit;
   cursor: pointer;
 }
@@ -286,12 +286,12 @@ defineExpose({ openGive, openInbox, close })
 .preset-coin {
   margin-top: 4px;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.64);
+  color: rgba(var(--fg), 0.64);
 }
 
 .custom-lab {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(var(--fg), 0.7);
 }
 
 .custom {
@@ -305,7 +305,7 @@ defineExpose({ openGive, openInbox, close })
 .empty {
   padding: 28px 8px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(var(--fg), 0.62);
 }
 
 .row {
@@ -315,7 +315,7 @@ defineExpose({ openGive, openInbox, close })
   align-items: center;
   padding: 10px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--fg), 0.05);
 }
 
 .row-name {

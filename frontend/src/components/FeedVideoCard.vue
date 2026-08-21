@@ -63,8 +63,8 @@ function formatPopularity(value?: number) {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
   gap: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  background: var(--panel);
   border-radius: 16px;
   overflow: hidden;
 }
@@ -95,7 +95,7 @@ function formatPopularity(value?: number) {
 .hot-pill {
   border-color: rgba(254, 44, 85, 0.35);
   background: rgba(254, 44, 85, 0.1);
-  color: rgba(255, 244, 246, 0.95);
+  color: var(--text);
 }
 
 @media (max-width: 900px) {

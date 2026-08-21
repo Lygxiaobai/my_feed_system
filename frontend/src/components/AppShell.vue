@@ -10,9 +10,11 @@ import { useDMStore } from '../stores/dm'
 import { useNotificationStore } from '../stores/notification'
 import { useSocialStore } from '../stores/social'
 import { useToastStore } from '../stores/toast'
+import { useThemeStore } from '../stores/theme'
 import AppIcon, { type AppIconName } from './AppIcon.vue'
 import MessagePanel from './MessagePanel.vue'
 import NotificationPanel from './NotificationPanel.vue'
+import ThemePicker from './ThemePicker.vue'
 import Toaster from './Toaster.vue'
 import UserAvatar from './UserAvatar.vue'
 
@@ -38,14 +40,21 @@ const social = useSocialStore()
 const notif = useNotificationStore()
 const dm = useDMStore()
 const toast = useToastStore()
+const theme = useThemeStore()
 const router = useRouter()
 const route = useRoute()
 
 const search = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const searchOpen = ref(false)
 const notifyOpen = ref(false)
+const themeOpen = ref(false)
 const notifyWrap = ref<HTMLElement | null>(null)
 const messageWrap = ref<HTMLElement | null>(null)
+const themeWrap = ref<HTMLElement | null>(null)
+const themeButtonLabel = computed(() => {
+  if (theme.preference === 'system') return '外观：跟随系统'
+  return theme.resolved === 'dark' ? '外观：深色' : '外观：浅色'
+})
 const unreadLabel = computed(() => (notif.unread > 99 ? '99+' : String(notif.unread)))
 const dmUnreadLabel = computed(() => (dm.unread > 99 ? '99+' : String(dm.unread)))
 
@@ -57,13 +66,20 @@ function bindMessageWrap(el: unknown) {
   messageWrap.value = el instanceof HTMLElement ? el : null
 }
 
+function bindThemeWrap(el: unknown) {
+  themeWrap.value = el instanceof HTMLElement ? el : null
+}
+
 function toggleNotify() {
   if (!auth.isLoggedIn) {
     void router.push('/account')
     return
   }
   notifyOpen.value = !notifyOpen.value
-  if (notifyOpen.value) dm.closePanel()
+  if (notifyOpen.value) {
+    themeOpen.value = false
+    dm.closePanel()
+  }
 }
 
 function toggleMessages() {
@@ -76,7 +92,16 @@ function toggleMessages() {
     return
   }
   notifyOpen.value = false
+  themeOpen.value = false
   dm.openInbox()
+}
+
+function toggleThemeMenu() {
+  themeOpen.value = !themeOpen.value
+  if (themeOpen.value) {
+    notifyOpen.value = false
+    dm.closePanel()
+  }
 }
 
 function onDocumentPointerDown(event: PointerEvent) {
@@ -84,6 +109,7 @@ function onDocumentPointerDown(event: PointerEvent) {
   if (!(target instanceof Node)) return
   if (notifyWrap.value && !notifyWrap.value.contains(target)) notifyOpen.value = false
   if (messageWrap.value && !messageWrap.value.contains(target)) dm.closePanel()
+  if (themeWrap.value && !themeWrap.value.contains(target)) themeOpen.value = false
 }
 
 watch(
@@ -98,6 +124,7 @@ watch(
   () => {
     searchOpen.value = false
     notifyOpen.value = false
+    themeOpen.value = false
     dm.closePanel()
   },
 )
@@ -213,6 +240,21 @@ function headerActionTo(action: HeaderAction) {
         </div>
 
         <div class="dy-top-actions">
+          <div class="dy-notify-wrap" :ref="bindThemeWrap">
+            <button
+              class="dy-icon-btn"
+              type="button"
+              :aria-label="themeButtonLabel"
+              :aria-expanded="themeOpen"
+              aria-haspopup="true"
+              @click="toggleThemeMenu"
+            >
+              <AppIcon :name="theme.resolved === 'dark' ? 'moon' : 'sun'" :size="18" />
+            </button>
+            <div v-if="themeOpen" class="dy-theme-drop">
+              <ThemePicker compact @picked="themeOpen = false" />
+            </div>
+          </div>
           <button class="dy-icon-btn mobile-only" type="button" aria-label="搜索" @click="searchOpen = !searchOpen">
             ⌕
           </button>
@@ -347,14 +389,14 @@ function headerActionTo(action: HeaderAction) {
   min-height: var(--app-height, 100dvh);
   display: grid;
   grid-template-columns: 240px 1fr;
-  background: radial-gradient(1200px 900px at 20% -25%, rgba(254, 44, 85, 0.18), transparent 60%),
-    radial-gradient(900px 700px at 90% 10%, rgba(37, 244, 238, 0.12), transparent 55%), transparent;
+  background: radial-gradient(1200px 900px at 20% -25%, var(--glow-a), transparent 60%),
+    radial-gradient(900px 700px at 90% 10%, var(--glow-b), transparent 55%), transparent;
   overflow: hidden;
 }
 
 .dy-aside {
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.35);
+  border-right: 1px solid var(--border);
+  background: var(--chrome);
   backdrop-filter: blur(16px);
   padding: 14px 12px;
   display: flex;
@@ -369,8 +411,8 @@ function headerActionTo(action: HeaderAction) {
   font-size: 18px;
   padding: 10px 10px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--fill);
+  border: 1px solid var(--border);
   text-decoration: none;
 }
 
@@ -383,7 +425,7 @@ function headerActionTo(action: HeaderAction) {
   padding: 10px 10px;
   border-radius: 12px;
   border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--fill);
   text-decoration: none;
 }
 
@@ -397,7 +439,7 @@ function headerActionTo(action: HeaderAction) {
   display: grid;
   gap: 10px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border);
 }
 
 .dy-user-actions {
@@ -407,9 +449,9 @@ function headerActionTo(action: HeaderAction) {
 
 .dy-btn {
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--border);
+  background: var(--fill);
+  color: var(--text);
   border-radius: 12px;
   padding: 10px 12px;
   cursor: pointer;
@@ -423,7 +465,7 @@ function headerActionTo(action: HeaderAction) {
 }
 
 .dy-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--fill-hover);
 }
 
 .dy-btn-primary {
@@ -436,8 +478,8 @@ function headerActionTo(action: HeaderAction) {
 }
 
 .dy-btn-ghost {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.15);
+  border-color: var(--border);
+  background: var(--fill);
 }
 
 .dy-main {
@@ -451,8 +493,8 @@ function headerActionTo(action: HeaderAction) {
 .dy-topbar {
   height: var(--topbar-h, 56px);
   flex-shrink: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.28);
+  border-bottom: 1px solid var(--border);
+  background: var(--chrome);
   backdrop-filter: blur(16px);
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(200px, 480px) auto;
@@ -477,10 +519,10 @@ function headerActionTo(action: HeaderAction) {
 
 .dy-search-input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--input-bg);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text);
   padding: 10px 14px;
   outline: none;
   font-size: 16px;
@@ -504,7 +546,7 @@ function headerActionTo(action: HeaderAction) {
   height: 48px;
   border-radius: 10px;
   text-decoration: none;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--muted);
   display: grid;
   place-items: center;
   gap: 2px;
@@ -518,8 +560,8 @@ function headerActionTo(action: HeaderAction) {
 
 .dy-head-act:hover,
 .dy-head-act.on {
-  color: rgba(255, 255, 255, 0.96);
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  background: var(--fill);
 }
 
 .dy-head-icon {
@@ -533,6 +575,8 @@ function headerActionTo(action: HeaderAction) {
 
 .dy-notify-wrap {
   position: relative;
+  display: block;
+  flex: none;
 }
 
 .dy-notify-drop {
@@ -540,6 +584,19 @@ function headerActionTo(action: HeaderAction) {
   top: calc(100% + 8px);
   right: 0;
   z-index: 40;
+}
+
+.dy-theme-drop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  min-width: 168px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .dy-badge {
@@ -585,9 +642,9 @@ function headerActionTo(action: HeaderAction) {
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--border);
+  background: var(--fill);
+  color: var(--text);
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
@@ -600,7 +657,7 @@ function headerActionTo(action: HeaderAction) {
   font-weight: 900;
   font-size: 16px;
   text-decoration: none;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--text);
   letter-spacing: 0.2px;
 }
 
@@ -609,8 +666,8 @@ function headerActionTo(action: HeaderAction) {
   grid-template-columns: 1fr auto;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.4);
+  border-bottom: 1px solid var(--border);
+  background: var(--chrome);
   flex-shrink: 0;
 }
 
@@ -642,8 +699,8 @@ function headerActionTo(action: HeaderAction) {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: stretch;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(8, 8, 12, 0.92);
+  border-top: 1px solid var(--border);
+  background: var(--nav);
   backdrop-filter: blur(16px);
 }
 
@@ -651,7 +708,7 @@ function headerActionTo(action: HeaderAction) {
   appearance: none;
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--muted);
   display: grid;
   place-items: center;
   gap: 2px;
@@ -664,7 +721,7 @@ function headerActionTo(action: HeaderAction) {
 
 .dy-tab.on,
 .dy-tab.router-link-active {
-  color: rgba(255, 255, 255, 0.96);
+  color: var(--text);
 }
 
 .dy-tab-icon {
@@ -687,7 +744,7 @@ function headerActionTo(action: HeaderAction) {
 }
 
 .dy-tab.publish {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text);
 }
 
 .mobile-only {

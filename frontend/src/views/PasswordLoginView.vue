@@ -101,12 +101,12 @@ async function onLogin() {
 .linkish {
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(var(--fg), 0.62);
   padding: 0;
   cursor: pointer;
 }
 
 .linkish:hover {
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(var(--fg), 0.9);
 }
 </style>

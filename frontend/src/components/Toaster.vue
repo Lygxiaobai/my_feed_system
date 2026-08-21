@@ -42,8 +42,8 @@ const toast = useToastStore()
   border-radius: 14px;
   padding: 10px 12px;
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: var(--toast-bg);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
@@ -62,16 +62,16 @@ const toast = useToastStore()
 .toast-msg {
   font-size: 13px;
   line-height: 1.35;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(var(--fg), 0.92);
 }
 
 .toast-x {
   width: 30px;
   height: 30px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(var(--fg), 0.14);
+  background: rgba(var(--fg), 0.08);
+  color: rgba(var(--fg), 0.88);
   cursor: pointer;
   font-size: 18px;
   line-height: 1;

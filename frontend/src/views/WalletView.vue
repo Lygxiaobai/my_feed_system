@@ -242,9 +242,9 @@ onUnmounted(() => {
 
 <style scoped>
 .ghost {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.18);
-  color: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(var(--fg), 0.14);
+  background: var(--fill);
+  color: rgba(var(--fg), 0.86);
   border-radius: 12px;
   padding: 10px 12px;
   cursor: pointer;
@@ -259,7 +259,7 @@ onUnmounted(() => {
 .unit {
   font-size: 16px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.64);
+  color: rgba(var(--fg), 0.64);
 }
 
 .warn {
@@ -269,7 +269,7 @@ onUnmounted(() => {
 .hint {
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--fg), 0.06);
 }
 
 .hint.ok {
@@ -299,7 +299,7 @@ onUnmounted(() => {
 .pkg-coin,
 .pkg-bonus {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.64);
+  color: rgba(var(--fg), 0.64);
 }
 
 .pkg-bonus {
@@ -325,8 +325,8 @@ onUnmounted(() => {
   gap: 10px;
   padding: 20px;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: #16161c;
+  border: 1px solid rgba(var(--fg), 0.14);
+  background: var(--surface);
 }
 
 .pay-qr {
@@ -342,7 +342,7 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 10px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(var(--fg), 0.08);
 }
 
 .ledger-amt.plus {

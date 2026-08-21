@@ -270,14 +270,14 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(var(--fg), 0.92);
 }
 
 .n-panel.dropdown {
   width: min(420px, calc(100vw - 24px));
   max-height: min(560px, calc(100dvh - 80px));
-  background: rgba(22, 22, 28, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--surface);
+  border: 1px solid rgba(var(--fg), 0.12);
   border-radius: 14px;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(18px);
@@ -285,8 +285,8 @@ onMounted(() => {
 }
 
 .n-panel.page {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(var(--fg), 0.04);
+  border: 1px solid rgba(var(--fg), 0.1);
   border-radius: 16px;
   overflow: hidden;
 }
@@ -297,7 +297,7 @@ onMounted(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(var(--fg), 0.08);
   flex-shrink: 0;
 }
 
@@ -316,7 +316,7 @@ onMounted(() => {
   appearance: none;
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(var(--fg), 0.72);
   font-size: 12px;
   padding: 4px 2px;
   cursor: pointer;
@@ -325,7 +325,7 @@ onMounted(() => {
 .n-readall {
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.56);
+  color: rgba(var(--fg), 0.56);
   font-size: 12px;
   cursor: pointer;
   padding: 4px 0;
@@ -333,7 +333,7 @@ onMounted(() => {
 
 .n-readall:hover,
 .n-filter:hover {
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(var(--fg), 0.92);
 }
 
 .n-list {
@@ -356,7 +356,7 @@ onMounted(() => {
 }
 
 .n-row:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--fg), 0.05);
 }
 
 .n-row.unread {
@@ -379,7 +379,7 @@ onMounted(() => {
   display: grid;
   place-items: center;
   color: #fff;
-  border: 2px solid rgba(16, 16, 20, 0.95);
+  border: 2px solid var(--surface);
 }
 
 .n-kind.like {
@@ -440,7 +440,7 @@ onMounted(() => {
 
 .n-text {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(var(--fg), 0.82);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -448,7 +448,7 @@ onMounted(() => {
 
 .n-meta {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.46);
+  color: rgba(var(--fg), 0.46);
 }
 
 .n-dot {
@@ -465,7 +465,7 @@ onMounted(() => {
   height: 48px;
   border-radius: 8px;
   object-fit: cover;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--fg), 0.06);
 }
 
 .n-follow {
@@ -484,7 +484,7 @@ onMounted(() => {
   margin: 0;
   padding: 36px 16px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(var(--fg), 0.5);
   font-size: 13px;
 }
 
@@ -495,7 +495,7 @@ onMounted(() => {
 .n-more {
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.56);
+  color: rgba(var(--fg), 0.56);
   padding: 12px;
   cursor: pointer;
 }

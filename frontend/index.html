@@ -11,6 +11,27 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>ShortVideo</title>
+    <script>
+      // 必须在首屏 CSS 生效前写入 data-theme，避免先闪成相反色。键名与 theme.ts 保持一致。
+      (function () {
+        var KEY = 'feed.theme'
+        var pref = 'system'
+        try {
+          var saved = localStorage.getItem(KEY)
+          if (saved === 'light' || saved === 'dark' || saved === 'system') pref = saved
+        } catch (e) {}
+        var systemDark = true
+        try {
+          systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        } catch (e) {}
+        var dark = pref === 'dark' || (pref !== 'light' && systemDark)
+        var theme = dark ? 'dark' : 'light'
+        document.documentElement.setAttribute('data-theme', theme)
+        document.documentElement.style.colorScheme = theme
+        var meta = document.querySelector('meta[name="theme-color"]')
+        if (meta) meta.setAttribute('content', dark ? '#0b0b0f' : '#f3f4f7')
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

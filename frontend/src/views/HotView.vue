@@ -176,9 +176,9 @@ watch(
   place-items: center;
   font-weight: 900;
   letter-spacing: 0.2px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: rgba(var(--fg), 0.06);
+  color: rgba(var(--fg), 0.86);
   user-select: none;
   text-decoration: none;
   transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
@@ -186,14 +186,14 @@ watch(
 
 .rank-num:hover {
   transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(var(--fg), 0.22);
+  background: rgba(var(--fg), 0.1);
 }
 
 .rank-num.top {
   border-color: rgba(254, 44, 85, 0.55);
   background: rgba(254, 44, 85, 0.18);
-  color: rgba(255, 255, 255, 0.96);
+  color: rgba(var(--fg), 0.96);
 }
 
 @media (max-width: 900px) {

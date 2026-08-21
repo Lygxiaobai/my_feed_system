@@ -4,10 +4,13 @@ import './style.css'
 import { installAnalyticsFlush, track } from './analytics/track'
 import App from './App.vue'
 import router from './router'
+import { useThemeStore } from './stores/theme'
 
 const app = createApp(App)
-app.use(createPinia())
+const pinia = createPinia()
+app.use(pinia)
 app.use(router)
+useThemeStore(pinia).start()
 installAnalyticsFlush()
 
 router.afterEach((to) => {

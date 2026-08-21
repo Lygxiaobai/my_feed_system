@@ -1,11 +1,23 @@
-﻿:root {
+:root {
   color-scheme: dark;
+  --fg: 255, 255, 255;
+  --ink: 0, 0, 0;
   --bg: #0b0b0f;
-  --panel: rgba(255, 255, 255, 0.06);
-  --panel-2: rgba(255, 255, 255, 0.1);
-  --text: rgba(255, 255, 255, 0.92);
-  --muted: rgba(255, 255, 255, 0.64);
-  --border: rgba(255, 255, 255, 0.12);
+  --panel: rgba(var(--fg), 0.06);
+  --panel-2: rgba(var(--fg), 0.1);
+  --text: rgba(var(--fg), 0.92);
+  --muted: rgba(var(--fg), 0.64);
+  --border: rgba(var(--fg), 0.12);
+  --fill: rgba(var(--fg), 0.06);
+  --fill-hover: rgba(var(--fg), 0.12);
+  --input-bg: rgba(var(--fg), 0.06);
+  --chrome: rgba(var(--ink), 0.35);
+  --nav: rgba(8, 8, 12, 0.92);
+  --surface: rgba(22, 22, 28, 0.96);
+  --toast-bg: rgba(var(--ink), 0.55);
+  --glow-a: rgba(254, 44, 85, 0.18);
+  --glow-b: rgba(37, 244, 238, 0.12);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   --primary: #fe2c55;
   --primary-2: #25f4ee;
   --danger: #fe2c55;
@@ -28,6 +40,23 @@
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
   text-size-adjust: 100%;
+}
+
+html[data-theme='light'] {
+  color-scheme: light;
+  --fg: 22, 24, 30;
+  --ink: 255, 255, 255;
+  --bg: #f3f4f7;
+  --panel: #ffffff;
+  --panel-2: #ffffff;
+  --input-bg: #ffffff;
+  --chrome: rgba(255, 255, 255, 0.88);
+  --nav: rgba(255, 255, 255, 0.94);
+  --surface: #ffffff;
+  --toast-bg: rgba(255, 255, 255, 0.94);
+  --glow-a: rgba(254, 44, 85, 0.08);
+  --glow-b: rgba(20, 184, 166, 0.08);
+  --shadow: 0 10px 28px rgba(15, 18, 28, 0.1);
 }
 
 @media (max-width: 900px) {
@@ -66,8 +95,8 @@ body,
 
 body {
   margin: 0;
-  background: radial-gradient(1200px 900px at 20% -25%, rgba(254, 44, 85, 0.18), transparent 60%),
-    radial-gradient(900px 700px at 90% 10%, rgba(37, 244, 238, 0.12), transparent 55%), var(--bg);
+  background: radial-gradient(1200px 900px at 20% -25%, var(--glow-a), transparent 60%),
+    radial-gradient(900px 700px at 90% 10%, var(--glow-b), transparent 55%), var(--bg);
   color: var(--text);
   overscroll-behavior-y: none;
   padding: 0;
@@ -104,6 +133,11 @@ select {
   border-radius: 16px;
   padding: 16px;
   backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+}
+
+html:not([data-theme='light']) .card {
+  box-shadow: none;
 }
 
 .card + .card {
@@ -176,7 +210,7 @@ input,
 textarea,
 select {
   width: 100%;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 12px;
   color: var(--text);
@@ -200,7 +234,7 @@ select:focus {
 button {
   appearance: none;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--fill-hover);
   color: var(--text);
   border-radius: 12px;
   padding: 10px 14px;
@@ -211,7 +245,7 @@ button {
 }
 
 button:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(var(--fg), 0.16);
 }
 
 button.primary {
@@ -244,7 +278,7 @@ button:disabled {
   padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--fill);
   font-size: 13px;
 }
 
@@ -267,8 +301,8 @@ button:disabled {
   word-break: break-word;
   font-size: 13px;
   line-height: 1.45;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(var(--fg), 0.06);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 12px;
   margin: 0;

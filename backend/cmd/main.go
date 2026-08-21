@@ -152,6 +152,7 @@ func main() {
 		cfg.Ops,
 		cfg.Alipay,
 		cfg.Feed,
+		cfg.Embedding,
 	)
 	if rabbitConn != nil {
 		//L1缓存失效的处理

@@ -178,6 +178,12 @@ export type ListByFollowingResponse = {
   has_more: boolean
 }
 
+export type ListRecommendResponse = {
+  video_list: FeedVideoItem[]
+  exclude_ids: number[]
+  has_more: boolean
+}
+
 export type BackendListLatestResponse = {
   videos: BackendFeedVideo[]
   next_time: number
@@ -203,5 +209,11 @@ export type BackendListByFollowingResponse = {
   videos: BackendFeedVideo[]
   next_time: number
   next_id: number
+  has_more: boolean
+}
+
+export type BackendListRecommendResponse = {
+  videos: BackendFeedVideo[]
+  exclude_ids: number[]
   has_more: boolean
 }

@@ -21,7 +21,7 @@ The backend has two runnable processes: an HTTP API and an asynchronous Worker. 
 ## expanded spec
 `backend/cmd/main.go` owns API bootstrap and lifecycle. It loads configuration, initializes database and optional cache or broker dependencies, assembles the HTTP router, starts API-side outbox and cache-invalidation work, and serves the public API.
 
-`backend/cmd/worker/main.go` owns asynchronous processing. It connects to the broker, starts the like, comment, social, popularity, timeline, and dead-letter consumers, and shuts them down with the process context. It does not replace the HTTP API process.
+`backend/cmd/worker/main.go` owns asynchronous processing. It connects to the broker, starts the like, comment, social, popularity, timeline, embedding, and dead-letter consumers, and shuts them down with the process context. It does not replace the HTTP API process.
 
 `backend/internal/http/router.go` is the API composition boundary. Routes, authentication middleware, rate limits, and handler wiring belong there; capability behavior belongs to the child backend specs. Configuration loading and shared database, broker, cache, and observability conventions must remain usable by both entrypoints.
 

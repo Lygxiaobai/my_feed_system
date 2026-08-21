@@ -15,6 +15,7 @@ const (
 	ExchangeCacheInvalidated = "cache.invalidate.events"
 	ExchangeMediaEvents      = "media.events"
 	ExchangeAuditEvents      = "audit.events"
+	ExchangeEmbedEvents      = "video.embed.events"
 )
 
 const (
@@ -26,6 +27,7 @@ const (
 	QueueTimelineFanout   = "timeline.fanout.q"
 	QueueMediaTranscode   = "media.transcode.q"
 	QueueAuditModerate    = "audit.moderate.q"
+	QueueVideoEmbed       = "video.embed.q"
 )
 
 const (
@@ -53,6 +55,7 @@ const (
 	TimelineDLX   = "video.timeline.events.dlx"
 	MediaDLX      = "media.events.dlx"
 	AuditDLX      = "audit.events.dlx"
+	EmbedDLX      = "video.embed.events.dlx"
 )
 
 type QueueSpec struct {
@@ -165,6 +168,17 @@ var queueSpecs = []QueueSpec{
 		DLRoutingKey: "audit.moderate.failed",
 		BindingKeys: []string{
 			EventTypeAuditRequested,
+		},
+	},
+	{
+		Exchange:     ExchangeEmbedEvents,
+		ExchangeType: "topic",
+		Queue:        QueueVideoEmbed,
+		DLX:          EmbedDLX,
+		DLQ:          QueueVideoEmbed + ".dlq",
+		DLRoutingKey: "video.embed.failed",
+		BindingKeys: []string{
+			EventTypeVideoEmbedRequested,
 		},
 	},
 }

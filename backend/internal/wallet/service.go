@@ -35,10 +35,19 @@ type Service struct {
 	draw        func() (int, error)
 	drawCheckin func() (int, error)
 	notify      *notification.Writer
+	interest    interestInvalidator
+}
+
+type interestInvalidator interface {
+	InvalidateUser(accountID uint64)
 }
 
 func (s *Service) SetNotifier(n *notification.Writer) {
 	s.notify = n
+}
+
+func (s *Service) SetInterestInvalidator(v interestInvalidator) {
+	s.interest = v
 }
 
 func NewService(db *gorm.DB, alipay config.AlipayConfig) *Service {
@@ -258,6 +267,9 @@ func (s *Service) Tip(accountID uint64, username string, req TipRequest) (*TipRe
 
 	if s.publisher == nil && s.popularity != nil {
 		_ = s.popularity.Record(context.Background(), req.VideoID, float64(req.Coins), now)
+	}
+	if s.interest != nil {
+		s.interest.InvalidateUser(accountID)
 	}
 	return &rec, nil
 }

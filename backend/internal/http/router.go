@@ -27,6 +27,7 @@ import (
 	"my_feed_system/internal/observability"
 	"my_feed_system/internal/ops"
 	"my_feed_system/internal/popularity"
+	"my_feed_system/internal/recommend"
 	"my_feed_system/internal/report"
 	"my_feed_system/internal/response"
 	"my_feed_system/internal/social"
@@ -42,7 +43,7 @@ func NewRouter(
 	jwtSecret string,
 	uploadDir string,
 ) *gin.Engine {
-	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir, 0, config.AuditConfig{}, config.AuthConfig{}, config.OpsConfig{}, config.AlipayConfig{}, config.FeedConfig{})
+	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir, 0, config.AuditConfig{}, config.AuthConfig{}, config.OpsConfig{}, config.AlipayConfig{}, config.FeedConfig{}, config.EmbeddingConfig{})
 }
 
 func NewRouterWithLocalCaches(
@@ -61,6 +62,7 @@ func NewRouterWithLocalCaches(
 	opsCfg config.OpsConfig,
 	alipayCfg config.AlipayConfig,
 	feedCfg config.FeedConfig,
+	embeddingCfg config.EmbeddingConfig,
 ) *gin.Engine {
 	// 不用 gin.Default()：它固定绑定 gin.Logger()，而后者只能输出拼好的文本行，
 	// 无法交给 slog 分级和结构化。这里自行组装等价的中间件链。
@@ -307,8 +309,22 @@ func NewRouterWithLocalCaches(
 	reportGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	reportHandler.RegisterProtectedRoutes(reportGroup, reportSubmitIPLimit, reportSubmitAccountLimit)
 
+	recCfg := feedCfg.Recommend
+	recCfg.ApplyDefaults()
+	embeddingCfg.ApplyDefaults()
+	recommendService := recommend.NewService(
+		db,
+		recommend.NewHTTPEmbedder(embeddingCfg),
+		redisClient,
+		popularityService,
+		video.NewMediaValidator(uploadDir),
+		recCfg,
+	)
+
 	likeService := like.NewServiceWithCachesAndPublisher(db, popularityService, detailCache, localDetailCache, publisher)
 	likeService.SetNotifier(notifyWriter)
+	likeService.SetInterestInvalidator(recommendService)
+	walletService.SetInterestInvalidator(recommendService)
 	likeHandler := like.NewHandler(likeService)
 	likeGroup := r.Group("/like")
 	likeGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
@@ -385,7 +401,10 @@ func NewRouterWithLocalCaches(
 		})
 	}
 	feedHandler := feed.NewHandler(feedService)
+	feedHandler.SetRecommender(recommendService)
 	feedGroup := r.Group("/feed")
+	// 推荐需要可选登录身份；其它公开信息流忽略 account_id。
+	feedGroup.Use(jwtmiddleware.OptionalJWTAuth(jwtSecret))
 	feedHandler.RegisterRoutes(feedGroup)
 
 	protectedFeedGroup := feedGroup.Group("")

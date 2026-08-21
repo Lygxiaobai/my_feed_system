@@ -100,3 +100,13 @@ feed:
     active_ttl_hours: ${FEED_FANOUT_ACTIVE_TTL_HOURS:-168}
     # 单次读取最多合并几个大V 发件箱，超过则退回 MySQL。
     max_pull_authors: ${FEED_FANOUT_MAX_PULL_AUTHORS:-20}
+  recommend:
+    small_creator_max_followers: ${RECOMMEND_SMALL_CREATOR_MAX_FOLLOWERS:-50}
+    slot_small_ratio: ${RECOMMEND_SLOT_SMALL_RATIO:-0.2}
+    mmr_lambda: ${RECOMMEND_MMR_LAMBDA:-0.7}
+
+embedding:
+  api_url: ${EMBEDDING_API_URL:-}
+  api_key: ${EMBEDDING_API_KEY:-}
+  model: ${EMBEDDING_MODEL:-text-embedding-3-small}
+  timeout_seconds: ${EMBEDDING_TIMEOUT_SECONDS:-15}

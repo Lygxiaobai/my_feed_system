@@ -31,6 +31,7 @@ const (
 	EventTypeMediaTranscodeRequested = "media.transcode.requested"
 	EventTypeAuditRequested          = "audit.requested"
 	EventTypeTipCreated              = "tip.created"
+	EventTypeVideoEmbedRequested     = "video.embed.requested"
 )
 
 const (
@@ -158,4 +159,9 @@ type CacheInvalidatedPayload struct {
 	Cache   string `json:"cache"`
 	VideoID uint64 `json:"video_id,omitempty"`
 	Version int64  `json:"version,omitempty"`
+}
+
+// VideoEmbedPayload 触发对一条已公开视频的标题/描述向量计算。
+type VideoEmbedPayload struct {
+	VideoID uint64 `json:"video_id"`
 }

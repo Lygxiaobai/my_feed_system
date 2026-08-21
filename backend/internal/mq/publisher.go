@@ -109,6 +109,8 @@ func exchangeAndKey(eventType string) (exchange string, routingKey string, err e
 		return ExchangeMediaEvents, eventType, nil
 	case EventTypeAuditRequested:
 		return ExchangeAuditEvents, eventType, nil
+	case EventTypeVideoEmbedRequested:
+		return ExchangeEmbedEvents, eventType, nil
 	default:
 		return "", "", fmt.Errorf("unknown event type: %s", eventType)
 	}

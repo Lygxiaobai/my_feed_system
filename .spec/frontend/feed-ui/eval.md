@@ -2,7 +2,7 @@
 scenarios:
   - name: feed-mode-navigation
     description: A user can switch between recommendation, likes-count, and following feed modes and load the next page.
-    expected: The selected mode, loading state, cursor, and returned cards stay consistent across navigation.
+    expected: The selected mode, loading state, exclude-id or cursor, and returned cards stay consistent across navigation.
     tags:
       - frontend-e2e
       - desktop

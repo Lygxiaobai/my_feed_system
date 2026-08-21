@@ -33,10 +33,19 @@ type Service struct {
 	publisher   *mq.Publisher
 	outboxRepo  *outbox.Repo
 	notify      *notification.Writer
+	interest    interestInvalidator
+}
+
+type interestInvalidator interface {
+	InvalidateUser(accountID uint64)
 }
 
 func (s *Service) SetNotifier(n *notification.Writer) {
 	s.notify = n
+}
+
+func (s *Service) SetInterestInvalidator(v interestInvalidator) {
+	s.interest = v
 }
 
 func NewService(db *gorm.DB, popularityService *popularity.Service) *Service {
@@ -124,6 +133,9 @@ func (s *Service) Like(accountID uint64, req LikeRequest) error {
 		_ = s.popularity.Record(context.Background(), req.VideoID, popularity.LikeWeight, time.Now())
 	}
 	s.invalidateDetailCache(req.VideoID)
+	if s.interest != nil {
+		s.interest.InvalidateUser(accountID)
+	}
 	return nil
 }
 
@@ -179,6 +191,9 @@ func (s *Service) Unlike(accountID uint64, req LikeRequest) error {
 		_ = s.popularity.Record(context.Background(), req.VideoID, popularity.UnlikeWeight, time.Now())
 	}
 	s.invalidateDetailCache(req.VideoID)
+	if s.interest != nil {
+		s.interest.InvalidateUser(accountID)
+	}
 	return nil
 }
 

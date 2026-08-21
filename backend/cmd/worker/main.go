@@ -21,6 +21,7 @@ import (
 	"my_feed_system/internal/notification"
 	"my_feed_system/internal/observability"
 	"my_feed_system/internal/popularity"
+	"my_feed_system/internal/recommend"
 	"my_feed_system/internal/video"
 	workerpkg "my_feed_system/internal/worker"
 )
@@ -118,6 +119,8 @@ func main() {
 	timelineConsumer := workerpkg.NewTimelineConsumer(timelineStore, latestCache, publisher)
 	fanoutWorker := workerpkg.NewFanoutWorker(database, inboxStore, outboxStore, publisher, fanoutCfg)
 	mediaWorker := workerpkg.NewMediaWorker(database, cfg.Upload.Dir)
+	cfg.Embedding.ApplyDefaults()
+	embedWorker := workerpkg.NewEmbedWorker(database, recommend.NewHTTPEmbedder(cfg.Embedding))
 	var auditWorker *workerpkg.AuditWorker
 	if cfg.Audit.Enabled {
 		auditService := audit.NewService(
@@ -169,6 +172,8 @@ func main() {
 		slog.Warn("redis unavailable, following fanout consumer will not start")
 	}
 	start(mq.QueueMediaTranscode, "media", mediaWorker.Handle)
+	start(mq.QueueVideoEmbed, "embed", embedWorker.Handle)
+	go embedWorker.Backfill(ctx)
 	if auditWorker != nil {
 		start(mq.QueueAuditModerate, "audit", auditWorker.Handle)
 	}

@@ -80,3 +80,16 @@ type ListByPopularityResult struct {
 	NextOffset int64 `json:"next_offset"`
 	HasMore    bool  `json:"has_more"`
 }
+
+// ListRecommendRequest 用已出 id 排除集翻页。
+type ListRecommendRequest struct {
+	Limit      int64    `json:"limit"`
+	ExcludeIDs []uint64 `json:"exclude_ids"`
+}
+
+// ListRecommendResult 是首页推荐混排的一页。
+type ListRecommendResult struct {
+	Videos     []FeedVideo `json:"videos"`
+	ExcludeIDs []uint64    `json:"exclude_ids"`
+	HasMore    bool        `json:"has_more"`
+}

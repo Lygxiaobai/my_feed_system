@@ -131,5 +131,16 @@ func (p *ApprovalPublisher) enqueuePublic(tx *gorm.DB, videoID uint64, authorID 
 		return fmt.Errorf("enqueue popularity event after %s: %w", reason, err)
 	}
 
+	// 标题/描述向量与时间线、热度同一出口投递，机审和人工共用。
+	embedEvent, err := mq.NewEnvelope(mq.EventTypeVideoEmbedRequested, mq.ProducerAPIServer, mq.VideoEmbedPayload{
+		VideoID: videoID,
+	})
+	if err != nil {
+		return fmt.Errorf("build embed event after %s: %w", reason, err)
+	}
+	if err := p.outboxRepo.Enqueue(tx, embedEvent); err != nil {
+		return fmt.Errorf("enqueue embed event after %s: %w", reason, err)
+	}
+
 	return nil
 }

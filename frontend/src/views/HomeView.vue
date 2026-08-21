@@ -44,8 +44,7 @@ const recommend = reactive({
   loading: false,
   error: '',
   hasMore: false,
-  asOf: 0,
-  nextOffset: 0,
+  excludeIds: [] as number[],
 })
 
 const hot = reactive({
@@ -290,14 +289,12 @@ async function loadRecommend(reset: boolean) {
   recommend.loading = true
   recommend.error = ''
   try {
-    const res = await feedApi.listByPopularity({
+    const res = await feedApi.listRecommend({
       limit: 10,
-      as_of: reset ? 0 : recommend.asOf,
-      offset: reset ? 0 : recommend.nextOffset,
+      exclude_ids: reset ? [] : recommend.excludeIds,
     })
     recommend.hasMore = res.has_more
-    recommend.asOf = res.as_of
-    recommend.nextOffset = res.next_offset
+    recommend.excludeIds = res.exclude_ids
     recommend.items = reset ? res.video_list : recommend.items.concat(res.video_list)
     await syncLikedState(res.video_list)
   } catch (e) {
@@ -702,6 +699,9 @@ watch(
   async (v) => {
     if (tab.value === 'following' && v && following.items.length === 0) {
       await loadFollowing(true)
+    }
+    if (tab.value === 'recommend') {
+      await loadRecommend(true)
     }
     if (!v) {
       await syncLikedState(recommend.items)

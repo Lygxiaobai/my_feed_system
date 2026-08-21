@@ -5,11 +5,13 @@ import type {
   BackendListByPopularityResponse,
   BackendListLatestResponse,
   BackendListLikesCountResponse,
+  BackendListRecommendResponse,
   FeedVideoItem,
   ListByFollowingResponse,
   ListByPopularityResponse,
   ListLatestResponse,
   ListLikesCountResponse,
+  ListRecommendResponse,
 } from './types'
 
 function normalizeFeedVideo(item: BackendFeedVideo): FeedVideoItem {
@@ -70,6 +72,18 @@ export async function listByPopularity(input: { limit: number; as_of: number; of
     next_offset: res.next_offset,
     has_more: res.has_more,
   } satisfies ListByPopularityResponse
+}
+
+export async function listRecommend(input: { limit: number; exclude_ids?: number[] }) {
+  const res = await postJson<BackendListRecommendResponse>('/feed/listRecommend', {
+    limit: input.limit,
+    exclude_ids: input.exclude_ids ?? [],
+  })
+  return {
+    video_list: res.videos.map(normalizeFeedVideo),
+    exclude_ids: res.exclude_ids ?? [],
+    has_more: res.has_more,
+  } satisfies ListRecommendResponse
 }
 
 export async function listByFollowing(input: { limit: number; latest_time: number; last_id?: number }) {

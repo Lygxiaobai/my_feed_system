@@ -21,6 +21,7 @@ import (
 	"my_feed_system/internal/notification"
 	"my_feed_system/internal/outbox"
 	"my_feed_system/internal/popularity"
+	"my_feed_system/internal/recommend"
 	"my_feed_system/internal/report"
 	"my_feed_system/internal/social"
 	"my_feed_system/internal/video"
@@ -81,6 +82,8 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		&wallet.RechargeOrder{},
 		&wallet.TipRecord{},
 		&wallet.PlatformEntry{},
+		&recommend.VideoEmbedding{},
+		&recommend.UserEmbedding{},
 	); err != nil {
 		return nil, fmt.Errorf("auto migrate tables: %w", err)
 	}

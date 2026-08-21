@@ -26,3 +26,8 @@ scenarios:
     tags:
       - worker
       - media
+  - name: embed-on-approval
+    description: A video becomes public and the embedding consumer receives the matching event while the HTTP embedder is configured.
+    expected: One video_embeddings row is written for that video and redelivery does not create a second row.
+    tags:
+      - worker

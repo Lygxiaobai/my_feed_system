@@ -40,3 +40,28 @@ scenarios:
     expected: The response is non-empty when MySQL has playable videos, returned popularity values match MySQL, and as_of is zero.
     tags:
       - backend-api
+  - name: recommend-small-creator-quota
+    description: A signed-in viewer requests a 10-item recommendation page while both interest-matching videos and ordinary-author videos exist.
+    expected: The page contains at least two videos from authors below the recommend small-creator follower threshold, unless that pool is empty.
+    tags:
+      - backend-api
+  - name: recommend-author-window
+    description: One author has many otherwise eligible videos in the candidate pool.
+    expected: Adjacent items in a recommendation page do not repeat that author within a window of four, while other authors remain available.
+    tags:
+      - backend-api
+  - name: recommend-anonymous-cold-start
+    description: An unauthenticated client reads the recommendation feed.
+    expected: The response is a mixed page of approved videos rather than an empty success, and no unapproved video appears.
+    tags:
+      - backend-api
+  - name: recommend-excludes-unapproved
+    description: An approved video and a pending video both exist when recommendation is requested.
+    expected: Only the approved video can appear.
+    tags:
+      - backend-api
+  - name: user-interest-persisted
+    description: A signed-in user likes or tips a video that already has an embedding.
+    expected: user_embeddings holds one row for that account and the same model, so a later recommend or push can read the interest vector without replaying the like history.
+    tags:
+      - backend-api

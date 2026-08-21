@@ -12,25 +12,76 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	Database DatabaseConfig `yaml:"database"`
-	Redis    RedisConfig    `yaml:"redis"`
-	RabbitMQ RabbitMQConfig `yaml:"rabbitmq"`
-	JWT      JWTConfig      `yaml:"jwt"`
-	Upload   UploadConfig   `yaml:"upload"`
-	Pprof    PprofConfig    `yaml:"pprof"`
-	Metrics  MetricsConfig  `yaml:"metrics"`
-	Log      LogConfig      `yaml:"log"`
-	Audit    AuditConfig    `yaml:"audit"`
-	Auth     AuthConfig     `yaml:"auth"`
-	Ops      OpsConfig      `yaml:"ops"`
-	Alipay   AlipayConfig   `yaml:"alipay"`
-	Feed     FeedConfig     `yaml:"feed"`
+	Server    ServerConfig    `yaml:"server"`
+	Database  DatabaseConfig  `yaml:"database"`
+	Redis     RedisConfig     `yaml:"redis"`
+	RabbitMQ  RabbitMQConfig  `yaml:"rabbitmq"`
+	JWT       JWTConfig       `yaml:"jwt"`
+	Upload    UploadConfig    `yaml:"upload"`
+	Pprof     PprofConfig     `yaml:"pprof"`
+	Metrics   MetricsConfig   `yaml:"metrics"`
+	Log       LogConfig       `yaml:"log"`
+	Audit     AuditConfig     `yaml:"audit"`
+	Auth      AuthConfig      `yaml:"auth"`
+	Ops       OpsConfig       `yaml:"ops"`
+	Alipay    AlipayConfig    `yaml:"alipay"`
+	Feed      FeedConfig      `yaml:"feed"`
+	Embedding EmbeddingConfig `yaml:"embedding"`
 }
 
 // FeedConfig 控制信息流的分发策略。
 type FeedConfig struct {
-	Fanout FanoutConfig `yaml:"fanout"`
+	Fanout    FanoutConfig    `yaml:"fanout"`
+	Recommend RecommendConfig `yaml:"recommend"`
+}
+
+// RecommendConfig 只服务首页推荐混排，与关注流 fanout 阈值脱钩。
+type RecommendConfig struct {
+	// SmallCreatorMaxFollowers 以下粉丝数的作者进入普通人队列。
+	SmallCreatorMaxFollowers int64   `yaml:"small_creator_max_followers"`
+	SlotSmallRatio           float64 `yaml:"slot_small_ratio"`
+	MMRLambda                float64 `yaml:"mmr_lambda"`
+}
+
+const (
+	defaultSmallCreatorMaxFollowers = int64(50)
+	defaultSlotSmallRatio           = 0.2
+	defaultMMRLambda                = 0.7
+)
+
+func (c *RecommendConfig) ApplyDefaults() {
+	if c.SmallCreatorMaxFollowers <= 0 {
+		c.SmallCreatorMaxFollowers = defaultSmallCreatorMaxFollowers
+	}
+	if c.SlotSmallRatio <= 0 || c.SlotSmallRatio > 0.8 {
+		c.SlotSmallRatio = defaultSlotSmallRatio
+	}
+	if c.MMRLambda <= 0 || c.MMRLambda > 1 {
+		c.MMRLambda = defaultMMRLambda
+	}
+}
+
+// EmbeddingConfig 是外部 HTTP embedding 接口。url 或 key 为空时不调用，推荐退化为冷启动混排。
+type EmbeddingConfig struct {
+	APIURL         string `yaml:"api_url"`
+	APIKey         string `yaml:"api_key"`
+	Model          string `yaml:"model"`
+	TimeoutSeconds int    `yaml:"timeout_seconds"`
+}
+
+const defaultEmbeddingModel = "text-embedding-3-small"
+
+func (c *EmbeddingConfig) ApplyDefaults() {
+	if strings.TrimSpace(c.Model) == "" {
+		c.Model = defaultEmbeddingModel
+	}
+	if c.TimeoutSeconds <= 0 {
+		c.TimeoutSeconds = 15
+	}
+}
+
+func (c EmbeddingConfig) Enabled() bool {
+	return strings.TrimSpace(c.APIURL) != "" && strings.TrimSpace(c.APIKey) != ""
 }
 
 // FanoutConfig 定义关注流「推拉结合」的分级阈值与容量。
@@ -255,6 +306,8 @@ func Load(path string) (*Config, error) {
 
 	cfg.Alipay.fillFromEnv()
 	cfg.Feed.Fanout.ApplyDefaults()
+	cfg.Feed.Recommend.ApplyDefaults()
+	cfg.Embedding.ApplyDefaults()
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}

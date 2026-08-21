@@ -10,6 +10,7 @@ import (
 
 	"my_feed_system/internal/account"
 	"my_feed_system/internal/mq"
+	"my_feed_system/internal/notification"
 )
 
 var (
@@ -22,6 +23,11 @@ type Service struct {
 	repo        *Repo
 	accountRepo *account.Repo
 	publisher   *mq.Publisher
+	notify      *notification.Writer
+}
+
+func (s *Service) SetNotifier(n *notification.Writer) {
+	s.notify = n
 }
 
 func NewService(db *gorm.DB) *Service {
@@ -59,7 +65,10 @@ func (s *Service) Follow(followerID uint64, req FollowRequest) error {
 
 	// 兜底：未接入 MQ 时沿用同步写逻辑。
 	if s.publisher == nil {
-		return s.repo.Create(&SocialRelation{FollowerID: followerID, VloggerID: req.VloggerID})
+		if err := s.repo.Create(&SocialRelation{FollowerID: followerID, VloggerID: req.VloggerID}); err != nil {
+			return err
+		}
+		return s.notify.ApplyFollow(nil, followerID, req.VloggerID)
 	}
 
 	// 异步路径：发布关注事件后快速返回，由 Worker 落库。

@@ -13,6 +13,8 @@ export type AppIconName =
   | 'share'
   | 'list'
   | 'flag'
+  | 'user-plus'
+  | 'at'
 
 withDefaults(
   defineProps<{
@@ -103,6 +105,16 @@ withDefaults(
       v-else-if="name === 'flag'"
       fill="currentColor"
       d="M6.2 3.2a1 1 0 0 1 1 1v.6h10.1a1 1 0 0 1 .8 1.6L16.2 9l1.9 2.6a1 1 0 0 1-.8 1.6H7.2v7.6a1 1 0 1 1-2 0V4.2a1 1 0 0 1 1-1Zm1 3.6v5.4h8.2l-1.3-1.8a1 1 0 0 1 0-1.2l1.3-1.8H7.2Z"
+    />
+    <g v-else-if="name === 'user-plus'" fill="currentColor">
+      <path d="M10.2 4.2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z" />
+      <path d="M10.2 13.2c-3.4 0-6.6 1.7-6.6 4.2a1 1 0 1 0 2 0c0-.8 1.9-2.2 4.6-2.2s4.6 1.4 4.6 2.2a1 1 0 1 0 2 0c0-2.5-3.2-4.2-6.6-4.2Z" />
+      <path d="M18.2 8.2h1.2v1.2a1 1 0 1 0 2 0V8.2H22.6a1 1 0 1 0 0-2h-1.2V5a1 1 0 1 0-2 0v1.2h-1.2a1 1 0 1 0 0 2Z" />
+    </g>
+    <path
+      v-else-if="name === 'at'"
+      fill="currentColor"
+      d="M12 3.4A8.6 8.6 0 1 0 20.6 12c0 1.7-.6 3-1.8 3.8-1.1.7-2.4.8-3.4.2V17a1 1 0 1 1-2 0v-6.2a1 1 0 0 1 1-1h.2a3.6 3.6 0 1 1 .4 7.2c.4.2.9.2 1.3 0 .6-.4.9-1.1.9-2.2A6.6 6.6 0 1 1 12 5.4 1 1 0 1 1 12 3.4Zm0 6.2a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2Z"
     />
   </svg>
 </template>

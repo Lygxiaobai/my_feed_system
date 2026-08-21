@@ -13,8 +13,8 @@ import (
 	"my_feed_system/internal/analytics"
 	"my_feed_system/internal/audit"
 	"my_feed_system/internal/comment"
-	"my_feed_system/internal/danmaku"
 	"my_feed_system/internal/config"
+	"my_feed_system/internal/danmaku"
 	"my_feed_system/internal/feed"
 	"my_feed_system/internal/like"
 	"my_feed_system/internal/media"
@@ -23,6 +23,7 @@ import (
 	"my_feed_system/internal/middleware/ratelimit"
 	"my_feed_system/internal/middleware/requestid"
 	"my_feed_system/internal/mq"
+	"my_feed_system/internal/notification"
 	"my_feed_system/internal/observability"
 	"my_feed_system/internal/ops"
 	"my_feed_system/internal/popularity"
@@ -200,8 +201,11 @@ func NewRouterWithLocalCaches(
 		FailOpen: true,
 	})
 
+	notifyWriter := notification.NewWriter(db)
+
 	walletService := wallet.NewService(db, alipayCfg)
 	walletService.SetPublisher(publisher, popularityService)
+	walletService.SetNotifier(notifyWriter)
 	accountService := account.NewServiceWithTokenCache(db, tokenCache, jwtSecret)
 	accountService.SetCreatedHook(walletService.GrantRegisterGiftTx)
 	var otpStore *account.OTPStore
@@ -303,7 +307,9 @@ func NewRouterWithLocalCaches(
 	reportGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	reportHandler.RegisterProtectedRoutes(reportGroup, reportSubmitIPLimit, reportSubmitAccountLimit)
 
-	likeHandler := like.NewHandler(like.NewServiceWithCachesAndPublisher(db, popularityService, detailCache, localDetailCache, publisher))
+	likeService := like.NewServiceWithCachesAndPublisher(db, popularityService, detailCache, localDetailCache, publisher)
+	likeService.SetNotifier(notifyWriter)
+	likeHandler := like.NewHandler(likeService)
 	likeGroup := r.Group("/like")
 	likeGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	likeGroup.POST("/like", likeLikeIPLimit, likeLikeAccountLimit, likeHandler.Like)
@@ -311,7 +317,9 @@ func NewRouterWithLocalCaches(
 	likeGroup.POST("/isLiked", likeHandler.IsLiked)
 	likeGroup.POST("/listLikedVideoIDs", likeHandler.ListLikedVideoIDs)
 
-	commentHandler := comment.NewHandler(comment.NewServiceWithDetailCacheAndPublisher(db, popularityService, detailCache, publisher))
+	commentService := comment.NewServiceWithDetailCacheAndPublisher(db, popularityService, detailCache, publisher)
+	commentService.SetNotifier(notifyWriter)
+	commentHandler := comment.NewHandler(commentService)
 	commentGroup := r.Group("/comment")
 	commentHandler.RegisterRoutes(commentGroup)
 
@@ -342,7 +350,9 @@ func NewRouterWithLocalCaches(
 	protectedDanmakuGroup.Use(danmakuSendIPLimit, danmakuSendAccountLimit)
 	danmakuHandler.RegisterProtectedRoutes(protectedDanmakuGroup)
 
-	socialHandler := social.NewHandler(social.NewServiceWithPublisher(db, publisher))
+	socialService := social.NewServiceWithPublisher(db, publisher)
+	socialService.SetNotifier(notifyWriter)
+	socialHandler := social.NewHandler(socialService)
 	socialGroup := r.Group("/social")
 	socialHandler.RegisterRoutes(socialGroup)
 
@@ -406,6 +416,32 @@ func NewRouterWithLocalCaches(
 		Window:   time.Minute,
 		FailOpen: true,
 	})
+
+	notifyListIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "notification.list.ip",
+		Limit:    60,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	notifyUnreadIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "notification.unread.ip",
+		Limit:    120,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	notifyWriteAccountLimit := ratelimit.ByAccountID(rateLimiter, ratelimit.Policy{
+		Name:     "notification.write.account",
+		Limit:    40,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	notifyHandler := notification.NewHandler(notification.NewService(db))
+	notifyGroup := r.Group("/notification")
+	notifyGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
+	notifyGroup.POST("/list", notifyListIPLimit, notifyHandler.List)
+	notifyGroup.POST("/unreadCount", notifyUnreadIPLimit, notifyHandler.UnreadCount)
+	notifyGroup.POST("/markRead", notifyWriteAccountLimit, notifyHandler.MarkRead)
+	notifyGroup.POST("/markAllRead", notifyWriteAccountLimit, notifyHandler.MarkAllRead)
 
 	walletHandler := wallet.NewHandler(walletService)
 	walletGroup := r.Group("/wallet")

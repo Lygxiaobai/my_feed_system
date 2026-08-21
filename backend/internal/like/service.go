@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"my_feed_system/internal/mq"
+	"my_feed_system/internal/notification"
 	"my_feed_system/internal/observability"
 	"my_feed_system/internal/outbox"
 	"my_feed_system/internal/popularity"
@@ -31,6 +32,11 @@ type Service struct {
 	localDetail *video.LocalDetailCache
 	publisher   *mq.Publisher
 	outboxRepo  *outbox.Repo
+	notify      *notification.Writer
+}
+
+func (s *Service) SetNotifier(n *notification.Writer) {
+	s.notify = n
 }
 
 func NewService(db *gorm.DB, popularityService *popularity.Service) *Service {
@@ -92,6 +98,10 @@ func (s *Service) Like(accountID uint64, req LikeRequest) error {
 			return err
 		}
 
+		if err := s.notify.ApplyLike(tx, accountID, req.VideoID, currentVideo.AuthorID); err != nil {
+			return err
+		}
+
 		if s.publisher != nil {
 			event, err := mq.NewEnvelope(mq.EventTypePopularityChanged, mq.ProducerAPIServer, mq.PopularityChangedPayload{
 				VideoID: req.VideoID,
@@ -140,6 +150,10 @@ func (s *Service) Unlike(accountID uint64, req LikeRequest) error {
 			return ErrLikeNotFound
 		}
 		if err := s.videoRepo.AdjustCounters(tx, req.VideoID, -1, 0, popularityDelta); err != nil {
+			return err
+		}
+
+		if err := s.notify.RetractLike(tx, accountID, req.VideoID, currentVideo.AuthorID); err != nil {
 			return err
 		}
 

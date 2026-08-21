@@ -17,29 +17,35 @@ import (
 	"my_feed_system/internal/audit"
 	"my_feed_system/internal/config"
 	"my_feed_system/internal/mq"
+	"my_feed_system/internal/notification"
 	"my_feed_system/internal/outbox"
 	"my_feed_system/internal/popularity"
 	"my_feed_system/internal/video"
 )
 
 type Service struct {
-	db         *gorm.DB
-	repo       *Repo
-	videoRepo  *video.Repo
-	gateway    Gateway
-	publisher  *mq.Publisher
-	outboxRepo *outbox.Repo
-	popularity *popularity.Service
+	db          *gorm.DB
+	repo        *Repo
+	videoRepo   *video.Repo
+	gateway     Gateway
+	publisher   *mq.Publisher
+	outboxRepo  *outbox.Repo
+	popularity  *popularity.Service
 	now         func() time.Time
 	draw        func() (int, error)
 	drawCheckin func() (int, error)
+	notify      *notification.Writer
+}
+
+func (s *Service) SetNotifier(n *notification.Writer) {
+	s.notify = n
 }
 
 func NewService(db *gorm.DB, alipay config.AlipayConfig) *Service {
 	s := &Service{
-		db:        db,
-		repo:      NewRepo(db),
-		videoRepo: video.NewRepo(db),
+		db:          db,
+		repo:        NewRepo(db),
+		videoRepo:   video.NewRepo(db),
 		now:         time.Now,
 		draw:        randomLotteryBucket,
 		drawCheckin: randomCheckinBucket,
@@ -213,6 +219,9 @@ func (s *Service) Tip(accountID uint64, username string, req TipRequest) (*TipRe
 			CreatedAt:     now,
 		}
 		if err := tx.Create(&rec).Error; err != nil {
+			return err
+		}
+		if err := s.notify.ApplyTip(tx, rec.ID, accountID, current.AuthorID, req.VideoID, req.Coins); err != nil {
 			return err
 		}
 		ref := strconv.FormatUint(rec.ID, 10)

@@ -11,6 +11,7 @@ import (
 	"my_feed_system/internal/account"
 	"my_feed_system/internal/feed"
 	"my_feed_system/internal/mq"
+	"my_feed_system/internal/notification"
 	"my_feed_system/internal/social"
 )
 
@@ -18,6 +19,11 @@ type SocialWorker struct {
 	db        *gorm.DB
 	inbox     *feed.InboxStore
 	following *feed.FollowingCache
+	notify    *notification.Writer
+}
+
+func (w *SocialWorker) SetNotifier(n *notification.Writer) {
+	w.notify = n
 }
 
 func NewSocialWorker(db *gorm.DB) *SocialWorker {
@@ -75,9 +81,12 @@ func (w *SocialWorker) handleFollowed(ctx context.Context, event mq.Envelope) er
 		}
 
 		// 粉丝数与关注关系同事务增减，避免计数与真值分叉。
-		return tx.Model(&account.Account{}).
+		if err := tx.Model(&account.Account{}).
 			Where("id = ?", payload.VloggerID).
-			UpdateColumn("follower_count", gorm.Expr("follower_count + 1")).Error
+			UpdateColumn("follower_count", gorm.Expr("follower_count + 1")).Error; err != nil {
+			return err
+		}
+		return w.notify.ApplyFollow(tx, payload.FollowerID, payload.VloggerID)
 	})
 	if err != nil {
 		return err

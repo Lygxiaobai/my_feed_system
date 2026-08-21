@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"my_feed_system/internal/mq"
+	"my_feed_system/internal/notification"
 	"my_feed_system/internal/observability"
 	"my_feed_system/internal/popularity"
 	"my_feed_system/internal/video"
@@ -29,6 +30,11 @@ type Service struct {
 	popularity  *popularity.Service
 	detailCache *video.DetailCache
 	publisher   *mq.Publisher
+	notify      *notification.Writer
+}
+
+func (s *Service) SetNotifier(n *notification.Writer) {
+	s.notify = n
 }
 
 func NewService(db *gorm.DB, popularityService *popularity.Service) *Service {
@@ -125,7 +131,7 @@ func (s *Service) Publish(accountID uint64, username string, req PublishRequest)
 	}
 
 	if s.publisher == nil {
-		return s.publishSync(comment)
+		return s.publishSync(comment, currentVideo.AuthorID)
 	}
 
 	comment.ID = nextCommentID()
@@ -204,7 +210,7 @@ func (s *Service) Delete(accountID uint64, req DeleteRequest) error {
 	return nil
 }
 
-func (s *Service) publishSync(comment *VideoComment) (*VideoComment, error) {
+func (s *Service) publishSync(comment *VideoComment, videoAuthorID uint64) (*VideoComment, error) {
 	popularityDelta := int64(0)
 	if s.popularity == nil {
 		popularityDelta = int64(popularity.CommentPublishWeight)
@@ -212,6 +218,18 @@ func (s *Service) publishSync(comment *VideoComment) (*VideoComment, error) {
 
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(comment).Error; err != nil {
+			return err
+		}
+		if err := s.notify.ApplyComment(tx, notification.CommentFanout{
+			CommentID:       comment.ID,
+			VideoID:         comment.VideoID,
+			ActorID:         comment.AuthorID,
+			VideoAuthorID:   videoAuthorID,
+			ParentCommentID: comment.ParentCommentID,
+			RootCommentID:   comment.RootCommentID,
+			ReplyToUserID:   comment.ReplyToUserID,
+			Content:         comment.Content,
+		}); err != nil {
 			return err
 		}
 
@@ -244,6 +262,9 @@ func (s *Service) deleteSync(commentID uint64, videoID uint64) error {
 
 		if s.popularity == nil {
 			popularityDelta = int64(popularity.CommentDeleteWeight) * deletedCount
+		}
+		if err := s.notify.HideByComment(tx, commentID); err != nil {
+			return err
 		}
 
 		return s.videoRepo.AdjustCounters(tx, videoID, 0, -deletedCount, popularityDelta)

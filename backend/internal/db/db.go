@@ -12,12 +12,13 @@ import (
 	"my_feed_system/internal/account"
 	"my_feed_system/internal/audit"
 	"my_feed_system/internal/comment"
-	"my_feed_system/internal/danmaku"
 	"my_feed_system/internal/config"
+	"my_feed_system/internal/danmaku"
 	"my_feed_system/internal/idempotency"
 	"my_feed_system/internal/like"
 	"my_feed_system/internal/media"
 	"my_feed_system/internal/mq"
+	"my_feed_system/internal/notification"
 	"my_feed_system/internal/outbox"
 	"my_feed_system/internal/popularity"
 	"my_feed_system/internal/report"
@@ -73,6 +74,7 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		&popularity.Projection{},
 		&audit.Record{},
 		&report.Report{},
+		&notification.Notification{},
 		&wallet.Lot{},
 		&wallet.Ledger{},
 		&wallet.DailyAction{},

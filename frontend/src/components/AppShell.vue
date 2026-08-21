@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { track } from '../analytics/track'
 import { ApiError } from '../api/client'
 import * as videoApi from '../api/video'
 import { useAuthStore } from '../stores/auth'
+import { useNotificationStore } from '../stores/notification'
 import { useSocialStore } from '../stores/social'
 import { useToastStore } from '../stores/toast'
 import AppIcon, { type AppIconName } from './AppIcon.vue'
+import NotificationPanel from './NotificationPanel.vue'
 import Toaster from './Toaster.vue'
 import UserAvatar from './UserAvatar.vue'
 
@@ -33,12 +35,34 @@ const props = defineProps<{ full?: boolean }>()
 
 const auth = useAuthStore()
 const social = useSocialStore()
+const notif = useNotificationStore()
 const toast = useToastStore()
 const router = useRouter()
 const route = useRoute()
 
 const search = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const searchOpen = ref(false)
+const notifyOpen = ref(false)
+const notifyWrap = ref<HTMLElement | null>(null)
+const unreadLabel = computed(() => (notif.unread > 99 ? '99+' : String(notif.unread)))
+
+function bindNotifyWrap(el: unknown) {
+  notifyWrap.value = el instanceof HTMLElement ? el : null
+}
+
+function toggleNotify() {
+  if (!auth.isLoggedIn) {
+    void router.push('/account')
+    return
+  }
+  notifyOpen.value = !notifyOpen.value
+}
+
+function onDocumentPointerDown(event: PointerEvent) {
+  const target = event.target
+  if (!(target instanceof Node) || !notifyWrap.value) return
+  if (!notifyWrap.value.contains(target)) notifyOpen.value = false
+}
 
 watch(
   () => route.query.q,
@@ -51,17 +75,33 @@ watch(
   () => route.fullPath,
   () => {
     searchOpen.value = false
+    notifyOpen.value = false
   },
 )
 
 watch(
   () => auth.isLoggedIn,
   (v) => {
-    if (v) void social.refreshMine()
-    else social.clear()
+    if (v) {
+      void social.refreshMine()
+      notif.startPolling()
+    } else {
+      social.clear()
+      notif.clear()
+      notifyOpen.value = false
+    }
   },
   { immediate: true },
 )
+
+onMounted(() => {
+  document.addEventListener('pointerdown', onDocumentPointerDown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('pointerdown', onDocumentPointerDown)
+  notif.stopPolling()
+})
 
 /**
  * 搜索框同时承担「粘贴口令直达」的职责，这与抖音的交互位置一致：
@@ -152,17 +192,46 @@ function headerActionTo(action: HeaderAction) {
             ⌕
           </button>
           <RouterLink
-            v-for="action in headerActions"
-            :key="action.key"
-            class="dy-head-act desktop-only"
-            :class="{ on: route.path === action.to }"
-            :to="headerActionTo(action)"
+            class="dy-icon-btn mobile-only dy-mobile-notify"
+            :to="auth.isLoggedIn ? '/notifications' : '/account'"
+            aria-label="通知"
           >
-            <span class="dy-head-icon" aria-hidden="true">
-              <AppIcon :name="action.icon" :size="18" />
-            </span>
-            <span class="dy-head-label">{{ action.label }}</span>
+            <AppIcon name="bell" :size="18" />
+            <span v-if="auth.isLoggedIn && notif.unread > 0" class="dy-badge">{{ unreadLabel }}</span>
           </RouterLink>
+          <template v-for="action in headerActions" :key="action.key">
+            <div
+              v-if="action.key === 'notify'"
+              class="dy-notify-wrap desktop-only"
+              :ref="bindNotifyWrap"
+            >
+              <button
+                class="dy-head-act"
+                :class="{ on: notifyOpen || route.path === '/notifications' }"
+                type="button"
+                aria-label="通知"
+                @click="toggleNotify"
+              >
+                <span class="dy-head-icon" aria-hidden="true">
+                  <AppIcon :name="action.icon" :size="18" />
+                  <span v-if="auth.isLoggedIn && notif.unread > 0" class="dy-badge">{{ unreadLabel }}</span>
+                </span>
+                <span class="dy-head-label">{{ action.label }}</span>
+              </button>
+              <NotificationPanel v-if="notifyOpen" class="dy-notify-drop" variant="dropdown" @close="notifyOpen = false" />
+            </div>
+            <RouterLink
+              v-else
+              class="dy-head-act desktop-only"
+              :class="{ on: route.path === action.to }"
+              :to="headerActionTo(action)"
+            >
+              <span class="dy-head-icon" aria-hidden="true">
+                <AppIcon :name="action.icon" :size="18" />
+              </span>
+              <span class="dy-head-label">{{ action.label }}</span>
+            </RouterLink>
+          </template>
           <RouterLink class="dy-head-avatar" to="/account" :title="auth.isLoggedIn ? '账号' : '登录'">
             <UserAvatar
               :username="auth.isLoggedIn ? (auth.claims?.username ?? '') : '登录'"
@@ -387,6 +456,11 @@ function headerActionTo(action: HeaderAction) {
   place-items: center;
   gap: 2px;
   padding: 4px 2px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
 }
 
 .dy-head-act:hover,
@@ -401,6 +475,44 @@ function headerActionTo(action: HeaderAction) {
   display: grid;
   place-items: center;
   line-height: 1;
+  position: relative;
+}
+
+.dy-notify-wrap {
+  position: relative;
+}
+
+.dy-notify-drop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+}
+
+.dy-badge {
+  position: absolute;
+  top: -7px;
+  right: -10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #fe2c55;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+}
+
+.dy-mobile-notify {
+  position: relative;
+  text-decoration: none;
+}
+
+.dy-mobile-notify .dy-badge {
+  top: 4px;
+  right: 4px;
 }
 
 .dy-head-label {
@@ -547,6 +659,10 @@ function headerActionTo(action: HeaderAction) {
 
 .dy-head-act.desktop-only {
   display: grid;
+}
+
+.dy-notify-wrap.desktop-only {
+  display: block;
 }
 
 .dy-top-left.desktop-only {

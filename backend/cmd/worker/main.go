@@ -18,6 +18,7 @@ import (
 	"my_feed_system/internal/feed"
 	"my_feed_system/internal/logging"
 	"my_feed_system/internal/mq"
+	"my_feed_system/internal/notification"
 	"my_feed_system/internal/observability"
 	"my_feed_system/internal/popularity"
 	"my_feed_system/internal/video"
@@ -107,9 +108,12 @@ func main() {
 	}
 
 	publisher := mq.NewPublisher(rabbitConn)
+	notifyWriter := notification.NewWriter(database)
 	likeWorker := workerpkg.NewLikeWorker(database, publisher, detailCache)
 	commentWorker := workerpkg.NewCommentWorker(database, publisher, detailCache)
+	commentWorker.SetNotifier(notifyWriter)
 	socialWorker := workerpkg.NewSocialWorkerWithFanout(database, inboxStore, followingCache)
+	socialWorker.SetNotifier(notifyWriter)
 	popularityWorker := workerpkg.NewPopularityWorker(database, popularityService, detailCache)
 	timelineConsumer := workerpkg.NewTimelineConsumer(timelineStore, latestCache, publisher)
 	fanoutWorker := workerpkg.NewFanoutWorker(database, inboxStore, outboxStore, publisher, fanoutCfg)

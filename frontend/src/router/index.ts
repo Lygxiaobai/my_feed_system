@@ -16,6 +16,7 @@ import CheckinView from '../views/CheckinView.vue'
 import LotteryView from '../views/LotteryView.vue'
 import ShareLandingView from '../views/ShareLandingView.vue'
 import PlaceholderView from '../views/PlaceholderView.vue'
+import NotificationsView from '../views/NotificationsView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -54,12 +55,7 @@ const router = createRouter({
     {
       path: '/notifications',
       name: 'notifications',
-      component: PlaceholderView,
-      meta: {
-        title: '通知',
-        summary: '点赞、关注和系统通知会汇到这里。后端接口还没有，先只做入口。',
-        auth: true,
-      },
+      component: NotificationsView,
     },
     {
       path: '/messages',

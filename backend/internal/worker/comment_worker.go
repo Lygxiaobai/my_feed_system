@@ -9,6 +9,7 @@ import (
 
 	"my_feed_system/internal/comment"
 	"my_feed_system/internal/mq"
+	"my_feed_system/internal/notification"
 	"my_feed_system/internal/popularity"
 	"my_feed_system/internal/video"
 )
@@ -19,6 +20,11 @@ type CommentWorker struct {
 	videoRepo   *video.Repo
 	detailCache *video.DetailCache
 	publisher   *mq.Publisher
+	notify      *notification.Writer
+}
+
+func (w *CommentWorker) SetNotifier(n *notification.Writer) {
+	w.notify = n
 }
 
 func NewCommentWorker(db *gorm.DB, publisher *mq.Publisher, detailCache *video.DetailCache) *CommentWorker {
@@ -84,6 +90,27 @@ func (w *CommentWorker) handleCommentCreated(ctx context.Context, event mq.Envel
 			return err
 		}
 
+		currentVideo, lookupErr := w.videoRepo.FindByID(payload.VideoID)
+		if lookupErr != nil {
+			return lookupErr
+		}
+		videoAuthorID := uint64(0)
+		if currentVideo != nil {
+			videoAuthorID = currentVideo.AuthorID
+		}
+		if err := w.notify.ApplyComment(tx, notification.CommentFanout{
+			CommentID:       payload.CommentID,
+			VideoID:         payload.VideoID,
+			ActorID:         payload.AuthorID,
+			VideoAuthorID:   videoAuthorID,
+			ParentCommentID: payload.ParentCommentID,
+			RootCommentID:   payload.RootCommentID,
+			ReplyToUserID:   payload.ReplyToUserID,
+			Content:         payload.Content,
+		}); err != nil {
+			return err
+		}
+
 		shouldEmit = true
 		return nil
 	}); err != nil {
@@ -130,6 +157,9 @@ func (w *CommentWorker) handleCommentDeleted(ctx context.Context, event mq.Envel
 		if deletedCount == 0 {
 			// Already deleted, keep idempotent.
 			return nil
+		}
+		if err := w.notify.HideByComment(tx, payload.CommentID); err != nil {
+			return err
 		}
 
 		return w.videoRepo.AdjustCounters(tx, payload.VideoID, 0, -deletedCount, 0)

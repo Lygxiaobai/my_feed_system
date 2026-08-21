@@ -26,8 +26,6 @@ type HeaderAction = {
 
 const headerActions: HeaderAction[] = [
   { key: 'wallet', label: '充积分', icon: 'coin', to: '/wallet', auth: true },
-  { key: 'client', label: '客户端', icon: 'download', to: '/client' },
-  { key: 'wallpaper', label: '壁纸', icon: 'sparkle', to: '/wallpaper' },
   { key: 'notify', label: '通知', icon: 'bell', to: '/notifications', auth: true },
   { key: 'messages', label: '消息', icon: 'chat', to: '/messages', auth: true },
   { key: 'publish', label: '投稿', icon: 'plus-box', to: '/video', auth: true },

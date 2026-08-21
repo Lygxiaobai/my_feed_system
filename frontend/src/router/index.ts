@@ -15,7 +15,6 @@ import PasswordLoginView from '../views/PasswordLoginView.vue'
 import CheckinView from '../views/CheckinView.vue'
 import LotteryView from '../views/LotteryView.vue'
 import ShareLandingView from '../views/ShareLandingView.vue'
-import PlaceholderView from '../views/PlaceholderView.vue'
 import NotificationsView from '../views/NotificationsView.vue'
 import MessagesView from '../views/MessagesView.vue'
 
@@ -41,18 +40,6 @@ const router = createRouter({
     { path: '/settings', name: 'settings', component: SettingsView },
     { path: '/ops', name: 'ops', component: OpsView },
     { path: '/u/:id', name: 'user-profile', component: UserProfileView, props: true },
-    {
-      path: '/client',
-      name: 'client',
-      component: PlaceholderView,
-      meta: { title: '客户端', summary: '网页版可以直接用。独立客户端还没做好，入口先放在这里。' },
-    },
-    {
-      path: '/wallpaper',
-      name: 'wallpaper',
-      component: PlaceholderView,
-      meta: { title: '壁纸', summary: '壁纸下载还没接上，先把页面搭好。' },
-    },
     {
       path: '/notifications',
       name: 'notifications',

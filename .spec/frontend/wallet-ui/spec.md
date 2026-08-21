@@ -16,7 +16,7 @@ related:
 # wallet-ui
 
 ## raw source
-A signed-in user opens a wallet from the account hub, sees spendable coins and soon-to-expire amounts, reads a ledger, and starts an Alipay sandbox recharge. Feed and video pages can send a tip or open that video's tip list. Dedicated pages cover daily check-in and lottery.
+A signed-in user opens a wallet from the account hub or the desktop top-bar recharge entry, sees spendable coins and soon-to-expire amounts, reads a ledger, and starts an Alipay sandbox recharge. Feed and video pages can send a tip or open that video's tip list. Dedicated pages cover daily check-in and lottery.
 
 ## expanded spec
 The wallet page uses coins for balances and the ledger, and yuan only on the recharge controls. Creating a recharge shows a sandbox payment QR code and queries the server until the order is paid or closed. Credit never comes from a browser redirect. Recharge failures show the server message. The four internal sources are not listed as separate balances.

@@ -30,6 +30,12 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
+  - name: topbar-utility-entries
+    description: A user uses the desktop top-bar entries aligned with search.
+    expected: Recharge, publish, and the avatar open the existing wallet, publish, and account pages; client, wallpaper, notifications, and messages open frontend placeholders; a signed-out click on an authenticated entry goes to the account page.
+    tags:
+      - frontend-e2e
+      - desktop
   - name: account-logout
     description: A logged-in user can log out and cannot continue using authenticated-only views.
     expected: Local authentication state is cleared and protected navigation requires login again.

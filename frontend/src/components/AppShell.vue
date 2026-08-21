@@ -9,6 +9,24 @@ import { useAuthStore } from '../stores/auth'
 import { useSocialStore } from '../stores/social'
 import { useToastStore } from '../stores/toast'
 import Toaster from './Toaster.vue'
+import UserAvatar from './UserAvatar.vue'
+
+type HeaderAction = {
+  key: string
+  label: string
+  icon: string
+  to: string
+  auth?: boolean
+}
+
+const headerActions: HeaderAction[] = [
+  { key: 'wallet', label: '充钻石', icon: '◇', to: '/wallet', auth: true },
+  { key: 'client', label: '客户端', icon: '↓', to: '/client' },
+  { key: 'wallpaper', label: '壁纸', icon: '☆', to: '/wallpaper' },
+  { key: 'notify', label: '通知', icon: '◉', to: '/notifications', auth: true },
+  { key: 'messages', label: '消息', icon: '✈', to: '/messages', auth: true },
+  { key: 'publish', label: '投稿', icon: '+', to: '/video', auth: true },
+]
 
 const props = defineProps<{ full?: boolean }>()
 
@@ -87,6 +105,11 @@ async function goLogin() {
 async function goSettings() {
   await router.push('/settings')
 }
+
+function headerActionTo(action: HeaderAction) {
+  if (action.auth && !auth.isLoggedIn) return '/account'
+  return action.to
+}
 </script>
 
 <template>
@@ -127,7 +150,23 @@ async function goSettings() {
           <button class="dy-icon-btn mobile-only" type="button" aria-label="搜索" @click="searchOpen = !searchOpen">
             ⌕
           </button>
-          <RouterLink class="dy-btn dy-btn-ghost desktop-only" to="/video">+ 发布视频</RouterLink>
+          <RouterLink
+            v-for="action in headerActions"
+            :key="action.key"
+            class="dy-head-act desktop-only"
+            :class="{ on: route.path === action.to }"
+            :to="headerActionTo(action)"
+          >
+            <span class="dy-head-icon" aria-hidden="true">{{ action.icon }}</span>
+            <span class="dy-head-label">{{ action.label }}</span>
+          </RouterLink>
+          <RouterLink class="dy-head-avatar" to="/account" :title="auth.isLoggedIn ? '账号' : '登录'">
+            <UserAvatar
+              :username="auth.isLoggedIn ? (auth.claims?.username ?? '') : '登录'"
+              :id="auth.claims?.account_id"
+              :size="34"
+            />
+          </RouterLink>
         </div>
       </header>
 
@@ -291,7 +330,7 @@ async function goSettings() {
   background: rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(16px);
   display: grid;
-  grid-template-columns: 180px 1fr 180px;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 480px) auto;
   gap: 12px;
   align-items: center;
   padding: 0 14px;
@@ -331,7 +370,44 @@ async function goSettings() {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dy-head-act {
+  width: 52px;
+  height: 48px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.78);
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  padding: 4px 2px;
+}
+
+.dy-head-act:hover,
+.dy-head-act.on {
+  color: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dy-head-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.dy-head-label {
+  font-size: 10px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.dy-head-avatar {
+  margin-left: 6px;
+  display: grid;
+  place-items: center;
+  text-decoration: none;
 }
 
 .dy-icon-btn {
@@ -461,6 +537,10 @@ async function goSettings() {
 
 .dy-btn.desktop-only {
   display: inline-flex;
+}
+
+.dy-head-act.desktop-only {
+  display: grid;
 }
 
 .dy-top-left.desktop-only {

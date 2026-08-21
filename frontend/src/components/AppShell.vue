@@ -173,10 +173,6 @@ async function goLogin() {
   await router.push('/account')
 }
 
-async function goSettings() {
-  await router.push('/settings')
-}
-
 function headerActionTo(action: HeaderAction) {
   if (action.auth && !auth.isLoggedIn) return '/account'
   return action.to
@@ -198,10 +194,9 @@ function headerActionTo(action: HeaderAction) {
         <RouterLink class="dy-nav-link" to="/settings">设置</RouterLink>
       </nav>
 
-      <div class="dy-aside-foot">
+      <div v-if="!auth.isLoggedIn" class="dy-aside-foot">
         <div class="dy-user-actions">
-          <button v-if="!auth.isLoggedIn" class="dy-btn dy-btn-primary" type="button" @click="goLogin">登录</button>
-          <button v-else class="dy-btn dy-btn-primary" type="button" @click="goSettings">设置</button>
+          <button class="dy-btn dy-btn-primary" type="button" @click="goLogin">登录</button>
         </div>
       </div>
     </aside>

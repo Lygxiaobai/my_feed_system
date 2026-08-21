@@ -65,3 +65,23 @@ scenarios:
     expected: Configuration files hold placeholders only, the untracked local file is excluded from version control, and no credential value appears anywhere in the tree.
     tags:
       - backend-api
+  - name: global-ceiling-rejects-floods
+    description: One client IP issues more requests in a minute than the global ceiling allows.
+    expected: Later requests are rejected with the rate-limited business code and a Retry-After hint, while a different IP continues to be served.
+    tags:
+      - backend-api
+  - name: abnormal-traffic-is-penalized
+    description: One subject is denied enough times in a short window to enter the penalty box, then continues to send requests.
+    expected: That subject is held to the tighter penalty ceiling for the cooling-off period, and a later request after the penalty expires returns to the ordinary ceiling.
+    tags:
+      - backend-api
+  - name: overload-is-shed-without-dropping-callbacks
+    description: The API process is already at its in-flight cap when more ordinary requests arrive, while a payment notification and a static media request also arrive.
+    expected: The extra ordinary requests are rejected as busy; the payment notification and the media request are still accepted.
+    tags:
+      - backend-api
+  - name: limiter-failure-fails-open
+    description: The rate-limit store is unavailable when a request arrives.
+    expected: The request is served instead of being rejected, so a Redis outage does not take the API down.
+    tags:
+      - backend-api

@@ -25,11 +25,12 @@ func (h *Handler) SetRecommender(svc *recommend.Service) {
 }
 
 // RegisterRoutes 注册匿名可访问的信息流接口。
-func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
+// recommendMW 只套在 listRecommend 上：混排比其它读接口更贵，需要更紧的上限。
+func (h *Handler) RegisterRoutes(rg *gin.RouterGroup, recommendMW ...gin.HandlerFunc) {
 	rg.POST("/listLatest", h.ListLatest)
 	rg.POST("/listLikesCount", h.ListLikesCount)
 	rg.POST("/listByPopularity", h.ListByPopularity)
-	rg.POST("/listRecommend", h.ListRecommend)
+	rg.POST("/listRecommend", append(recommendMW, h.ListRecommend)...)
 }
 
 // RegisterProtectedRoutes 注册需要登录后才能访问的信息流接口。

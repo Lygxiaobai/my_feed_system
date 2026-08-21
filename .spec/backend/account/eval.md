@@ -35,3 +35,8 @@ scenarios:
     expected: Each case returns the same caller-facing incorrect-code outcome and does not reveal whether the address exists.
     tags:
       - backend-api
+  - name: account-lookup-is-rate-limited
+    description: One client IP looks up accounts by identifier or username faster than the lookup ceiling.
+    expected: Later lookups are rejected with the rate-limited outcome and do not reveal whether the remaining names exist.
+    tags:
+      - backend-api

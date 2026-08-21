@@ -23,7 +23,7 @@ The backend has two runnable processes: an HTTP API and an asynchronous Worker. 
 
 `backend/cmd/worker/main.go` owns asynchronous processing. It connects to the broker, starts the like, comment, social, popularity, timeline, embedding, and dead-letter consumers, and shuts them down with the process context. It does not replace the HTTP API process.
 
-`backend/internal/http/router.go` is the API composition boundary. Routes, authentication middleware, rate limits, and handler wiring belong there; capability behavior belongs to the child backend specs. Configuration loading and shared database, broker, cache, and observability conventions must remain usable by both entrypoints.
+`backend/internal/http/router.go` is the API composition boundary. Routes, authentication middleware, rate limits, the traffic guard, and handler wiring belong there; capability behavior belongs to the child backend specs. Configuration loading and shared database, broker, cache, and observability conventions must remain usable by both entrypoints.
 
 Every HTTP endpoint answers with one response envelope: a machine-readable business code, a message written for the end user, the payload, and the identifier of the request occurrence. The success code is distinct from every failure code, so a client decides success from the envelope rather than from payload shape. HTTP status codes keep their transport meaning and are not collapsed into a single value; the business code carries the finer distinction the status cannot express.
 

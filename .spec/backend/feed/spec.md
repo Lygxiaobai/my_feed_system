@@ -21,7 +21,7 @@ related:
 # feed
 
 ## raw source
-The backend serves latest, following, likes-count, popularity, and personalized recommendation feeds with stable pagination and authenticated access where required.
+The backend serves latest, following, likes-count, popularity, and personalized recommendation feeds with stable pagination and authenticated access where required. Feed reads share an IP ceiling; recommendation is held to a tighter ceiling because mixing is more expensive than a cache-backed latest page.
 
 ## expanded spec
 Feed reads prefer the appropriate Redis timeline, ranking, or page cache and can fall back to MySQL when a cache is unavailable or a ranking has no usable entries. Popularity fallback results use the persisted MySQL popularity score and set as_of to zero. Cursor or snapshot pagination must not duplicate or skip items across adjacent pages. Following feed results are scoped to the authenticated account. Cache invalidation and asynchronous timeline updates must not make newly published videos permanently invisible.

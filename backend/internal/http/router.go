@@ -24,6 +24,7 @@ import (
 	jwtmiddleware "my_feed_system/internal/middleware/jwt"
 	"my_feed_system/internal/middleware/ratelimit"
 	"my_feed_system/internal/middleware/requestid"
+	"my_feed_system/internal/middleware/traffic"
 	"my_feed_system/internal/mq"
 	"my_feed_system/internal/notification"
 	"my_feed_system/internal/observability"
@@ -96,6 +97,10 @@ func NewRouterWithLocalCaches(
 	if redisClient != nil {
 		rateLimiter = ratelimit.NewFixedWindow(redisClient)
 	}
+	// OptionalJWT 只为全局账号天花板取身份，无效 token 不拦截。
+	// 写接口仍走后面的严格鉴权（含 token 吊销缓存）。
+	r.Use(jwtmiddleware.OptionalJWTAuth(jwtSecret))
+	r.Use(traffic.New(rateLimiter, redisClient, traffic.DefaultConfig()))
 
 	loginIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
 		Name:     "account.login.ip",
@@ -204,6 +209,12 @@ func NewRouterWithLocalCaches(
 		Window:   time.Minute,
 		FailOpen: true,
 	})
+	accountLookupIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "account.lookup.ip",
+		Limit:    40,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
 
 	notifyWriter := notification.NewWriter(db)
 
@@ -231,8 +242,8 @@ func NewRouterWithLocalCaches(
 	accountGroup.POST("/login", loginIPLimit, accountHandler.Login)
 	accountGroup.POST("/email/sendCode", emailSendIPLimit, accountHandler.SendEmailCode)
 	accountGroup.POST("/email/verify", emailVerifyIPLimit, accountHandler.VerifyEmail)
-	accountGroup.POST("/findByID", accountHandler.FindByID)
-	accountGroup.POST("/findByUsername", accountHandler.FindByUsername)
+	accountGroup.POST("/findByID", accountLookupIPLimit, accountHandler.FindByID)
+	accountGroup.POST("/findByUsername", accountLookupIPLimit, accountHandler.FindByUsername)
 
 	protectedAccountGroup := accountGroup.Group("")
 	protectedAccountGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
@@ -266,12 +277,46 @@ func NewRouterWithLocalCaches(
 	videoGroup := r.Group("/video")
 	// 公开路由挂可选鉴权：作者本人需要能看到自己尚未过审的内容，
 	// 匿名访问则只看得到已过审的。
-	videoGroup.Use(jwtmiddleware.OptionalJWTAuth(jwtSecret))
+	videoReadIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "video.read.ip",
+		Limit:    180,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	videoUploadIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "video.upload.ip",
+		Limit:    20,
+		Window:   10 * time.Minute,
+		FailOpen: true,
+	})
+	videoUploadAccountLimit := ratelimit.ByAccountID(rateLimiter, ratelimit.Policy{
+		Name:     "video.upload.account",
+		Limit:    12,
+		Window:   10 * time.Minute,
+		FailOpen: true,
+	})
+	videoPublishIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "video.publish.ip",
+		Limit:    20,
+		Window:   10 * time.Minute,
+		FailOpen: true,
+	})
+	videoPublishAccountLimit := ratelimit.ByAccountID(rateLimiter, ratelimit.Policy{
+		Name:     "video.publish.account",
+		Limit:    12,
+		Window:   10 * time.Minute,
+		FailOpen: true,
+	})
+	videoGroup.Use(jwtmiddleware.OptionalJWTAuth(jwtSecret), videoReadIPLimit)
 	videoHandler.RegisterRoutes(videoGroup)
 
 	protectedVideoGroup := videoGroup.Group("")
 	protectedVideoGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
-	videoHandler.RegisterProtectedRoutes(protectedVideoGroup)
+	videoHandler.RegisterProtectedRoutes(
+		protectedVideoGroup,
+		[]gin.HandlerFunc{videoUploadIPLimit, videoUploadAccountLimit},
+		[]gin.HandlerFunc{videoPublishIPLimit, videoPublishAccountLimit},
+	)
 
 	if auditCfg.Enabled {
 		auditService := audit.NewService(
@@ -429,10 +474,22 @@ func NewRouterWithLocalCaches(
 	}
 	feedHandler := feed.NewHandler(feedService)
 	feedHandler.SetRecommender(recommendService)
+	feedReadIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "feed.read.ip",
+		Limit:    120,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	feedRecommendIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "feed.recommend.ip",
+		Limit:    40,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
 	feedGroup := r.Group("/feed")
 	// 推荐需要可选登录身份；其它公开信息流忽略 account_id。
-	feedGroup.Use(jwtmiddleware.OptionalJWTAuth(jwtSecret))
-	feedHandler.RegisterRoutes(feedGroup)
+	feedGroup.Use(jwtmiddleware.OptionalJWTAuth(jwtSecret), feedReadIPLimit)
+	feedHandler.RegisterRoutes(feedGroup, feedRecommendIPLimit)
 
 	protectedFeedGroup := feedGroup.Group("")
 	protectedFeedGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))

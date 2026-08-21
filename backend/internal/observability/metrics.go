@@ -130,6 +130,23 @@ var (
 		},
 		[]string{"method", "route"},
 	)
+
+	// scope 取规则名（http.global.ip、account.login.ip），不是真实 IP 或账号。
+	// result 只有 allow / deny / bypass 三态，基数固定。
+	rateLimitTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rate_limit_total",
+			Help: "Rate-limit and traffic-guard decisions by scope and result.",
+		},
+		[]string{"scope", "result"},
+	)
+	trafficPenaltyAppliedTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "traffic_penalty_applied_total",
+			Help: "Times a subject was placed into the traffic penalty box.",
+		},
+		[]string{"dimension"},
+	)
 )
 
 func NewMetricsHandler() http.Handler {
@@ -200,6 +217,24 @@ func ObserveHTTPRequest(method string, route string, status int, seconds float64
 	httpRequestDurationSeconds.WithLabelValues(method, route).Observe(seconds)
 }
 
+const (
+	RateLimitAllow  = "allow"
+	RateLimitDeny   = "deny"
+	RateLimitBypass = "bypass"
+)
+
+// ObserveRateLimit 记录一次限流或流量治理判定。
+func ObserveRateLimit(scope string, result string) {
+	registerMetrics()
+	rateLimitTotal.WithLabelValues(scope, result).Inc()
+}
+
+// IncTrafficPenalty 记录一次把主体送进处罚箱。
+func IncTrafficPenalty(dimension string) {
+	registerMetrics()
+	trafficPenaltyAppliedTotal.WithLabelValues(dimension).Inc()
+}
+
 func registerMetrics() {
 	registerMetricsOnce.Do(func() {
 		prometheus.MustRegister(
@@ -216,6 +251,8 @@ func registerMetrics() {
 			feedFollowingSourceTotal,
 			httpRequestsTotal,
 			httpRequestDurationSeconds,
+			rateLimitTotal,
+			trafficPenaltyAppliedTotal,
 		)
 	})
 }

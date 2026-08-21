@@ -32,11 +32,11 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/resolveShare", h.ResolveShare)
 }
 
-func (h *Handler) RegisterProtectedRoutes(rg *gin.RouterGroup) {
-	rg.POST("/uploadVideo", h.UploadVideo)
+func (h *Handler) RegisterProtectedRoutes(rg *gin.RouterGroup, uploadMW []gin.HandlerFunc, publishMW []gin.HandlerFunc) {
+	rg.POST("/uploadVideo", append(append([]gin.HandlerFunc{}, uploadMW...), h.UploadVideo)...)
 	rg.POST("/uploadCover", h.UploadCover)
 	rg.POST("/mediaTaskStatus", h.MediaTaskStatus)
-	rg.POST("/publish", h.Publish)
+	rg.POST("/publish", append(append([]gin.HandlerFunc{}, publishMW...), h.Publish)...)
 	rg.POST("/listLiked", h.ListLiked)
 }
 

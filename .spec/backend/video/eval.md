@@ -5,6 +5,11 @@ scenarios:
     expected: The upload task reaches ready with a playable MP4 and generated poster before publish; the publish response identifies the video and the operation is not duplicated by a repeated idempotency key.
     tags:
       - backend-api
+  - name: video-writes-are-rate-limited
+    description: One account uploads or publishes faster than the write ceiling.
+    expected: Later write attempts are rejected with the rate-limited outcome and do not create another media task or video.
+    tags:
+      - backend-api
   - name: media-task-failure
     description: An uploaded file that ffmpeg cannot decode is processed by the Worker.
     expected: The task reaches failed with a bounded error message, no raw source path is returned, and the file cannot be published as a playable video.

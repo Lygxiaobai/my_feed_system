@@ -60,6 +60,11 @@ scenarios:
     expected: Only the approved video can appear.
     tags:
       - backend-api
+  - name: recommend-is-rate-limited
+    description: One client IP requests recommendation pages faster than the recommendation ceiling.
+    expected: Later pages are rejected with the rate-limited outcome; a latest-feed request from the same IP may still succeed if it remains under the broader feed-read ceiling.
+    tags:
+      - backend-api
   - name: user-interest-persisted
     description: A signed-in user likes or tips a video that already has an embedding.
     expected: user_embeddings holds one row for that account and the same model, so a later recommend or push can read the interest vector without replaying the like history.

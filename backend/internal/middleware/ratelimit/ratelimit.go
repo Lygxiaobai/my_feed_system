@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
+	"my_feed_system/internal/observability"
 	"my_feed_system/internal/response"
 )
 
@@ -149,6 +150,7 @@ func newMiddleware(checker Checker, policy Policy, resolveSubject func(c *gin.Co
 				// Redis 异常时默认降级放行，避免限流组件故障拖垮主业务链路。
 				slog.WarnContext(c.Request.Context(), "rate limit bypassed due to checker failure",
 					slog.String("scope", policy.Name), slog.String("error", err.Error()))
+				observability.ObserveRateLimit(policy.Name, observability.RateLimitBypass)
 				c.Next()
 				return
 			}
@@ -158,10 +160,12 @@ func newMiddleware(checker Checker, policy Policy, resolveSubject func(c *gin.Co
 		}
 
 		if result.Allowed {
+			observability.ObserveRateLimit(policy.Name, observability.RateLimitAllow)
 			c.Next()
 			return
 		}
 
+		observability.ObserveRateLimit(policy.Name, observability.RateLimitDeny)
 		// Retry-After 让客户端知道最早何时可以重试，方便做退避控制。
 		retryAfterSeconds := int(math.Ceil(result.RetryAfter.Seconds()))
 		if retryAfterSeconds < 1 {

@@ -15,6 +15,7 @@ related:
   - backend/internal/worker/popularity_worker.go
   - backend/internal/worker/social_worker.go
   - backend/internal/worker/timeline_worker.go
+  - backend/internal/worker/fanout_worker.go
   - backend/internal/feed/invalidation_consumer.go
   - backend/internal/video/invalidation_consumer.go
 ---
@@ -25,3 +26,5 @@ The Worker consumes RabbitMQ events and applies asynchronous media, comment, lik
 
 ## expanded spec
 Consumers acknowledge messages only after the required effect is durable. Processed-message tracking makes redelivery safe, media tasks expose explicit processing/ready/failed states, and failed messages follow the dead-letter policy instead of disappearing. Worker behavior must remain independently runnable from the API process.
+
+Following-feed fanout is a separate consumer from the global timeline consumer, so a slow or failing fanout never delays the latest feed. Because a single message has a bounded processing budget, fanout for one publish is split into follower batches that advance by cursor, and each batch schedules the next only after its own delivery succeeds. Fanout effects are naturally idempotent, so redelivery is safe without processed-message tracking. When the inbox and outbox storage is unavailable the fanout consumer does not run at all, rather than draining publishes into the dead-letter queue.

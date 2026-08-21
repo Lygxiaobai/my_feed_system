@@ -79,7 +79,7 @@ my_feed_system/
 
 | 表名 | 作用 | 关键字段 |
 | --- | --- | --- |
-| `accounts` | 用户账号 | `id`、`username`、`password`、`token` |
+| `accounts` | 用户账号 | `id`、`username`、`password`、`token`、`follower_count` |
 | `videos` | 视频主表 | `id`、`author_id`、`title`、`description`、`play_url`、`cover_url`、`likes_count`、`comment_count`、`popularity` |
 | `video_likes` | 点赞关系 | `video_id`、`account_id` |
 | `video_comments` | 评论与回复 | `video_id`、`root_comment_id`、`parent_comment_id`、`reply_to_user_id` |
@@ -185,6 +185,8 @@ erDiagram
 
 1. `(follower_id, vlogger_id)` 唯一约束保证关系不重复。
 2. 写操作可通过 MQ 异步落库，接口层保持响应轻量。
+3. `accounts.follower_count` 与关注关系同事务增减，是关注流推拉分级的判定依据；取关走 `follower_count > 0` 的条件更新，保证计数不会被带成负数。
+4. 关注关系变化后会清掉该用户的关注列表缓存与收件箱活跃标记，下次读关注流时按最新关系重建收件箱。
 
 ### 5.6 Feed 系统
 
@@ -200,6 +202,32 @@ erDiagram
 1. `listLatest` 优先读 Redis 最新流缓存与全局时间线，失败时回退 MySQL。
 2. `listLikesCount` 使用 `likes_count + id` 复合游标，保证稳定分页。
 3. `listByPopularity` 使用 `as_of + offset` 保证翻页期间榜单稳定。
+4. `listByFollowing` 采用推拉结合，详见下一节。
+
+#### 5.6.1 关注流推拉结合
+
+按作者粉丝数分三档，把写扩散的成本挡在大V 之外：
+
+| 档位 | 判定 | 发布时行为 | 粉丝读取时行为 |
+| --- | --- | --- | --- |
+| 普通作者 | `follower_count < push_threshold` | 写扩散进全部粉丝的收件箱 | 直接读收件箱 |
+| 中V | `push_threshold <= follower_count < pull_threshold` | 只推给活跃粉丝 | 活跃粉丝读收件箱；冷粉丝上线时回源重建 |
+| 大V | `follower_count >= pull_threshold` | 只写自己的发件箱，不推任何人 | 读取时合并其发件箱 |
+
+阈值与容量由 `feed.fanout` 配置，未配置时使用代码内默认值。
+
+读路径关键约束：
+
+1. **结果按当前关注列表过滤。** 取关后收件箱里的残留视频靠这一层挡住，并顺手从收件箱清除；取关时不做精确 `ZREM`，因为 ZSET 的 member 只有 `videoID`，反查作者代价更大。
+2. **收件箱未满即代表内容完整。** 只有在收件箱与所有被合并的发件箱都没有被截断时，才敢返回「没有下一页」；否则本页改由 MySQL 出数，`(created_at, id)` 游标在两条路径间通用。
+3. **活跃标记即收件箱维护窗口。** 标记不存在说明扩散早已跳过该用户，读取时先标记再回源重建——顺序不能反，否则会与并发扩散互相错过，让新视频永久不可见。
+4. **任何一步不可信都退回 MySQL。** 关注的大V 数量超过 `max_pull_authors`、Redis 不可用、收件箱读取报错，都会走原来的联表查询，功能不降级。
+
+写路径关键约束：
+
+1. 扩散与全局时间线消费同一个 `video.timeline.publish` 事件但走**独立队列**，扩散慢或失败不拖累最新流。
+2. 扩散按 `follower_id` 游标**分批**投递消息，因为消费端单条消息有 10 秒处理上限且失败直接进死信队列，大V 一次推完必然超时。
+3. `ZADD` 幂等，因此扩散消息重投天然安全，不需要 `processed_messages` 去重。
 
 ## 6. 异步消息与 Worker 设计
 
@@ -212,6 +240,7 @@ erDiagram
 | 关注 | `social.events` | `social.write.q` | `social.followed`、`social.unfollowed` |
 | 热度 | `popularity.events` | `popularity.update.q` | `popularity.changed` |
 | 时间线 | `video.timeline.events` | `timeline.update.q` | `video.timeline.publish` |
+| 关注流扩散 | `video.timeline.events` | `timeline.fanout.q` | `video.timeline.publish`、`video.fanout.batch` |
 | 本地缓存失效 | `cache.invalidate.events` | 临时 fanout 队列 | 详情页 / 最新流 L1 缓存失效 |
 
 ### 6.2 Worker 分工
@@ -220,7 +249,8 @@ erDiagram
 | --- | --- |
 | `LikeWorker` | 写点赞关系、更新 `likes_count`、发布热度事件、清理详情缓存 |
 | `CommentWorker` | 写评论树、更新 `comment_count`、发布热度事件、清理详情缓存 |
-| `SocialWorker` | 写关注/取关关系 |
+| `SocialWorker` | 写关注/取关关系、维护 `follower_count`、失效关注流缓存 |
+| `FanoutWorker` | 写作者发件箱、按粉丝量级分级、分批写扩散到粉丝收件箱 |
 | `PopularityWorker` | 更新 `videos.popularity`，写 Redis 热榜分钟桶 |
 | `TimelineConsumer` | 写全局时间线，统一失效最新流缓存 |
 
@@ -238,6 +268,10 @@ erDiagram
 | 视频详情缓存 | String | `video:detail:id=<videoID>` | 5m | 详情页优先读取。 |
 | 最新流缓存 | String | `feed:listLatest:*` | 5s | 匿名最新流短 TTL 缓存。 |
 | 全局时间线 | ZSet | `feed:global_timeline` | 常驻 | 保存全站最新视频候选集。 |
+| 关注流收件箱 | ZSet | `feed:inbox:<userID>` | 常驻（定长截断） | 写扩散落点，member 为 videoID、score 为发布毫秒。 |
+| 收件箱活跃标记 | String | `feed:inbox:active:<userID>` | 7d | 标记该用户收件箱正在被维护，过期即触发回源重建。 |
+| 作者发件箱 | ZSet | `feed:outbox:<authorID>` | 常驻（定长截断） | 读扩散来源，所有作者都写，不只是大V。 |
+| 关注列表缓存 | String | `feed:following:<userID>` | 5m | 关注作者及其粉丝数，供读路径判定大V 与过滤取关残留。 |
 | 热度分钟桶 | ZSet | `hot:video:1m:<yyyyMMddHHmm>` | 2h | 按分钟累计热度增量。 |
 | 热榜快照 | ZSet | `hot:video:merge:1m:<as_of>` | 2m | 合并窗口结果，支持稳定分页。 |
 | 限流计数 | String | `ratelimit:<scope>:<subject>` | 窗口期 | 固定窗口限流。 |
@@ -260,7 +294,7 @@ erDiagram
 
 | 异常依赖 | 系统表现 |
 | --- | --- |
-| Redis 不可用 | API 退化为 MySQL-only；缓存、热榜、限流能力部分失效，但核心业务可继续运行。 |
+| Redis 不可用 | API 退化为 MySQL-only；缓存、热榜、限流能力部分失效，但核心业务可继续运行。关注流退回联表读扩散，Worker 不启动扩散消费者。 |
 | RabbitMQ 不可用 | API 启动后仍可服务；视频发布时间线事件进入 Outbox 等待后续补发。 |
 | MQ Publisher 缺失 | 点赞、评论、关注自动走同步事务写库。 |
 | 热度缓存不可用 | 热度仍会落到 MySQL `videos.popularity` 字段。 |
@@ -300,6 +334,10 @@ flowchart LR
     MQ --> SW[SocialWorker]
     MQ --> PW[PopularityWorker]
     MQ --> TW[TimelineConsumer]
+    MQ --> FW[FanoutWorker]
+    FW --> MYSQL
+    FW --> REDIS
+    FW --> MQ
     LW --> MYSQL
     CW --> MYSQL
     SW --> MYSQL
@@ -378,4 +416,5 @@ sequenceDiagram
 2. 写操作通过 API / Worker 分离削峰，降低同步请求时延。
 3. Redis 与 RabbitMQ 都设计了退化路径，不会因为单个基础设施故障让核心业务整体不可用。
 4. 热榜采用分钟桶与快照分页，兼顾高频写入和稳定浏览体验。
-5. Docker Compose 已对齐完整服务栈，方便本地演示、开发与部署。
+5. 关注流按粉丝量级三档推拉结合，并用「收件箱未满即完整」这一不变量在缓存与 MySQL 之间安全切换，不会因为收件箱截断而让用户翻不到历史内容。
+6. Docker Compose 已对齐完整服务栈，方便本地演示、开发与部署。

@@ -23,6 +23,7 @@ const (
 	QueueSocialWrite      = "social.write.q"
 	QueuePopularityUpdate = "popularity.update.q"
 	QueueTimelineUpdate   = "timeline.update.q"
+	QueueTimelineFanout   = "timeline.fanout.q"
 	QueueMediaTranscode   = "media.transcode.q"
 	QueueAuditModerate    = "audit.moderate.q"
 )
@@ -33,6 +34,7 @@ const (
 	QueueSocialWriteDLQ      = "social.write.dlq"
 	QueuePopularityUpdateDLQ = "popularity.update.dlq"
 	QueueTimelineUpdateDLQ   = "timeline.update.dlq"
+	QueueTimelineFanoutDLQ   = "timeline.fanout.dlq"
 )
 
 const (
@@ -127,6 +129,20 @@ var queueSpecs = []QueueSpec{
 		DLRoutingKey: "timeline.write.failed",
 		BindingKeys: []string{
 			EventTypeVideoTimelinePush,
+		},
+	},
+	{
+		// 关注流写扩散独立成队：它与全局时间线消费同一个 video.timeline.publish 事件，
+		// 但耗时和失败模式完全不同——扩散慢或失败不该拖累最新流的时间线更新。
+		Exchange:     ExchangeVideoTimeline,
+		ExchangeType: "topic",
+		Queue:        QueueTimelineFanout,
+		DLX:          TimelineDLX,
+		DLQ:          QueueTimelineFanoutDLQ,
+		DLRoutingKey: "timeline.fanout.failed",
+		BindingKeys: []string{
+			EventTypeVideoTimelinePush,
+			EventTypeVideoFanoutBatch,
 		},
 	},
 	{

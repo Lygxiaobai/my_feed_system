@@ -90,6 +90,9 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	if err := syncVideoCounters(db); err != nil {
 		return nil, fmt.Errorf("sync video counters: %w", err)
 	}
+	if err := syncFollowerCounts(db); err != nil {
+		return nil, fmt.Errorf("sync follower counts: %w", err)
+	}
 
 	return db, nil
 }
@@ -181,6 +184,22 @@ func syncVideoCounters(db *gorm.DB) error {
 			GROUP BY video_id
 		) commented ON commented.video_id = videos.id
 		SET videos.comment_count = COALESCE(commented.cnt, 0)
+	`).Error
+}
+
+// syncFollowerCounts 把 accounts.follower_count 重算成 social_relations 的真值。
+//
+// 新增列默认是 0，不重算的话历史大V 全部会被判成普通用户而走全量写扩散。
+// 同时这也是计数漂移的兜底：增减都在异步 Worker 里做，重启时对齐一次成本很低。
+func syncFollowerCounts(db *gorm.DB) error {
+	return db.Exec(`
+		UPDATE accounts
+		LEFT JOIN (
+			SELECT vlogger_id, COUNT(*) AS cnt
+			FROM social_relations
+			GROUP BY vlogger_id
+		) followed ON followed.vlogger_id = accounts.id
+		SET accounts.follower_count = COALESCE(followed.cnt, 0)
 	`).Error
 }
 

@@ -1,7 +1,8 @@
 # Prometheus 抓取配置。
 #
-# 只抓自身与后端 API：worker 目前不暴露 HTTP 指标端点，
-# 它的健康状况通过日志与队列积压观察，不在这里配置无效抓取目标。
+# API 的 /metrics 挂在业务路由上；Worker 没有业务路由，
+# 由 metrics.worker 配置单独开一个仅在 compose 网络内可达的端口。
+# 关注流写扩散完全跑在 Worker 侧，不抓它就看不到扩散量。
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -20,3 +21,10 @@ scrape_configs:
       - targets: ["backend:8080"]
         labels:
           service: api
+
+  - job_name: feed-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["worker:9101"]
+        labels:
+          service: worker

@@ -9,12 +9,16 @@ const (
 )
 
 type Account struct {
-	ID        uint64    `gorm:"primaryKey" json:"id"`
-	Username  string    `gorm:"size:64;not null;uniqueIndex" json:"username"`
-	Password  string    `gorm:"size:255" json:"-"`
-	Token     string    `gorm:"size:512" json:"token,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID       uint64 `gorm:"primaryKey" json:"id"`
+	Username string `gorm:"size:64;not null;uniqueIndex" json:"username"`
+	Password string `gorm:"size:255" json:"-"`
+	Token    string `gorm:"size:512" json:"token,omitempty"`
+	// FollowerCount 是粉丝数冗余计数，关注流的推拉分级完全依赖它。
+	// 不实时 COUNT social_relations 的原因：那正是要避免的大表聚合，
+	// 而分级判定处在视频发布的写路径上，每次发布都要读一次。
+	FollowerCount int64     `gorm:"not null;default:0" json:"follower_count"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // Identity 把一种登录方式绑到账号上。同一 provider+subject 只能对应一个账号。

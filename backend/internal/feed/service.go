@@ -13,6 +13,11 @@ import (
 	"my_feed_system/internal/video"
 )
 
+const (
+	followingReadFactor = int64(4)
+	followingReadCap    = int64(200)
+)
+
 // Service 负责组装 latest / following / hot 等不同入口的 feed 结果。
 type Service struct {
 	repo             *Repo
@@ -22,7 +27,31 @@ type Service struct {
 	hotCache         *HotPageCache
 	localHotCache    *LocalHotPageCache
 	timelineStore    *GlobalTimelineStore
+	fanout           *FollowingFanout
 	mediaValidator   video.MediaValidator
+}
+
+// FollowingFanout 汇总关注流「推拉结合」所需的存储与阈值。
+type FollowingFanout struct {
+	Inbox     *InboxStore
+	Outbox    *OutboxStore
+	Following *FollowingCache
+	// PullThreshold 及以上粉丝数的作者走读扩散，读路径需要合并他们的发件箱。
+	PullThreshold int64
+	// MaxPullAuthors 限制单次读取最多合并几个大V 发件箱。
+	MaxPullAuthors int
+}
+
+// Enabled 判断推拉结合能力是否可用。任一依赖缺失都退回纯读扩散。
+func (f *FollowingFanout) Enabled() bool {
+	return f != nil && f.Inbox.Enabled() && f.Outbox.Enabled() && f.Following.Enabled()
+}
+
+// WithFollowingFanout 挂载关注流推拉结合能力。
+// 未挂载（或 Redis 不可用）时关注流退化为直接查 MySQL，行为与优化前一致。
+func (s *Service) WithFollowingFanout(fanout *FollowingFanout) *Service {
+	s.fanout = fanout
+	return s
 }
 
 func NewService(db *gorm.DB, popularityService *popularity.Service, uploadDir string) *Service {
@@ -250,9 +279,234 @@ func (s *Service) ListLikesCount(req ListLikesCountRequest) (*ListLikesCountResu
 	return result, nil
 }
 
+// ListByFollowing 返回关注流。
+//
+// 优先走推拉结合：普通作者的视频在发布时已经写扩散进当前用户的收件箱，
+// 大V 的视频则在这里从其发件箱实时拉取并归并。任何一步不可信都退回 MySQL，
+// 因为关注流少一条内容是用户可感知的错误，而多查一次库只是慢一点。
 func (s *Service) ListByFollowing(accountID uint64, req ListByFollowingRequest) (*ListByFollowingResult, error) {
 	req.Limit = normalizeLimit(req.Limit)
 
+	if accountID != 0 && s.fanout.Enabled() {
+		result, ok, err := s.listByFollowingFromInbox(context.Background(), accountID, req)
+		if err != nil {
+			slog.Warn("read following inbox failed, falling back to MySQL", slog.String("error", err.Error()))
+		} else if ok {
+			return result, nil
+		}
+	}
+
+	observability.IncFeedFollowingSource(observability.FollowingSourceFallback)
+	return s.listByFollowingFromMySQL(accountID, req)
+}
+
+// listByFollowingFromInbox 用收件箱与大V 发件箱组装关注流。
+// 返回 ok=false 表示这一页无法从缓存结构上给出可信答案，应由 MySQL 出数。
+func (s *Service) listByFollowingFromInbox(
+	ctx context.Context,
+	accountID uint64,
+	req ListByFollowingRequest,
+) (*ListByFollowingResult, bool, error) {
+	authors, err := s.loadFollowedAuthors(ctx, accountID)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(authors) == 0 {
+		// 没有关注任何人是确定结论，不必再回源确认一次。
+		observability.IncFeedFollowingSource(observability.FollowingSourceInbox)
+		return &ListByFollowingResult{Videos: []FeedVideo{}}, true, nil
+	}
+
+	followed := make(map[uint64]struct{}, len(authors))
+	pullAuthorIDs := make([]uint64, 0)
+	for _, author := range authors {
+		followed[author.VloggerID] = struct{}{}
+		if author.FollowerCount >= s.fanout.PullThreshold {
+			pullAuthorIDs = append(pullAuthorIDs, author.VloggerID)
+		}
+	}
+	if len(pullAuthorIDs) > s.fanout.MaxPullAuthors {
+		// 关注的大V 越多，读扩散要打的发件箱就越多。超过上限后这条路径已经
+		// 比一次带索引的联表查询更贵，继续走下去只会把 Redis 拖垮。
+		return nil, false, nil
+	}
+
+	source := observability.FollowingSourceInbox
+	active, err := s.fanout.Inbox.IsActive(ctx, accountID)
+	if err != nil {
+		return nil, false, err
+	}
+	if !active {
+		// 冷启动、收件箱被淘汰、用户长期不活跃都会走到这里，统一按回源重建处理。
+		if err := s.rebuildInbox(ctx, accountID); err != nil {
+			return nil, false, err
+		}
+		source = observability.FollowingSourceRebuild
+	}
+
+	readCount := followingReadCount(req.Limit)
+	inboxIDs, inboxCard, err := s.fanout.Inbox.ListVideoIDs(ctx, accountID, req.LatestTime, readCount)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// 收件箱读满说明更早的候选还没取回来；发件箱读满同理。
+	// 这个标记决定了「结果不足一页」到底是真的没有了，还是只是没读到。
+	truncated := int64(len(inboxIDs)) >= readCount
+
+	candidateIDs := make([]uint64, 0, len(inboxIDs))
+	seen := make(map[uint64]struct{}, len(inboxIDs))
+	appendCandidates := func(ids []uint64) {
+		for _, videoID := range ids {
+			if _, ok := seen[videoID]; ok {
+				continue
+			}
+			seen[videoID] = struct{}{}
+			candidateIDs = append(candidateIDs, videoID)
+		}
+	}
+	appendCandidates(inboxIDs)
+
+	for _, authorID := range pullAuthorIDs {
+		outboxIDs, full, err := s.fanout.Outbox.ListVideoIDs(ctx, authorID, req.LatestTime, readCount)
+		if err != nil {
+			return nil, false, err
+		}
+		truncated = truncated || full
+		appendCandidates(outboxIDs)
+	}
+
+	// FindByIDs 自带审核过滤，被下架的内容不会从这里泄漏出去。
+	videos, err := s.repo.FindByIDs(candidateIDs)
+	if err != nil {
+		return nil, false, err
+	}
+	videoByID := make(map[uint64]video.Video, len(videos))
+	for _, item := range videos {
+		videoByID[item.ID] = item
+	}
+
+	candidates := make([]video.Video, 0, len(candidateIDs))
+	staleIDs := make([]uint64, 0)
+	for _, videoID := range candidateIDs {
+		item, ok := videoByID[videoID]
+		if !ok {
+			// 已删除或未过审，收件箱里的残留 ID 顺手清掉。
+			staleIDs = append(staleIDs, videoID)
+			continue
+		}
+		if _, following := followed[item.AuthorID]; !following {
+			// 取关后收件箱里仍会残留该作者的视频。这里按关注列表过滤是权威判定，
+			// 取关时不做精确 ZREM——ZSET 的 member 只有 videoID，反查作者代价更大。
+			staleIDs = append(staleIDs, videoID)
+			continue
+		}
+		if !includeTimeCursor(item, req.LatestTime, req.LastID) {
+			continue
+		}
+		if !s.mediaValidator.IsPlayable(item) {
+			staleIDs = append(staleIDs, videoID)
+			continue
+		}
+		candidates = append(candidates, item)
+	}
+	if len(staleIDs) > 0 {
+		if err := s.fanout.Inbox.Remove(ctx, accountID, staleIDs...); err != nil {
+			slog.Warn("cleanup stale following inbox members failed", slog.String("error", err.Error()))
+		}
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].CreatedAt.Equal(candidates[j].CreatedAt) {
+			return candidates[i].ID > candidates[j].ID
+		}
+		return candidates[i].CreatedAt.After(candidates[j].CreatedAt)
+	})
+
+	rawVideos, hasMore := trimVideoPage(candidates, req.Limit)
+	if !hasMore && (truncated || inboxCard >= s.fanout.Inbox.MaxSize()) {
+		// 凑不满一页，且收件箱或发件箱可能还有更早的内容没读到，
+		// 此时断言「没有下一页」会让用户永远翻不到剩下的历史内容。
+		return nil, false, nil
+	}
+
+	result := &ListByFollowingResult{
+		Videos:  buildFeedVideos(rawVideos, s.followingScores(ctx, rawVideos)),
+		HasMore: hasMore,
+	}
+	if len(rawVideos) > 0 {
+		last := rawVideos[len(rawVideos)-1]
+		result.NextTime = last.CreatedAt.UnixMilli()
+		result.NextID = last.ID
+	}
+
+	observability.IncFeedFollowingSource(source)
+	return result, true, nil
+}
+
+// followingScores 读取热度分。热度只影响卡片上的展示数值，
+// 取不到时退回视频表里的持久化值，不值得让整条关注流失败。
+func (s *Service) followingScores(ctx context.Context, videos []video.Video) map[uint64]int64 {
+	scores, err := s.loadScores(ctx, videos, time.Time{})
+	if err != nil {
+		slog.Warn("load following feed scores failed", slog.String("error", err.Error()))
+		scores = make(map[uint64]int64, len(videos))
+		for _, item := range videos {
+			scores[item.ID] = item.Popularity
+		}
+	}
+	return scores
+}
+
+// loadFollowedAuthors 读取关注列表及作者粉丝数，优先走缓存。
+func (s *Service) loadFollowedAuthors(ctx context.Context, accountID uint64) ([]FollowedAuthor, error) {
+	cached, ok, err := s.fanout.Following.Get(ctx, accountID)
+	if err != nil {
+		observability.IncCacheL2Miss(observability.CacheFeedFollowing)
+		slog.Warn("read following cache failed", slog.String("error", err.Error()))
+	} else if ok {
+		observability.IncCacheL2Hit(observability.CacheFeedFollowing)
+		return cached, nil
+	} else {
+		observability.IncCacheL2Miss(observability.CacheFeedFollowing)
+	}
+
+	authors, err := s.repo.ListFollowedAuthors(accountID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.fanout.Following.Set(ctx, accountID, authors); err != nil {
+		slog.Warn("write following cache failed", slog.String("error", err.Error()))
+	}
+
+	return authors, nil
+}
+
+// rebuildInbox 按 MySQL 里的真值重建收件箱。
+//
+// 标记活跃必须发生在查库之前。反过来的话存在这样一条时序：扩散 Worker 检查
+// 活跃标记发现是「不活跃」而跳过推送，但那条新视频发布于我们查库之后，
+// 于是它既没被推进来、也没被查出来，对这个用户永久不可见——
+// 而 feed spec 明确要求异步时间线更新不得让新发布的视频永久不可见。
+func (s *Service) rebuildInbox(ctx context.Context, accountID uint64) error {
+	if err := s.fanout.Inbox.MarkActive(ctx, accountID); err != nil {
+		return err
+	}
+
+	videos, err := s.repo.ListByFollowing(accountID, s.fanout.Inbox.MaxSize(), 0, 0)
+	if err != nil {
+		return err
+	}
+
+	entries := make([]TimelineEntry, 0, len(videos))
+	for _, item := range videos {
+		entries = append(entries, TimelineEntry{VideoID: item.ID, CreatedAt: item.CreatedAt})
+	}
+
+	return s.fanout.Inbox.Fill(ctx, accountID, entries)
+}
+
+func (s *Service) listByFollowingFromMySQL(accountID uint64, req ListByFollowingRequest) (*ListByFollowingResult, error) {
 	videos, err := s.repo.ListByFollowing(accountID, req.Limit+1, req.LatestTime, req.LastID)
 	if err != nil {
 		return nil, err
@@ -444,21 +698,40 @@ func normalizeLimit(limit int64) int64 {
 }
 
 func includeLatestCursor(item video.Video, req ListLatestRequest) bool {
-	if req.LatestTime <= 0 {
+	return includeTimeCursor(item, req.LatestTime, req.LastID)
+}
+
+// includeTimeCursor 判断一条视频是否落在 (created_at, id) 复合游标之后。
+// ZSET 只能按毫秒分值切分，同毫秒内的多条记录必须靠 id 再比一次才不会重复或跳页。
+func includeTimeCursor(item video.Video, latestTime int64, lastID uint64) bool {
+	if latestTime <= 0 {
 		return true
 	}
 
-	cursorTime := time.UnixMilli(req.LatestTime)
+	cursorTime := time.UnixMilli(latestTime)
 	if item.CreatedAt.Before(cursorTime) {
 		return true
 	}
 	if item.CreatedAt.After(cursorTime) {
 		return false
 	}
-	if req.LastID == 0 {
+	if lastID == 0 {
 		return true
 	}
-	return item.ID < req.LastID
+	return item.ID < lastID
+}
+
+// followingReadCount 计算一次关注流要从 ZSET 读取的候选数量。
+// 放大是因为候选里混有已取关、已下架、已越过游标的条目，按页大小取会不够用。
+func followingReadCount(limit int64) int64 {
+	count := limit * followingReadFactor
+	if count < limit {
+		count = limit
+	}
+	if count > followingReadCap {
+		count = followingReadCap
+	}
+	return count
 }
 
 func trimVideoPage(videos []video.Video, limit int64) ([]video.Video, bool) {

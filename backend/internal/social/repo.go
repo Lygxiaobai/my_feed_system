@@ -36,6 +36,28 @@ func (r *Repo) DeleteByPair(followerID uint64, vloggerID uint64) (int64, error) 
 	return result.RowsAffected, result.Error
 }
 
+// ListFollowerIDsAfter 按 follower_id 升序游标分页拉取粉丝 ID，供写扩散分批推送。
+//
+// 用游标而不是 OFFSET：扩散期间粉丝表可能正在增删，OFFSET 会让某些粉丝被跳过或重复；
+// 走 (vlogger_id, follower_id) 复合索引后每一批都是一次稳定的索引区间扫描。
+func (r *Repo) ListFollowerIDsAfter(vloggerID uint64, afterFollowerID uint64, limit int64) ([]uint64, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+
+	followerIDs := make([]uint64, 0, limit)
+	if err := r.db.
+		Model(&SocialRelation{}).
+		Where("vlogger_id = ? AND follower_id > ?", vloggerID, afterFollowerID).
+		Order("follower_id ASC").
+		Limit(int(limit)).
+		Pluck("follower_id", &followerIDs).Error; err != nil {
+		return nil, err
+	}
+
+	return followerIDs, nil
+}
+
 func (r *Repo) FindAllFollowers(vloggerID uint64) ([]SocialRelation, error) {
 	var relations []SocialRelation
 	if err := r.db.

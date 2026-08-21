@@ -101,7 +101,7 @@ func exchangeAndKey(eventType string) (exchange string, routingKey string, err e
 		return ExchangeSocialEvents, eventType, nil
 	case EventTypePopularityChanged:
 		return ExchangePopularityEvents, eventType, nil
-	case EventTypeVideoTimelinePush:
+	case EventTypeVideoTimelinePush, EventTypeVideoFanoutBatch:
 		return ExchangeVideoTimeline, eventType, nil
 	case EventTypeCacheInvalidated:
 		return ExchangeCacheInvalidated, "", nil

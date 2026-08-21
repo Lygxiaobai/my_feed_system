@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -18,11 +19,86 @@ type Config struct {
 	JWT      JWTConfig      `yaml:"jwt"`
 	Upload   UploadConfig   `yaml:"upload"`
 	Pprof    PprofConfig    `yaml:"pprof"`
+	Metrics  MetricsConfig  `yaml:"metrics"`
 	Log      LogConfig      `yaml:"log"`
 	Audit    AuditConfig    `yaml:"audit"`
 	Auth     AuthConfig     `yaml:"auth"`
 	Ops      OpsConfig      `yaml:"ops"`
 	Alipay   AlipayConfig   `yaml:"alipay"`
+	Feed     FeedConfig     `yaml:"feed"`
+}
+
+// FeedConfig 控制信息流的分发策略。
+type FeedConfig struct {
+	Fanout FanoutConfig `yaml:"fanout"`
+}
+
+// FanoutConfig 定义关注流「推拉结合」的分级阈值与容量。
+//
+// 按作者粉丝数分三档，目的是把写扩散的成本挡在大V 之外：
+//
+//	粉丝数 < PushThreshold                     全量写扩散，所有粉丝的收件箱都推
+//	PushThreshold <= 粉丝数 < PullThreshold    只推活跃粉丝，冷粉丝上线时回源重建
+//	粉丝数 >= PullThreshold                    完全不推，粉丝读取时从作者发件箱实时拉取
+type FanoutConfig struct {
+	PushThreshold int64 `yaml:"push_threshold"`
+	PullThreshold int64 `yaml:"pull_threshold"`
+	// BatchSize 是单条扩散消息处理的粉丝数量。消费端对单条消息有 10 秒处理上限，
+	// 大V 一次推完必然超时，因此扩散按 follower_id 游标拆成多条消息。
+	BatchSize int64 `yaml:"batch_size"`
+	// InboxMaxSize 是每个用户收件箱保留的条数。收件箱未满即代表内容完整，
+	// 读路径依赖这个不变量来判断能否信任「没有下一页」。
+	InboxMaxSize  int64 `yaml:"inbox_max_size"`
+	OutboxMaxSize int64 `yaml:"outbox_max_size"`
+	// ActiveTTLHours 是活跃标记的存活时长，同时也是收件箱的维护窗口。
+	ActiveTTLHours int `yaml:"active_ttl_hours"`
+	// MaxPullAuthors 限制单次读取最多合并几个大V 发件箱。
+	// 超过此数量说明该用户关注的大V 过多，读扩散成本已经超过直接查库，退回 MySQL。
+	MaxPullAuthors int `yaml:"max_pull_authors"`
+}
+
+// 默认值按「中小规模部署也能直接跑」选取，生产环境应显式配置。
+const (
+	defaultFanoutPushThreshold  = int64(5000)
+	defaultFanoutPullThreshold  = int64(100000)
+	defaultFanoutBatchSize      = int64(1000)
+	defaultFanoutInboxMaxSize   = int64(1000)
+	defaultFanoutOutboxMaxSize  = int64(200)
+	defaultFanoutActiveTTLHours = 24 * 7
+	defaultFanoutMaxPullAuthors = 20
+)
+
+// ApplyDefaults 把未配置项补成默认值。
+// 阈值为 0 时若按字面理解会退化成「所有人都是大V」，即关注流彻底不推，
+// 与使用者的预期正好相反，所以这里必须兜底而不是放行。
+// 装配方也应调用一次，避免绕过 Load 直接构造出零值配置。
+func (c *FanoutConfig) ApplyDefaults() {
+	if c.PushThreshold <= 0 {
+		c.PushThreshold = defaultFanoutPushThreshold
+	}
+	if c.PullThreshold <= 0 {
+		c.PullThreshold = defaultFanoutPullThreshold
+	}
+	if c.BatchSize <= 0 {
+		c.BatchSize = defaultFanoutBatchSize
+	}
+	if c.InboxMaxSize <= 0 {
+		c.InboxMaxSize = defaultFanoutInboxMaxSize
+	}
+	if c.OutboxMaxSize <= 0 {
+		c.OutboxMaxSize = defaultFanoutOutboxMaxSize
+	}
+	if c.ActiveTTLHours <= 0 {
+		c.ActiveTTLHours = defaultFanoutActiveTTLHours
+	}
+	if c.MaxPullAuthors <= 0 {
+		c.MaxPullAuthors = defaultFanoutMaxPullAuthors
+	}
+}
+
+// ActiveTTL 返回活跃标记的存活时长。
+func (c FanoutConfig) ActiveTTL() time.Duration {
+	return time.Duration(c.ActiveTTLHours) * time.Hour
 }
 
 // AlipayConfig 是电脑网站支付沙箱配置。密钥全部从环境变量展开，缺省时空字符串，充值接口返回未配置。
@@ -140,6 +216,19 @@ type PprofServerConfig struct {
 	Addr    string `yaml:"addr"`
 }
 
+// MetricsConfig 只有 Worker 一项：API 进程的 /metrics 挂在业务路由上，
+// 而 Worker 没有任何 HTTP 服务，指标需要单独开一个端口才能被抓取。
+type MetricsConfig struct {
+	Worker MetricsServerConfig `yaml:"worker"`
+}
+
+// MetricsServerConfig 描述附属指标端口。
+// 该端口不对宿主机发布，只在 compose 网络内供 Prometheus 抓取。
+type MetricsServerConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Addr    string `yaml:"addr"`
+}
+
 func Load(path string) (*Config, error) {
 	// 本地开发从工作目录下的 .env 补齐环境变量（该文件已被 .gitignore 排除）。
 	// 容器部署不带 .env，配置全部由编排层注入，两种场景走同一套代码。
@@ -165,6 +254,7 @@ func Load(path string) (*Config, error) {
 	}
 
 	cfg.Alipay.fillFromEnv()
+	cfg.Feed.Fanout.ApplyDefaults()
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
@@ -256,6 +346,14 @@ func (c *Config) validate() error {
 	}
 	if c.Database.DBName == "" {
 		return errors.New("database.dbname 为空：请检查配置文件")
+	}
+	// 两个阈值倒挂会让「只推活跃粉丝」这一档消失，且哪一档生效难以从行为上察觉，
+	// 属于必须启动期拦下的配置错误。
+	if c.Feed.Fanout.PullThreshold < c.Feed.Fanout.PushThreshold {
+		return fmt.Errorf(
+			"feed.fanout.pull_threshold(%d) 不能小于 push_threshold(%d)",
+			c.Feed.Fanout.PullThreshold, c.Feed.Fanout.PushThreshold,
+		)
 	}
 	return nil
 }

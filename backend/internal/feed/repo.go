@@ -115,6 +115,24 @@ func (r *Repo) FindByIDs(ids []uint64) ([]video.Video, error) {
 	return videos, nil
 }
 
+// ListFollowedAuthors 查询某个用户关注的作者及其粉丝数。
+//
+// 这里查的是关注关系而不是视频，因此不适用本文件的审核过滤约定；
+// 由它挑出的作者最终仍要经过 FindByIDs 才能拿到视频。
+func (r *Repo) ListFollowedAuthors(followerID uint64) ([]FollowedAuthor, error) {
+	authors := make([]FollowedAuthor, 0)
+	if err := r.db.
+		Table("social_relations").
+		Select("social_relations.vlogger_id AS vlogger_id, COALESCE(accounts.follower_count, 0) AS follower_count").
+		Joins("LEFT JOIN accounts ON accounts.id = social_relations.vlogger_id").
+		Where("social_relations.follower_id = ?", followerID).
+		Scan(&authors).Error; err != nil {
+		return nil, err
+	}
+
+	return authors, nil
+}
+
 // ListByPopularity 在无 Redis 热度服务时，退化为按表中 popularity 字段排序。
 func (r *Repo) ListByPopularity(limit int64, offset int64) ([]video.Video, error) {
 	var videos []video.Video

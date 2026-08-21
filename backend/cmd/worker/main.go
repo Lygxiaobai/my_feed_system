@@ -75,6 +75,12 @@ func main() {
 	latestCache := feed.NewLatestCache(redisCmd)
 	timelineStore := feed.NewGlobalTimelineStore(redisCmd)
 
+	fanoutCfg := cfg.Feed.Fanout
+	fanoutCfg.ApplyDefaults()
+	inboxStore := feed.NewInboxStore(redisCmd, fanoutCfg.InboxMaxSize, fanoutCfg.ActiveTTL())
+	outboxStore := feed.NewOutboxStore(redisCmd, fanoutCfg.OutboxMaxSize)
+	followingCache := feed.NewFollowingCache(redisCmd, 0)
+
 	rabbitConn, err := mq.Dial(cfg.RabbitMQ)
 	if err != nil {
 		fatal("connect rabbitmq failed", err)
@@ -95,13 +101,18 @@ func main() {
 	if err := observability.StartPprof(ctx, "worker", cfg.Pprof.Worker); err != nil {
 		fatal("start worker pprof failed", err)
 	}
+	// Worker 没有业务路由，扩散等指标只能靠这个附属端口暴露出去。
+	if err := observability.StartMetricsServer(ctx, "worker", cfg.Metrics.Worker); err != nil {
+		fatal("start worker metrics server failed", err)
+	}
 
 	publisher := mq.NewPublisher(rabbitConn)
 	likeWorker := workerpkg.NewLikeWorker(database, publisher, detailCache)
 	commentWorker := workerpkg.NewCommentWorker(database, publisher, detailCache)
-	socialWorker := workerpkg.NewSocialWorker(database)
+	socialWorker := workerpkg.NewSocialWorkerWithFanout(database, inboxStore, followingCache)
 	popularityWorker := workerpkg.NewPopularityWorker(database, popularityService, detailCache)
 	timelineConsumer := workerpkg.NewTimelineConsumer(timelineStore, latestCache, publisher)
+	fanoutWorker := workerpkg.NewFanoutWorker(database, inboxStore, outboxStore, publisher, fanoutCfg)
 	mediaWorker := workerpkg.NewMediaWorker(database, cfg.Upload.Dir)
 	var auditWorker *workerpkg.AuditWorker
 	if cfg.Audit.Enabled {
@@ -146,6 +157,13 @@ func main() {
 	start(mq.QueueSocialWrite, "social", socialWorker.Handle)
 	start(mq.QueuePopularityUpdate, "popularity", popularityWorker.Handle)
 	start(mq.QueueTimelineUpdate, "timeline", timelineConsumer.Handle)
+	if redisClient != nil {
+		start(mq.QueueTimelineFanout, "fanout", fanoutWorker.Handle)
+	} else {
+		// 收件箱与发件箱都在 Redis 上，没有 Redis 时启动这个消费者只会把消息全打进死信队列。
+		// 关注流此时由 API 侧自动退回 MySQL 读扩散，功能不受影响。
+		slog.Warn("redis unavailable, following fanout consumer will not start")
+	}
 	start(mq.QueueMediaTranscode, "media", mediaWorker.Handle)
 	if auditWorker != nil {
 		start(mq.QueueAuditModerate, "audit", auditWorker.Handle)

@@ -26,6 +26,7 @@ const (
 	EventTypeSocialUnfollowed        = "social.unfollowed"
 	EventTypePopularityChanged       = "popularity.changed"
 	EventTypeVideoTimelinePush       = "video.timeline.publish"
+	EventTypeVideoFanoutBatch        = "video.fanout.batch"
 	EventTypeCacheInvalidated        = "cache.invalidated"
 	EventTypeMediaTranscodeRequested = "media.transcode.requested"
 	EventTypeAuditRequested          = "audit.requested"
@@ -128,6 +129,29 @@ type VideoTimelinePayload struct {
 	VideoID   uint64    `json:"video_id"`
 	AuthorID  uint64    `json:"author_id"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// 关注流写扩散的推送档位。
+const (
+	// FanoutModeAll 推给作者的全部粉丝，用于普通作者。
+	FanoutModeAll = "all"
+	// FanoutModeActive 只推给活跃粉丝，用于粉丝量中等的作者。
+	// 冷粉丝不推，他们下次打开关注流时会自行回源重建收件箱。
+	FanoutModeActive = "active"
+)
+
+// VideoFanoutPayload 描述一批写扩散任务。
+//
+// 粉丝按 follower_id 升序游标分批，每条消息只处理一批，处理完再投递下一批。
+// 不在单条消息里推完的原因很实在：消费端对单条消息有 10 秒处理上限，
+// 且失败直接进死信队列不重试，大V 一次推完必然超时并丢掉整次扩散。
+type VideoFanoutPayload struct {
+	VideoID   uint64    `json:"video_id"`
+	AuthorID  uint64    `json:"author_id"`
+	CreatedAt time.Time `json:"created_at"`
+	Mode      string    `json:"mode"`
+	// CursorAfter 是上一批处理到的 follower_id，本批从它之后继续。
+	CursorAfter uint64 `json:"cursor_after"`
 }
 
 type CacheInvalidatedPayload struct {

@@ -39,7 +39,7 @@ func NewRouter(
 	jwtSecret string,
 	uploadDir string,
 ) *gin.Engine {
-	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir, 0, config.AuditConfig{}, config.AuthConfig{}, config.OpsConfig{}, config.AlipayConfig{})
+	return NewRouterWithLocalCaches(db, redisClient, popularityService, publisher, nil, nil, nil, jwtSecret, uploadDir, 0, config.AuditConfig{}, config.AuthConfig{}, config.OpsConfig{}, config.AlipayConfig{}, config.FeedConfig{})
 }
 
 func NewRouterWithLocalCaches(
@@ -57,6 +57,7 @@ func NewRouterWithLocalCaches(
 	authCfg config.AuthConfig,
 	opsCfg config.OpsConfig,
 	alipayCfg config.AlipayConfig,
+	feedCfg config.FeedConfig,
 ) *gin.Engine {
 	// 不用 gin.Default()：它固定绑定 gin.Logger()，而后者只能输出拼好的文本行，
 	// 无法交给 slog 分级和结构化。这里自行组装等价的中间件链。
@@ -306,7 +307,7 @@ func NewRouterWithLocalCaches(
 	protectedSocialGroup.POST("/getAllFollowers", socialHandler.GetAllFollowers)
 	protectedSocialGroup.POST("/getAllVloggers", socialHandler.GetAllVloggers)
 
-	feedHandler := feed.NewHandler(feed.NewServiceWithCachesAndTimeline(
+	feedService := feed.NewServiceWithCachesAndTimeline(
 		db,
 		popularityService,
 		latestCache,
@@ -315,7 +316,19 @@ func NewRouterWithLocalCaches(
 		localHotCache,
 		timelineStore,
 		uploadDir,
-	))
+	)
+	if redisClient != nil {
+		fanoutCfg := feedCfg.Fanout
+		fanoutCfg.ApplyDefaults()
+		feedService = feedService.WithFollowingFanout(&feed.FollowingFanout{
+			Inbox:          feed.NewInboxStore(redisClient, fanoutCfg.InboxMaxSize, fanoutCfg.ActiveTTL()),
+			Outbox:         feed.NewOutboxStore(redisClient, fanoutCfg.OutboxMaxSize),
+			Following:      feed.NewFollowingCache(redisClient, 0),
+			PullThreshold:  fanoutCfg.PullThreshold,
+			MaxPullAuthors: fanoutCfg.MaxPullAuthors,
+		})
+	}
+	feedHandler := feed.NewHandler(feedService)
 	feedGroup := r.Group("/feed")
 	feedHandler.RegisterRoutes(feedGroup)
 

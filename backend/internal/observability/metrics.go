@@ -10,9 +10,17 @@ import (
 )
 
 const (
-	CacheVideoDetail = "video_detail"
-	CacheFeedLatest  = "feed_latest"
-	CacheFeedHot     = "feed_hot"
+	CacheVideoDetail   = "video_detail"
+	CacheFeedLatest    = "feed_latest"
+	CacheFeedHot       = "feed_hot"
+	CacheFeedFollowing = "feed_following"
+)
+
+// 关注流读路径的三种数据来源，用于判断推拉结合是否真的生效。
+const (
+	FollowingSourceInbox    = "inbox"
+	FollowingSourceRebuild  = "rebuild"
+	FollowingSourceFallback = "fallback"
 )
 
 var (
@@ -74,6 +82,30 @@ var (
 			Buckets: prometheus.DefBuckets,
 		},
 		[]string{"cache"},
+	)
+
+	// 关注流写扩散指标。batch 与 target 分开计数，因为「消息量」和「实际推送人数」
+	// 在只推活跃粉丝的档位上会明显背离，两者一起看才能判断分级是否生效。
+	feedFanoutBatchTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "feed_fanout_batch_total",
+			Help: "Total number of following-feed fanout batches processed by mode.",
+		},
+		[]string{"mode"},
+	)
+	feedFanoutTargetTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "feed_fanout_target_total",
+			Help: "Total number of inboxes written by following-feed fanout by mode.",
+		},
+		[]string{"mode"},
+	)
+	feedFollowingSourceTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "feed_following_source_total",
+			Help: "Total number of following-feed reads by data source.",
+		},
+		[]string{"source"},
 	)
 
 	// 以下两个是 RED 指标（Rate / Errors / Duration），
@@ -145,6 +177,21 @@ func ObserveCacheLoadSeconds(cacheName string, seconds float64) {
 	cacheLoadDurationSeconds.WithLabelValues(cacheName).Observe(seconds)
 }
 
+// IncFeedFanoutBatch 记录一批关注流写扩散的消息数与实际写入的收件箱数量。
+func IncFeedFanoutBatch(mode string, targets int) {
+	registerMetrics()
+	feedFanoutBatchTotal.WithLabelValues(mode).Inc()
+	if targets > 0 {
+		feedFanoutTargetTotal.WithLabelValues(mode).Add(float64(targets))
+	}
+}
+
+// IncFeedFollowingSource 记录一次关注流读取最终由哪条路径出数。
+func IncFeedFollowingSource(source string) {
+	registerMetrics()
+	feedFollowingSourceTotal.WithLabelValues(source).Inc()
+}
+
 // ObserveHTTPRequest 记录一次 HTTP 请求的计数与耗时。
 // 由访问日志中间件在请求结束时调用，与日志共用同一份现成数据，不额外增加开销。
 func ObserveHTTPRequest(method string, route string, status int, seconds float64) {
@@ -164,6 +211,9 @@ func registerMetrics() {
 			cacheSFSharedTotal,
 			cacheInvalidationTotal,
 			cacheLoadDurationSeconds,
+			feedFanoutBatchTotal,
+			feedFanoutTargetTotal,
+			feedFollowingSourceTotal,
 			httpRequestsTotal,
 			httpRequestDurationSeconds,
 		)

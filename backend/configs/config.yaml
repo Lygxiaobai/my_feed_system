@@ -45,6 +45,13 @@ pprof:
     enabled: ${PPROF_WORKER_ENABLED:-true}
     addr: ${PPROF_WORKER_ADDR:-127.0.0.1:6061}
 
+metrics:
+  # Worker 没有业务路由，指标需要单独开端口才能被 Prometheus 抓到。
+  # 该端口只在 compose 网络内可达，不对宿主机发布。
+  worker:
+    enabled: true
+    addr: 0.0.0.0:9101
+
 log:
   level: ${LOG_LEVEL:-info}
   format: ${LOG_FORMAT:-text}
@@ -83,3 +90,19 @@ alipay:
   gateway: ${ALIPAY_GATEWAY:-https://openapi-sandbox.dl.alipaydev.com/gateway.do}
   notify_url: ${ALIPAY_NOTIFY_URL:-}
   return_url: ${ALIPAY_RETURN_URL:-}
+
+feed:
+  # 关注流推拉结合的分级阈值。粉丝数低于 push_threshold 全量写扩散；
+  # 介于两个阈值之间只推活跃粉丝；达到 pull_threshold 后完全不推，
+  # 粉丝读关注流时从作者发件箱实时拉取。
+  fanout:
+    push_threshold: ${FEED_FANOUT_PUSH_THRESHOLD:-5000}
+    pull_threshold: ${FEED_FANOUT_PULL_THRESHOLD:-100000}
+    # 单条扩散消息处理的粉丝数。消费端单条消息有 10 秒上限，不宜调大。
+    batch_size: ${FEED_FANOUT_BATCH_SIZE:-1000}
+    inbox_max_size: ${FEED_FANOUT_INBOX_MAX_SIZE:-1000}
+    outbox_max_size: ${FEED_FANOUT_OUTBOX_MAX_SIZE:-200}
+    # 活跃标记存活时长，同时是收件箱的维护窗口。
+    active_ttl_hours: ${FEED_FANOUT_ACTIVE_TTL_HOURS:-168}
+    # 单次读取最多合并几个大V 发件箱，超过则退回 MySQL。
+    max_pull_authors: ${FEED_FANOUT_MAX_PULL_AUTHORS:-20}

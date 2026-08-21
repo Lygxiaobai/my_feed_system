@@ -24,6 +24,12 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
+  - name: hot-card-has-no-play-url-or-detail-chip
+    description: A user views a video row on the hot-ranking list.
+    expected: The row does not expose a playback-URL control or a separate details/comments chip; the cover and title still open the video.
+    tags:
+      - frontend-e2e
+      - desktop
   - name: feed-playback-navigation
     description: A user can move between full-screen feed items using scroll or keyboard navigation.
     expected: The active item follows visibility, old items pause, only nearby items keep media sources enabled, and a single tap does not fire together with a double-tap like.

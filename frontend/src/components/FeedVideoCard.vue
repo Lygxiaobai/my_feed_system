@@ -54,10 +54,6 @@ function formatPopularity(value?: number) {
         </div>
       </div>
       <div v-if="item.description" class="muted" style="margin-top: 8px">{{ item.description }}</div>
-      <div class="row" style="margin-top: 10px">
-        <a class="pill mono" :href="item.play_url" target="_blank" rel="noreferrer">&#x64AD;&#x653E;&#x5730;&#x5740;</a>
-        <RouterLink class="pill" :to="`/video/${item.id}`">&#x67E5;&#x770B;&#x8BE6;&#x60C5; / &#x8BC4;&#x8BBA;</RouterLink>
-      </div>
     </div>
   </div>
 </template>

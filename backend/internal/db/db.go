@@ -12,6 +12,7 @@ import (
 	"my_feed_system/internal/account"
 	"my_feed_system/internal/audit"
 	"my_feed_system/internal/comment"
+	"my_feed_system/internal/danmaku"
 	"my_feed_system/internal/config"
 	"my_feed_system/internal/idempotency"
 	"my_feed_system/internal/like"
@@ -63,6 +64,7 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		&like.VideoLike{},
 		&media.Task{},
 		&comment.VideoComment{},
+		&danmaku.VideoDanmaku{},
 		&social.SocialRelation{},
 		&mq.ProcessedMessage{},
 		&mq.DeadLetterMessage{},

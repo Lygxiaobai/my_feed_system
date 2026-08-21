@@ -6,6 +6,7 @@ import { track } from '../analytics/track'
 import { createWatchSession } from '../analytics/watch'
 import AppShell from '../components/AppShell.vue'
 import CommentListSkeleton from '../components/CommentListSkeleton.vue'
+import DanmakuLayer from '../components/DanmakuLayer.vue'
 import FeedStageSkeleton from '../components/FeedStageSkeleton.vue'
 import ReportSheet from '../components/ReportSheet.vue'
 import ShareSheet from '../components/ShareSheet.vue'
@@ -39,6 +40,9 @@ const state = reactive({
 })
 
 const muted = ref(true)
+const danmakuEnabled = ref(true)
+const playTime = ref(0)
+const playing = ref(false)
 const player = ref<VideoPlayerHandle | null>(null)
 const watchSession = createWatchSession()
 let tapTimer: number | undefined
@@ -113,6 +117,28 @@ function toggleMute() {
   } catch {
     // 某些隐私模式会禁用 localStorage，静音功能本身仍需正常工作。
   }
+}
+
+function toggleDanmaku() {
+  danmakuEnabled.value = !danmakuEnabled.value
+  try {
+    window.localStorage.setItem('feed.danmaku', String(danmakuEnabled.value))
+  } catch {
+    // 隐私模式写不了 localStorage，当次会话的开关仍要生效。
+  }
+}
+
+function onPlayerPlaying() {
+  playing.value = true
+  if (state.video) watchSession.play(state.video.id, { from: 'detail' })
+}
+
+function onPlayerPaused() {
+  playing.value = false
+}
+
+function onPlayerTime(seconds: number) {
+  playTime.value = seconds
 }
 
 function togglePlayPause() {
@@ -389,6 +415,8 @@ watch(
   async () => {
     watchSession.end(player.value ?? undefined, { from: 'detail' })
     player.value?.pause()
+    playTime.value = 0
+    playing.value = false
     closeDrawer()
     await loadVideo()
     await loadIsLiked()
@@ -408,6 +436,8 @@ onMounted(async () => {
   try {
     const saved = window.localStorage.getItem('feed.muted')
     if (saved !== null) muted.value = saved === 'true'
+    const danmakuSaved = window.localStorage.getItem('feed.danmaku')
+    if (danmakuSaved !== null) danmakuEnabled.value = danmakuSaved === 'true'
   } catch {
     // 某些隐私模式会禁用 localStorage，默认静音仍可保证自动播放。
   }
@@ -432,6 +462,7 @@ onBeforeUnmount(() => {
           <RouterLink class="chip" to="/">← 返回推荐</RouterLink>
         </div>
         <div class="top-right">
+          <button class="chip" type="button" @click="toggleDanmaku">{{ danmakuEnabled ? '弹幕开' : '弹幕关' }}</button>
           <button class="chip" type="button" @click="toggleMute">{{ muted ? '静音' : '有声' }}</button>
         </div>
       </div>
@@ -440,14 +471,23 @@ onBeforeUnmount(() => {
         <FeedStageSkeleton v-if="state.loading" />
         <div v-else-if="state.error" class="center-hint bad">{{ state.error }}</div>
 
-        <div v-else-if="state.video" class="stage" @click="onStageClick" @dblclick.prevent="onStageDoubleClick">
+        <div v-else-if="state.video" class="stage" :class="{ 'has-danmaku': danmakuEnabled }" @click="onStageClick" @dblclick.prevent="onStageDoubleClick">
           <VideoPlayer
             ref="player"
             :src="state.video.play_url"
             :poster="state.video.cover_url"
             :active="true"
             :muted="muted"
-            @playing="state.video && watchSession.play(state.video.id, { from: 'detail' })"
+            @playing="onPlayerPlaying"
+            @paused="onPlayerPaused"
+            @timeupdate="onPlayerTime"
+          />
+          <DanmakuLayer
+            v-if="danmakuEnabled"
+            :video-id="state.video.id"
+            :current-time="playTime"
+            :playing="playing"
+            :enabled="true"
           />
           <div class="grad" />
 
@@ -598,6 +638,12 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(16px);
 }
 
+.top-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .wrap {
   flex: 1;
   min-height: 0;
@@ -648,6 +694,10 @@ onBeforeUnmount(() => {
   max-width: min(620px, calc(100% - 96px));
 }
 
+.stage.has-danmaku .meta {
+  bottom: 68px;
+}
+
 .author-link {
   display: inline-flex;
   align-items: center;
@@ -682,6 +732,7 @@ onBeforeUnmount(() => {
   position: absolute;
   right: 12px;
   bottom: 18px;
+  z-index: 3;
   display: grid;
   gap: 12px;
 }
@@ -922,6 +973,10 @@ onBeforeUnmount(() => {
     right: 84px;
     bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     max-width: none;
+  }
+
+  .stage.has-danmaku .meta {
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   }
 
   .actions {

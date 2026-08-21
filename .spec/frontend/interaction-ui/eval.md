@@ -50,6 +50,13 @@ scenarios:
       - frontend-e2e
       - desktop
       - mobile
+  - name: danmaku-flies-with-playback
+    description: A signed-in user turns danmaku on, watches a video that already has timed items, joins after those offsets, and sends a short one at the current moment.
+    expected: Items still crossing the screen appear without dumping earlier history, the new text flies immediately, a failed send removes the local item and shows the server message, and turning danmaku off hides the overlay and the composer.
+    tags:
+      - frontend-e2e
+      - desktop
+      - mobile
   - name: playback-surface-has-no-instructional-overlay
     description: A user views a feed video and a video detail page, then toggles mute.
     expected: No gesture or keyboard-shortcut hints are drawn over the video, mute produces no transient message because the control's own label shows the state, and the underlying gestures and shortcuts still work.

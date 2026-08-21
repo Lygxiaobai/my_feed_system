@@ -6,6 +6,7 @@ import { track } from '../analytics/track'
 import { createWatchSession } from '../analytics/watch'
 import AppShell from '../components/AppShell.vue'
 import CommentListSkeleton from '../components/CommentListSkeleton.vue'
+import DanmakuLayer from '../components/DanmakuLayer.vue'
 import FeedStageSkeleton from '../components/FeedStageSkeleton.vue'
 import ReportSheet from '../components/ReportSheet.vue'
 import ShareSheet from '../components/ShareSheet.vue'
@@ -69,6 +70,9 @@ const followBusy = reactive<Record<string, boolean>>({})
 const watchSession = createWatchSession()
 
 const muted = ref(true)
+const danmakuEnabled = ref(true)
+const activePlayTime = ref(0)
+const activePlaying = ref(false)
 const activeIndex = ref(0)
 const tipSheet = ref<InstanceType<typeof TipSheet> | null>(null)
 const tipTarget = ref<FeedVideoItem | null>(null)
@@ -92,6 +96,15 @@ let playRequestId = 0
 function readMutedPreference() {
   try {
     const saved = window.localStorage.getItem('feed.muted')
+    return saved === null ? true : saved === 'true'
+  } catch {
+    return true
+  }
+}
+
+function readDanmakuPreference() {
+  try {
+    const saved = window.localStorage.getItem('feed.danmaku')
     return saved === null ? true : saved === 'true'
   } catch {
     return true
@@ -249,6 +262,27 @@ function togglePlayPause() {
   const item = activeItem.value
   if (!item) return
   void playerMap.get(item.id)?.toggle()
+}
+
+function toggleDanmaku() {
+  danmakuEnabled.value = !danmakuEnabled.value
+  try {
+    window.localStorage.setItem('feed.danmaku', String(danmakuEnabled.value))
+  } catch {
+    // 隐私模式写不了 localStorage，当次会话的开关仍要生效。
+  }
+}
+
+function onPlayerPlaying(videoId: number) {
+  if (activeItem.value?.id === videoId) activePlaying.value = true
+}
+
+function onPlayerPaused(videoId: number) {
+  if (activeItem.value?.id === videoId) activePlaying.value = false
+}
+
+function onPlayerTime(videoId: number, seconds: number) {
+  if (activeItem.value?.id === videoId) activePlayTime.value = seconds
 }
 
 function onStageClick() {
@@ -632,6 +666,8 @@ watch(
     if (previousId && previousId !== currentId) {
       watchSession.end(playerMap.get(previousId) ?? undefined, { feed: tab.value })
     }
+    activePlayTime.value = 0
+    activePlaying.value = false
     await nextTick()
     await playActive()
     await loadMoreIfNeeded()
@@ -701,6 +737,7 @@ watch(
 
 onMounted(async () => {
   muted.value = readMutedPreference()
+  danmakuEnabled.value = readDanmakuPreference()
   await ensureTabLoaded()
   await nextTick()
   setupSlideObserver()
@@ -728,6 +765,7 @@ onBeforeUnmount(() => {
         <button class="tab" :class="{ on: tab === 'hot' }" type="button" @click="switchTab('hot')">点赞榜</button>
 
         <div class="tabs-right">
+          <button class="chip" type="button" @click="toggleDanmaku">{{ danmakuEnabled ? '弹幕开' : '弹幕关' }}</button>
           <button class="chip" type="button" @click="toggleMute">{{ muted ? '静音' : '有声' }}</button>
         </div>
       </div>
@@ -748,7 +786,7 @@ onBeforeUnmount(() => {
           :data-index="idx"
           :class="{ active: idx === activeIndex }"
         >
-          <div class="stage" @click="onStageClick" @dblclick.prevent="onStageDoubleClick(item)">
+          <div class="stage" :class="{ 'has-danmaku': danmakuEnabled && idx === activeIndex }" @click="onStageClick" @dblclick.prevent="onStageDoubleClick(item)">
             <VideoPlayer
               :ref="(el) => setPlayerRef(item.id, el as VideoPlayerHandle | null)"
               :src="item.play_url"
@@ -756,7 +794,16 @@ onBeforeUnmount(() => {
               :active="idx === activeIndex"
               :enabled="Math.abs(idx - activeIndex) <= 1"
               :muted="muted"
-              @playing="watchSession.play(item.id, { feed: tab })"
+              @playing="onPlayerPlaying(item.id); watchSession.play(item.id, { feed: tab })"
+              @paused="onPlayerPaused(item.id)"
+              @timeupdate="onPlayerTime(item.id, $event)"
+            />
+            <DanmakuLayer
+              v-if="idx === activeIndex && danmakuEnabled"
+              :video-id="item.id"
+              :current-time="activePlayTime"
+              :playing="activePlaying"
+              :enabled="true"
             />
             <div class="grad" />
 
@@ -1028,6 +1075,10 @@ onBeforeUnmount(() => {
   max-width: min(620px, calc(100% - 96px));
 }
 
+.stage.has-danmaku .meta {
+  bottom: 68px;
+}
+
 .author-link {
   display: inline-flex;
   align-items: center;
@@ -1062,6 +1113,7 @@ onBeforeUnmount(() => {
   position: absolute;
   right: 12px;
   bottom: 18px;
+  z-index: 3;
   display: grid;
   gap: 12px;
 }
@@ -1328,6 +1380,10 @@ onBeforeUnmount(() => {
     right: 84px;
     bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     max-width: none;
+  }
+
+  .stage.has-danmaku .meta {
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   }
 
   .actions {

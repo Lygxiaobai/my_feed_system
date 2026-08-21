@@ -101,6 +101,24 @@ export type CommentPublishResponse = {
   comment: CommentReply | Comment
 }
 
+export type DanmakuItem = {
+  id: number
+  video_id: number
+  author_id: number
+  username: string
+  content: string
+  offset_ms: number
+  created_at: string
+}
+
+export type DanmakuListEnvelope = {
+  items: DanmakuItem[]
+}
+
+export type DanmakuSendResponse = {
+  item: DanmakuItem
+}
+
 export type GetAllFollowersResponse = {
   followers: SocialRelation[]
 }

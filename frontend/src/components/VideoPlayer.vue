@@ -15,6 +15,8 @@ export type VideoPlayerHandle = {
 
 const emit = defineEmits<{
   playing: []
+  paused: []
+  timeupdate: [seconds: number]
 }>()
 
 const props = withDefaults(
@@ -122,6 +124,11 @@ function duration() {
 
 function onPause() {
   if (status.value !== 'error') setStatus('paused')
+  emit('paused')
+}
+
+function onTimeUpdate() {
+  emit('timeupdate', currentTime())
 }
 
 function onWaiting() {
@@ -204,6 +211,7 @@ defineExpose<VideoPlayerHandle>({
       @canplay="onCanPlay"
       @playing="onPlaying"
       @pause="onPause"
+      @timeupdate="onTimeUpdate"
       @waiting="onWaiting"
       @stalled="onWaiting"
       @error="onError"

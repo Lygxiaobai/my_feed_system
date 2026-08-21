@@ -23,4 +23,4 @@ The upload workflow rejects an unusable file before any network request: a non-v
 
 The video poster is derived by the server from the video's first frame. It is not a user-facing concept: no cover is selected, uploaded, previewed, or confirmed anywhere in the publish workflow.
 
-The shared video player owns playback lifecycle behavior for feed and detail surfaces: muted autoplay, active-item pause rules, loading and buffering feedback, playback errors with retry, and resource cleanup when a video is no longer active. Feed playback keeps only the active item and its immediate neighbors enabled.
+The shared video player owns playback lifecycle behavior for feed and detail surfaces: muted autoplay, active-item pause rules, loading and buffering feedback, playback errors with retry, and resource cleanup when a video is no longer active. It exposes play, pause, and playback-time updates so overlays on the same surface can stay in sync. Feed playback keeps only the active item and its immediate neighbors enabled.

@@ -13,6 +13,7 @@ import (
 	"my_feed_system/internal/analytics"
 	"my_feed_system/internal/audit"
 	"my_feed_system/internal/comment"
+	"my_feed_system/internal/danmaku"
 	"my_feed_system/internal/config"
 	"my_feed_system/internal/feed"
 	"my_feed_system/internal/like"
@@ -318,6 +319,28 @@ func NewRouterWithLocalCaches(
 	protectedCommentGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	protectedCommentGroup.POST("/publish", commentPublishIPLimit, commentPublishAccountLimit, commentHandler.Publish)
 	protectedCommentGroup.POST("/delete", commentDeleteIPLimit, commentDeleteAccountLimit, commentHandler.Delete)
+
+	danmakuSendIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "danmaku.send.ip",
+		Limit:    40,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	danmakuSendAccountLimit := ratelimit.ByAccountID(rateLimiter, ratelimit.Policy{
+		Name:     "danmaku.send.account",
+		Limit:    20,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	danmakuHandler := danmaku.NewHandler(danmaku.NewService(db, danmaku.NewVideoAccess(videoService)))
+	danmakuGroup := r.Group("/danmaku")
+	// 列表挂可选鉴权：作者需要能给自己尚未过审的视频看弹幕，其他人一律当视频不存在。
+	danmakuGroup.Use(jwtmiddleware.OptionalJWTAuth(jwtSecret))
+	danmakuHandler.RegisterRoutes(danmakuGroup)
+	protectedDanmakuGroup := danmakuGroup.Group("")
+	protectedDanmakuGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
+	protectedDanmakuGroup.Use(danmakuSendIPLimit, danmakuSendAccountLimit)
+	danmakuHandler.RegisterProtectedRoutes(protectedDanmakuGroup)
 
 	socialHandler := social.NewHandler(social.NewServiceWithPublisher(db, publisher))
 	socialGroup := r.Group("/social")

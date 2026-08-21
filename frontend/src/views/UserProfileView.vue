@@ -14,6 +14,7 @@ import * as socialApi from '../api/social'
 import type { Account, SocialRelation, Video } from '../api/types'
 import * as videoApi from '../api/video'
 import { useAuthStore } from '../stores/auth'
+import { useDMStore } from '../stores/dm'
 import { useSocialStore } from '../stores/social'
 import { useToastStore } from '../stores/toast'
 
@@ -21,6 +22,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const social = useSocialStore()
+const dm = useDMStore()
 const toast = useToastStore()
 
 const userId = computed(() => Number(route.params.id))
@@ -221,6 +223,21 @@ async function goVideo(videoId: number) {
   await router.push(`/video/${videoId}`)
 }
 
+async function goMessage() {
+  if (!auth.isLoggedIn) {
+    toast.error('请先登录')
+    await router.push('/account')
+    return
+  }
+  if (!Number.isFinite(userId.value) || userId.value <= 0) return
+  // 桌面用顶栏下拉展开会话，避免再跳进一整页。
+  if (window.matchMedia('(min-width: 901px)').matches) {
+    dm.openChat(userId.value)
+    return
+  }
+  await router.push({ path: '/messages', query: { u: String(userId.value) } })
+}
+
 watch(
   () => route.params.id,
   async () => {
@@ -255,15 +272,24 @@ onMounted(loadProfile)
 
         <div class="row">
           <button v-if="isMe" class="ghost" type="button" @click="router.push('/account')">我的账号</button>
-          <button
-            v-else
-            class="primary"
-            type="button"
-            :disabled="!state.user || state.loading || followBusy || social.isPending(userId)"
-            @click="toggleFollow"
-          >
-            {{ isFollowing ? '已关注' : '关注' }}
-          </button>
+          <template v-else>
+            <button
+              class="ghost"
+              type="button"
+              :disabled="!state.user || state.loading"
+              @click="goMessage"
+            >
+              发私信
+            </button>
+            <button
+              class="primary"
+              type="button"
+              :disabled="!state.user || state.loading || followBusy || social.isPending(userId)"
+              @click="toggleFollow"
+            >
+              {{ isFollowing ? '已关注' : '关注' }}
+            </button>
+          </template>
         </div>
       </div>
 

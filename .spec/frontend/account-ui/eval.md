@@ -32,7 +32,7 @@ scenarios:
       - desktop
   - name: topbar-utility-entries
     description: A user uses the desktop top-bar entries aligned with search.
-    expected: The recharge entry is labeled 充积分 and opens the wallet; publish and the avatar open the existing publish and account pages; the notifications bell opens the inbox; client, wallpaper, and messages open frontend placeholders; a signed-out click on an authenticated entry goes to the account page.
+    expected: The recharge entry is labeled 充积分 and opens the wallet; publish and the avatar open the existing publish and account pages; the notifications bell opens the inbox; messages opens the private-chat dropdown; client and wallpaper open frontend placeholders; a signed-out click on an authenticated entry goes to the account page.
     tags:
       - frontend-e2e
       - desktop

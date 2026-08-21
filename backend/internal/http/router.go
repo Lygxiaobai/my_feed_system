@@ -15,6 +15,7 @@ import (
 	"my_feed_system/internal/comment"
 	"my_feed_system/internal/config"
 	"my_feed_system/internal/danmaku"
+	"my_feed_system/internal/dm"
 	"my_feed_system/internal/feed"
 	"my_feed_system/internal/history"
 	"my_feed_system/internal/like"
@@ -487,6 +488,33 @@ func NewRouterWithLocalCaches(
 	notifyGroup.POST("/unreadCount", notifyUnreadIPLimit, notifyHandler.UnreadCount)
 	notifyGroup.POST("/markRead", notifyWriteAccountLimit, notifyHandler.MarkRead)
 	notifyGroup.POST("/markAllRead", notifyWriteAccountLimit, notifyHandler.MarkAllRead)
+
+	dmSendIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "dm.send.ip",
+		Limit:    40,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	dmSendAccountLimit := ratelimit.ByAccountID(rateLimiter, ratelimit.Policy{
+		Name:     "dm.send.account",
+		Limit:    30,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	dmReadIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "dm.read.ip",
+		Limit:    80,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	dmHandler := dm.NewHandler(dm.NewService(db))
+	dmGroup := r.Group("/dm")
+	dmGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
+	dmGroup.POST("/inbox", dmReadIPLimit, dmHandler.Inbox)
+	dmGroup.POST("/thread", dmReadIPLimit, dmHandler.Thread)
+	dmGroup.POST("/unreadCount", notifyUnreadIPLimit, dmHandler.UnreadCount)
+	dmGroup.POST("/markRead", notifyWriteAccountLimit, dmHandler.MarkRead)
+	dmGroup.POST("/send", dmSendIPLimit, dmSendAccountLimit, dmHandler.Send)
 
 	walletHandler := wallet.NewHandler(walletService)
 	walletGroup := r.Group("/wallet")

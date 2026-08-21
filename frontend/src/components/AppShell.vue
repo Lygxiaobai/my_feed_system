@@ -6,10 +6,12 @@ import { track } from '../analytics/track'
 import { ApiError } from '../api/client'
 import * as videoApi from '../api/video'
 import { useAuthStore } from '../stores/auth'
+import { useDMStore } from '../stores/dm'
 import { useNotificationStore } from '../stores/notification'
 import { useSocialStore } from '../stores/social'
 import { useToastStore } from '../stores/toast'
 import AppIcon, { type AppIconName } from './AppIcon.vue'
+import MessagePanel from './MessagePanel.vue'
 import NotificationPanel from './NotificationPanel.vue'
 import Toaster from './Toaster.vue'
 import UserAvatar from './UserAvatar.vue'
@@ -36,6 +38,7 @@ const props = defineProps<{ full?: boolean }>()
 const auth = useAuthStore()
 const social = useSocialStore()
 const notif = useNotificationStore()
+const dm = useDMStore()
 const toast = useToastStore()
 const router = useRouter()
 const route = useRoute()
@@ -44,10 +47,16 @@ const search = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const searchOpen = ref(false)
 const notifyOpen = ref(false)
 const notifyWrap = ref<HTMLElement | null>(null)
+const messageWrap = ref<HTMLElement | null>(null)
 const unreadLabel = computed(() => (notif.unread > 99 ? '99+' : String(notif.unread)))
+const dmUnreadLabel = computed(() => (dm.unread > 99 ? '99+' : String(dm.unread)))
 
 function bindNotifyWrap(el: unknown) {
   notifyWrap.value = el instanceof HTMLElement ? el : null
+}
+
+function bindMessageWrap(el: unknown) {
+  messageWrap.value = el instanceof HTMLElement ? el : null
 }
 
 function toggleNotify() {
@@ -56,12 +65,27 @@ function toggleNotify() {
     return
   }
   notifyOpen.value = !notifyOpen.value
+  if (notifyOpen.value) dm.closePanel()
+}
+
+function toggleMessages() {
+  if (!auth.isLoggedIn) {
+    void router.push('/account')
+    return
+  }
+  if (dm.panelOpen) {
+    dm.closePanel()
+    return
+  }
+  notifyOpen.value = false
+  dm.openInbox()
 }
 
 function onDocumentPointerDown(event: PointerEvent) {
   const target = event.target
-  if (!(target instanceof Node) || !notifyWrap.value) return
-  if (!notifyWrap.value.contains(target)) notifyOpen.value = false
+  if (!(target instanceof Node)) return
+  if (notifyWrap.value && !notifyWrap.value.contains(target)) notifyOpen.value = false
+  if (messageWrap.value && !messageWrap.value.contains(target)) dm.closePanel()
 }
 
 watch(
@@ -76,6 +100,7 @@ watch(
   () => {
     searchOpen.value = false
     notifyOpen.value = false
+    dm.closePanel()
   },
 )
 
@@ -85,13 +110,22 @@ watch(
     if (v) {
       void social.refreshMine()
       notif.startPolling()
+      dm.startPolling()
     } else {
       social.clear()
       notif.clear()
+      dm.clear()
       notifyOpen.value = false
     }
   },
   { immediate: true },
+)
+
+watch(
+  () => dm.panelOpen,
+  (open) => {
+    if (open) notifyOpen.value = false
+  },
 )
 
 onMounted(() => {
@@ -101,6 +135,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown)
   notif.stopPolling()
+  dm.stopPolling()
 })
 
 /**
@@ -196,6 +231,14 @@ function headerActionTo(action: HeaderAction) {
             <AppIcon name="bell" :size="18" />
             <span v-if="auth.isLoggedIn && notif.unread > 0" class="dy-badge">{{ unreadLabel }}</span>
           </RouterLink>
+          <RouterLink
+            class="dy-icon-btn mobile-only dy-mobile-notify"
+            :to="auth.isLoggedIn ? '/messages' : '/account'"
+            aria-label="消息"
+          >
+            <AppIcon name="chat" :size="18" />
+            <span v-if="auth.isLoggedIn && dm.unread > 0" class="dy-badge">{{ dmUnreadLabel }}</span>
+          </RouterLink>
           <template v-for="action in headerActions" :key="action.key">
             <div
               v-if="action.key === 'notify'"
@@ -216,6 +259,26 @@ function headerActionTo(action: HeaderAction) {
                 <span class="dy-head-label">{{ action.label }}</span>
               </button>
               <NotificationPanel v-if="notifyOpen" class="dy-notify-drop" variant="dropdown" @close="notifyOpen = false" />
+            </div>
+            <div
+              v-else-if="action.key === 'messages'"
+              class="dy-notify-wrap desktop-only"
+              :ref="bindMessageWrap"
+            >
+              <button
+                class="dy-head-act"
+                :class="{ on: dm.panelOpen || route.path === '/messages' }"
+                type="button"
+                aria-label="消息"
+                @click="toggleMessages"
+              >
+                <span class="dy-head-icon" aria-hidden="true">
+                  <AppIcon :name="action.icon" :size="18" />
+                  <span v-if="auth.isLoggedIn && dm.unread > 0" class="dy-badge">{{ dmUnreadLabel }}</span>
+                </span>
+                <span class="dy-head-label">{{ action.label }}</span>
+              </button>
+              <MessagePanel v-if="dm.panelOpen" class="dy-notify-drop" variant="dropdown" @close="dm.closePanel()" />
             </div>
             <RouterLink
               v-else

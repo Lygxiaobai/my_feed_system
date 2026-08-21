@@ -50,6 +50,8 @@ const (
 	RequestServiceError Code = "A0500"
 	RateLimited         Code = "A0501"
 	DuplicatedRequest   Code = "A0502"
+	// DMQuotaExceeded 未互关时已经用掉唯一一条私信额度。
+	DMQuotaExceeded Code = "A0503"
 
 	// ---------- B：当前系统错误 ----------
 
@@ -104,6 +106,7 @@ var defaultUserTips = map[Code]string{
 	RequestServiceError: "请求处理失败，请稍后重试",
 	RateLimited:         "操作过于频繁，请稍后再试",
 	DuplicatedRequest:   "请勿重复提交",
+	DMQuotaExceeded:     "互相关注后才能继续发私信",
 
 	SystemError:   "服务暂时不可用，请稍后重试",
 	SystemTimeout: "服务响应超时，请稍后重试",

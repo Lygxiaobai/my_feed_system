@@ -17,6 +17,7 @@ import LotteryView from '../views/LotteryView.vue'
 import ShareLandingView from '../views/ShareLandingView.vue'
 import PlaceholderView from '../views/PlaceholderView.vue'
 import NotificationsView from '../views/NotificationsView.vue'
+import MessagesView from '../views/MessagesView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -60,8 +61,7 @@ const router = createRouter({
     {
       path: '/messages',
       name: 'messages',
-      component: PlaceholderView,
-      meta: { title: '消息', summary: '私信还没有接口，先把入口和页面放好。', auth: true },
+      component: MessagesView,
     },
   ],
 })

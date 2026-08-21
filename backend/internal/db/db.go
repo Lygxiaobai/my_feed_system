@@ -14,6 +14,7 @@ import (
 	"my_feed_system/internal/comment"
 	"my_feed_system/internal/config"
 	"my_feed_system/internal/danmaku"
+	"my_feed_system/internal/dm"
 	"my_feed_system/internal/history"
 	"my_feed_system/internal/idempotency"
 	"my_feed_system/internal/like"
@@ -78,6 +79,8 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		&audit.Record{},
 		&report.Report{},
 		&notification.Notification{},
+		&dm.Conversation{},
+		&dm.Message{},
 		&wallet.Lot{},
 		&wallet.Ledger{},
 		&wallet.DailyAction{},

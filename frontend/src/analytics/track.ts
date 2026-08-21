@@ -13,6 +13,13 @@ export const PRODUCT_EVENTS = [
   'login',
   'register',
   'logout',
+  'wallet_recharge',
+  'wallet_tip',
+  'wallet_checkin',
+  'wallet_lottery',
+  'report_submit',
+  'danmaku_send',
+  'dm_send',
 ] as const
 
 export type ProductEventName = (typeof PRODUCT_EVENTS)[number]

@@ -24,6 +24,6 @@ Appearance has one client-side owner in `stores/theme.ts`. The stored preference
 
 The resolved mode is applied on `document.documentElement` as `data-theme` plus `color-scheme`, and the `theme-color` meta follows it. An inline script in `index.html` applies the stored preference before Vue mounts so the first paint does not flash the opposite palette. Bootstrap starts the store so later preference or system changes stay in sync, including another tab writing the same storage key.
 
-The settings page always hosts the three-way picker, including for signed-out visitors. Account login, rename, and logout stay on that page but must not gate appearance. Application chrome also exposes the same three choices so the visitor does not have to open settings. Playback overlays that sit on a video remain high-contrast against the picture; they do not invert with the chrome palette.
+The settings page always hosts the three-way picker, including for signed-out visitors. Account login, rename, and logout stay on that page but must not gate appearance. Application chrome also exposes the same three choices from the desktop sidebar footer, and from a floating control above the tab bar on compact screens; the menu opens upward so it stays on screen. Playback overlays that sit on a video remain high-contrast against the picture; they do not invert with the chrome palette.
 
 The preference is stored under `feed.theme`. A privacy mode that blocks `localStorage` still lets the current session switch; only persistence is skipped.

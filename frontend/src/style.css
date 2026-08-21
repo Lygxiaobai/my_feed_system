@@ -2,27 +2,28 @@
   color-scheme: dark;
   --fg: 255, 255, 255;
   --ink: 0, 0, 0;
-  --bg: #0b0b0f;
+  --bg: #121212;
   --panel: rgba(var(--fg), 0.06);
   --panel-2: rgba(var(--fg), 0.1);
   --text: rgba(var(--fg), 0.92);
-  --muted: rgba(var(--fg), 0.64);
-  --border: rgba(var(--fg), 0.12);
+  --muted: rgba(var(--fg), 0.56);
+  --border: rgba(var(--fg), 0.08);
   --fill: rgba(var(--fg), 0.06);
-  --fill-hover: rgba(var(--fg), 0.12);
-  --input-bg: rgba(var(--fg), 0.06);
-  --chrome: rgba(var(--ink), 0.35);
-  --nav: rgba(8, 8, 12, 0.92);
-  --surface: rgba(22, 22, 28, 0.96);
+  --fill-hover: rgba(var(--fg), 0.1);
+  --input-bg: rgba(var(--fg), 0.08);
+  --chrome: #161616;
+  --nav: #161616;
+  --surface: #1c1c1c;
   --toast-bg: rgba(var(--ink), 0.55);
-  --glow-a: rgba(254, 44, 85, 0.18);
-  --glow-b: rgba(37, 244, 238, 0.12);
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --glow-a: transparent;
+  --glow-b: transparent;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+  --nav-active: rgba(255, 255, 255, 0.08);
   --primary: #fe2c55;
   --primary-2: #25f4ee;
   --danger: #fe2c55;
   --ok: #22c55e;
-  --topbar-h: 56px;
+  --topbar-h: 64px;
   --bottom-nav-h: 0px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -31,8 +32,8 @@
   --app-height: 100vh;
   --app-height: 100dvh;
   --content-bottom-pad: 24px;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji',
-    'Segoe UI Emoji';
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', ui-sans-serif, system-ui, -apple-system, Segoe UI,
+    Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
   line-height: 1.5;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -44,19 +45,25 @@
 
 html[data-theme='light'] {
   color-scheme: light;
-  --fg: 22, 24, 30;
+  --fg: 22, 24, 35;
   --ink: 255, 255, 255;
-  --bg: #f3f4f7;
+  --bg: #ffffff;
   --panel: #ffffff;
-  --panel-2: #ffffff;
-  --input-bg: #ffffff;
-  --chrome: rgba(255, 255, 255, 0.88);
-  --nav: rgba(255, 255, 255, 0.94);
+  --panel-2: #f8f8f8;
+  --text: #161823;
+  --muted: #8a8b91;
+  --border: #f1f1f2;
+  --fill: #f2f2f4;
+  --fill-hover: #e8e8ea;
+  --input-bg: #f2f2f4;
+  --chrome: #ffffff;
+  --nav: #ffffff;
   --surface: #ffffff;
   --toast-bg: rgba(255, 255, 255, 0.94);
-  --glow-a: rgba(254, 44, 85, 0.08);
-  --glow-b: rgba(20, 184, 166, 0.08);
-  --shadow: 0 10px 28px rgba(15, 18, 28, 0.1);
+  --glow-a: transparent;
+  --glow-b: transparent;
+  --shadow: 0 8px 24px rgba(22, 24, 35, 0.08);
+  --nav-active: #f2f2f4;
 }
 
 @media (max-width: 900px) {
@@ -95,8 +102,7 @@ body,
 
 body {
   margin: 0;
-  background: radial-gradient(1200px 900px at 20% -25%, var(--glow-a), transparent 60%),
-    radial-gradient(900px 700px at 90% 10%, var(--glow-b), transparent 55%), var(--bg);
+  background: var(--bg);
   color: var(--text);
   overscroll-behavior-y: none;
   padding: 0;
@@ -227,8 +233,8 @@ textarea {
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: rgba(124, 92, 255, 0.8);
-  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.22);
+  border-color: rgba(254, 44, 85, 0.45);
+  box-shadow: 0 0 0 3px rgba(254, 44, 85, 0.12);
 }
 
 button {

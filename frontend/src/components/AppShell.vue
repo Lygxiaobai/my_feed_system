@@ -26,11 +26,30 @@ type HeaderAction = {
   auth?: boolean
 }
 
+type NavLink = {
+  to: string
+  label: string
+  icon: AppIconName
+  exact?: boolean
+}
+
 const headerActions: HeaderAction[] = [
   { key: 'wallet', label: '充积分', icon: 'coin', to: '/wallet', auth: true },
   { key: 'notify', label: '通知', icon: 'bell', to: '/notifications', auth: true },
   { key: 'messages', label: '消息', icon: 'chat', to: '/messages', auth: true },
   { key: 'publish', label: '投稿', icon: 'plus-box', to: '/video', auth: true },
+]
+
+const browseLinks: NavLink[] = [
+  { to: '/', label: '推荐', icon: 'home', exact: true },
+  { to: '/following', label: '关注', icon: 'user-plus' },
+  { to: '/likes', label: '点赞榜', icon: 'heart' },
+  { to: '/hot', label: '热榜', icon: 'fire' },
+]
+
+const mineLinks: NavLink[] = [
+  { to: '/video', label: '发布', icon: 'plus-box', exact: true },
+  { to: '/account', label: '账号', icon: 'user' },
 ]
 
 const props = defineProps<{ full?: boolean }>()
@@ -51,6 +70,7 @@ const themeOpen = ref(false)
 const notifyWrap = ref<HTMLElement | null>(null)
 const messageWrap = ref<HTMLElement | null>(null)
 const themeWrap = ref<HTMLElement | null>(null)
+const asideThemeWrap = ref<HTMLElement | null>(null)
 const themeButtonLabel = computed(() => {
   if (theme.preference === 'system') return '外观：跟随系统'
   return theme.resolved === 'dark' ? '外观：深色' : '外观：浅色'
@@ -68,6 +88,15 @@ function bindMessageWrap(el: unknown) {
 
 function bindThemeWrap(el: unknown) {
   themeWrap.value = el instanceof HTMLElement ? el : null
+}
+
+function bindAsideThemeWrap(el: unknown) {
+  asideThemeWrap.value = el instanceof HTMLElement ? el : null
+}
+
+function navOn(link: NavLink) {
+  if (link.exact) return route.path === link.to
+  return route.path === link.to || route.path.startsWith(`${link.to}/`)
 }
 
 function toggleNotify() {
@@ -109,7 +138,9 @@ function onDocumentPointerDown(event: PointerEvent) {
   if (!(target instanceof Node)) return
   if (notifyWrap.value && !notifyWrap.value.contains(target)) notifyOpen.value = false
   if (messageWrap.value && !messageWrap.value.contains(target)) dm.closePanel()
-  if (themeWrap.value && !themeWrap.value.contains(target)) themeOpen.value = false
+  const inFab = themeWrap.value?.contains(target)
+  const inAside = asideThemeWrap.value?.contains(target)
+  if (!inFab && !inAside) themeOpen.value = false
 }
 
 watch(
@@ -208,41 +239,165 @@ function headerActionTo(action: HeaderAction) {
 
 <template>
   <div class="dy-shell" :class="{ full: props.full }">
-    <aside class="dy-aside desktop-only">
-      <RouterLink class="dy-logo" to="/">ShortVideo</RouterLink>
+    <header class="dy-topbar">
+      <RouterLink class="dy-brand" to="/">
+        <span class="dy-mark" aria-hidden="true" />
+        <span class="dy-brand-text">ShortVideo</span>
+      </RouterLink>
 
-      <nav class="dy-nav">
-        <RouterLink class="dy-nav-link" to="/">推荐</RouterLink>
-        <RouterLink class="dy-nav-link" to="/following">关注</RouterLink>
-        <RouterLink class="dy-nav-link" to="/likes">点赞榜</RouterLink>
-        <RouterLink class="dy-nav-link" to="/hot">热榜</RouterLink>
-        <RouterLink class="dy-nav-link" to="/video">发布</RouterLink>
-        <RouterLink class="dy-nav-link" to="/account">账号</RouterLink>
-        <RouterLink class="dy-nav-link" to="/settings">设置</RouterLink>
-      </nav>
-
-      <div v-if="!auth.isLoggedIn" class="dy-aside-foot">
-        <div class="dy-user-actions">
-          <button class="dy-btn dy-btn-primary" type="button" @click="goLogin">登录</button>
-        </div>
+      <div class="dy-search desktop-only">
+        <span class="dy-search-icon" aria-hidden="true">
+          <AppIcon name="search" :size="16" />
+        </span>
+        <input
+          v-model="search"
+          class="dy-search-input"
+          aria-label="搜索"
+          placeholder="搜索你感兴趣的内容"
+          @keydown.enter="onSearch"
+        />
+        <button class="dy-search-go" type="button" @click="onSearch">搜索</button>
       </div>
-    </aside>
 
-    <div class="dy-main">
-      <header class="dy-topbar">
-        <div class="dy-top-left desktop-only" />
-
-        <RouterLink class="dy-mobile-brand mobile-only" to="/">ShortVideo</RouterLink>
-
-        <div class="dy-search desktop-only">
-          <input v-model="search" class="dy-search-input" aria-label="搜索" @keydown.enter="onSearch" />
-          <button class="dy-btn dy-btn-primary" type="button" @click="onSearch">搜索</button>
-        </div>
-
-        <div class="dy-top-actions">
-          <div class="dy-notify-wrap" :ref="bindThemeWrap">
+      <div class="dy-top-actions">
+        <button class="dy-icon-btn mobile-only" type="button" aria-label="搜索" @click="searchOpen = !searchOpen">
+          <AppIcon name="search" :size="18" />
+        </button>
+        <RouterLink
+          class="dy-icon-btn mobile-only dy-mobile-notify"
+          :to="auth.isLoggedIn ? '/notifications' : '/account'"
+          aria-label="通知"
+        >
+          <AppIcon name="bell" :size="18" />
+          <span v-if="auth.isLoggedIn && notif.unread > 0" class="dy-badge">{{ unreadLabel }}</span>
+        </RouterLink>
+        <RouterLink
+          class="dy-icon-btn mobile-only dy-mobile-notify"
+          :to="auth.isLoggedIn ? '/messages' : '/account'"
+          aria-label="消息"
+        >
+          <AppIcon name="chat" :size="18" />
+          <span v-if="auth.isLoggedIn && dm.unread > 0" class="dy-badge">{{ dmUnreadLabel }}</span>
+        </RouterLink>
+        <template v-for="action in headerActions" :key="action.key">
+          <div
+            v-if="action.key === 'notify'"
+            class="dy-notify-wrap desktop-only"
+            :ref="bindNotifyWrap"
+          >
             <button
-              class="dy-icon-btn"
+              class="dy-head-act"
+              :class="{ on: notifyOpen || route.path === '/notifications' }"
+              type="button"
+              :aria-label="action.label"
+              :title="action.label"
+              @click="toggleNotify"
+            >
+              <span class="dy-head-icon" aria-hidden="true">
+                <AppIcon :name="action.icon" :size="20" />
+                <span v-if="auth.isLoggedIn && notif.unread > 0" class="dy-badge">{{ unreadLabel }}</span>
+              </span>
+            </button>
+            <NotificationPanel v-if="notifyOpen" class="dy-notify-drop" variant="dropdown" @close="notifyOpen = false" />
+          </div>
+          <div
+            v-else-if="action.key === 'messages'"
+            class="dy-notify-wrap desktop-only"
+            :ref="bindMessageWrap"
+          >
+            <button
+              class="dy-head-act"
+              :class="{ on: dm.panelOpen || route.path === '/messages' }"
+              type="button"
+              :aria-label="action.label"
+              :title="action.label"
+              @click="toggleMessages"
+            >
+              <span class="dy-head-icon" aria-hidden="true">
+                <AppIcon :name="action.icon" :size="20" />
+                <span v-if="auth.isLoggedIn && dm.unread > 0" class="dy-badge">{{ dmUnreadLabel }}</span>
+              </span>
+            </button>
+            <MessagePanel v-if="dm.panelOpen" class="dy-notify-drop" variant="dropdown" @close="dm.closePanel()" />
+          </div>
+          <RouterLink
+            v-else-if="action.key === 'publish'"
+            class="dy-upload desktop-only"
+            :class="{ on: route.path === action.to }"
+            :to="headerActionTo(action)"
+          >
+            <AppIcon :name="action.icon" :size="16" />
+            <span>投稿</span>
+          </RouterLink>
+          <RouterLink
+            v-else
+            class="dy-head-act desktop-only"
+            :class="{ on: route.path === action.to }"
+            :to="headerActionTo(action)"
+            :title="action.label"
+            :aria-label="action.label"
+          >
+            <span class="dy-head-icon" aria-hidden="true">
+              <AppIcon :name="action.icon" :size="20" />
+            </span>
+          </RouterLink>
+        </template>
+        <RouterLink class="dy-head-avatar" to="/account" :title="auth.isLoggedIn ? '账号' : '登录'">
+          <UserAvatar
+            :username="auth.isLoggedIn ? (auth.claims?.username ?? '') : '登录'"
+            :id="auth.claims?.account_id"
+            :size="36"
+          />
+        </RouterLink>
+      </div>
+    </header>
+
+    <aside class="dy-aside desktop-only">
+      <div class="dy-aside-scroll">
+        <nav class="dy-nav" aria-label="浏览">
+          <RouterLink
+            v-for="link in browseLinks"
+            :key="link.to"
+            class="dy-nav-link"
+            :class="{ on: navOn(link) }"
+            :to="link.to"
+          >
+            <AppIcon :name="link.icon" :size="20" />
+            <span>{{ link.label }}</span>
+          </RouterLink>
+        </nav>
+
+        <nav class="dy-nav" aria-label="我的">
+          <RouterLink
+            v-for="link in mineLinks"
+            :key="link.to"
+            class="dy-nav-link"
+            :class="{ on: navOn(link) }"
+            :to="link.to"
+          >
+            <AppIcon :name="link.icon" :size="20" />
+            <span>{{ link.label }}</span>
+          </RouterLink>
+        </nav>
+      </div>
+
+      <div class="dy-aside-foot">
+        <button
+          v-if="!auth.isLoggedIn"
+          class="dy-login"
+          type="button"
+          @click="goLogin"
+        >
+          登录
+        </button>
+        <div class="dy-aside-tools">
+          <RouterLink class="dy-foot-link" :class="{ on: route.path === '/settings' }" to="/settings">
+            <AppIcon name="gear" :size="18" />
+            <span>设置</span>
+          </RouterLink>
+          <div class="dy-aside-theme" :ref="bindAsideThemeWrap">
+            <button
+              class="dy-foot-btn"
               type="button"
               :aria-label="themeButtonLabel"
               :aria-expanded="themeOpen"
@@ -251,101 +406,25 @@ function headerActionTo(action: HeaderAction) {
             >
               <AppIcon :name="theme.resolved === 'dark' ? 'moon' : 'sun'" :size="18" />
             </button>
-            <div v-if="themeOpen" class="dy-theme-drop">
+            <div v-if="themeOpen" class="dy-theme-drop aside">
               <ThemePicker compact @picked="themeOpen = false" />
             </div>
           </div>
-          <button class="dy-icon-btn mobile-only" type="button" aria-label="搜索" @click="searchOpen = !searchOpen">
-            ⌕
-          </button>
-          <RouterLink
-            class="dy-icon-btn mobile-only dy-mobile-notify"
-            :to="auth.isLoggedIn ? '/notifications' : '/account'"
-            aria-label="通知"
-          >
-            <AppIcon name="bell" :size="18" />
-            <span v-if="auth.isLoggedIn && notif.unread > 0" class="dy-badge">{{ unreadLabel }}</span>
-          </RouterLink>
-          <RouterLink
-            class="dy-icon-btn mobile-only dy-mobile-notify"
-            :to="auth.isLoggedIn ? '/messages' : '/account'"
-            aria-label="消息"
-          >
-            <AppIcon name="chat" :size="18" />
-            <span v-if="auth.isLoggedIn && dm.unread > 0" class="dy-badge">{{ dmUnreadLabel }}</span>
-          </RouterLink>
-          <template v-for="action in headerActions" :key="action.key">
-            <div
-              v-if="action.key === 'notify'"
-              class="dy-notify-wrap desktop-only"
-              :ref="bindNotifyWrap"
-            >
-              <button
-                class="dy-head-act"
-                :class="{ on: notifyOpen || route.path === '/notifications' }"
-                type="button"
-                aria-label="通知"
-                @click="toggleNotify"
-              >
-                <span class="dy-head-icon" aria-hidden="true">
-                  <AppIcon :name="action.icon" :size="18" />
-                  <span v-if="auth.isLoggedIn && notif.unread > 0" class="dy-badge">{{ unreadLabel }}</span>
-                </span>
-                <span class="dy-head-label">{{ action.label }}</span>
-              </button>
-              <NotificationPanel v-if="notifyOpen" class="dy-notify-drop" variant="dropdown" @close="notifyOpen = false" />
-            </div>
-            <div
-              v-else-if="action.key === 'messages'"
-              class="dy-notify-wrap desktop-only"
-              :ref="bindMessageWrap"
-            >
-              <button
-                class="dy-head-act"
-                :class="{ on: dm.panelOpen || route.path === '/messages' }"
-                type="button"
-                aria-label="消息"
-                @click="toggleMessages"
-              >
-                <span class="dy-head-icon" aria-hidden="true">
-                  <AppIcon :name="action.icon" :size="18" />
-                  <span v-if="auth.isLoggedIn && dm.unread > 0" class="dy-badge">{{ dmUnreadLabel }}</span>
-                </span>
-                <span class="dy-head-label">{{ action.label }}</span>
-              </button>
-              <MessagePanel v-if="dm.panelOpen" class="dy-notify-drop" variant="dropdown" @close="dm.closePanel()" />
-            </div>
-            <RouterLink
-              v-else
-              class="dy-head-act desktop-only"
-              :class="{ on: route.path === action.to }"
-              :to="headerActionTo(action)"
-            >
-              <span class="dy-head-icon" aria-hidden="true">
-                <AppIcon :name="action.icon" :size="18" />
-              </span>
-              <span class="dy-head-label">{{ action.label }}</span>
-            </RouterLink>
-          </template>
-          <RouterLink class="dy-head-avatar" to="/account" :title="auth.isLoggedIn ? '账号' : '登录'">
-            <UserAvatar
-              :username="auth.isLoggedIn ? (auth.claims?.username ?? '') : '登录'"
-              :id="auth.claims?.account_id"
-              :size="34"
-            />
-          </RouterLink>
         </div>
-      </header>
+      </div>
+    </aside>
 
+    <div class="dy-main">
       <div v-if="searchOpen" class="dy-mobile-search mobile-only">
         <input
           v-model="search"
           class="dy-search-input"
           aria-label="搜索"
+          placeholder="搜索你感兴趣的内容"
           autofocus
           @keydown.enter="onSearch"
         />
-        <button class="dy-btn dy-btn-primary" type="button" @click="onSearch">搜索</button>
+        <button class="dy-search-go" type="button" @click="onSearch">搜索</button>
       </div>
 
       <div class="dy-content" :class="props.full ? 'full' : 'padded'">
@@ -362,11 +441,11 @@ function headerActionTo(action: HeaderAction) {
 
     <nav class="dy-bottom-nav mobile-only" aria-label="底部导航">
       <RouterLink class="dy-tab" :class="{ on: route.path === '/' }" to="/">
-        <span class="dy-tab-icon">⌂</span>
+        <AppIcon name="home" :size="20" />
         <span>首页</span>
       </RouterLink>
       <RouterLink class="dy-tab" :class="{ on: route.path === '/hot' }" to="/hot">
-        <span class="dy-tab-icon">▲</span>
+        <AppIcon name="fire" :size="20" />
         <span>热榜</span>
       </RouterLink>
       <RouterLink class="dy-tab publish" to="/video">
@@ -374,10 +453,26 @@ function headerActionTo(action: HeaderAction) {
         <span>发布</span>
       </RouterLink>
       <RouterLink class="dy-tab" :class="{ on: route.path.startsWith('/account') }" to="/account">
-        <span class="dy-tab-icon">☺</span>
+        <AppIcon name="user" :size="20" />
         <span>我的</span>
       </RouterLink>
     </nav>
+
+    <div class="dy-theme-fab mobile-only" :ref="bindThemeWrap">
+      <button
+        class="dy-theme-btn"
+        type="button"
+        :aria-label="themeButtonLabel"
+        :aria-expanded="themeOpen"
+        aria-haspopup="true"
+        @click="toggleThemeMenu"
+      >
+        <AppIcon :name="theme.resolved === 'dark' ? 'moon' : 'sun'" :size="20" />
+      </button>
+      <div v-if="themeOpen" class="dy-theme-drop">
+        <ThemePicker compact @picked="themeOpen = false" />
+      </div>
+    </div>
 
     <Toaster />
   </div>
@@ -388,179 +483,135 @@ function headerActionTo(action: HeaderAction) {
   height: var(--app-height, 100dvh);
   min-height: var(--app-height, 100dvh);
   display: grid;
-  grid-template-columns: 240px 1fr;
-  background: radial-gradient(1200px 900px at 20% -25%, var(--glow-a), transparent 60%),
-    radial-gradient(900px 700px at 90% 10%, var(--glow-b), transparent 55%), transparent;
+  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-rows: var(--topbar-h, 64px) minmax(0, 1fr);
+  background: var(--bg);
   overflow: hidden;
 }
 
-.dy-aside {
-  border-right: 1px solid var(--border);
-  background: var(--chrome);
-  backdrop-filter: blur(16px);
-  padding: 14px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-height: 0;
-}
-
-.dy-logo {
-  font-weight: 900;
-  letter-spacing: 0.4px;
-  font-size: 18px;
-  padding: 10px 10px;
-  border-radius: 12px;
-  background: var(--fill);
-  border: 1px solid var(--border);
-  text-decoration: none;
-}
-
-.dy-nav {
-  display: grid;
-  gap: 8px;
-}
-
-.dy-nav-link {
-  padding: 10px 10px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  background: var(--fill);
-  text-decoration: none;
-}
-
-.dy-nav-link.router-link-active {
-  border-color: rgba(254, 44, 85, 0.42);
-  background: rgba(254, 44, 85, 0.12);
-}
-
-.dy-aside-foot {
-  margin-top: auto;
-  display: grid;
-  gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.dy-user-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.dy-btn {
-  appearance: none;
-  border: 1px solid var(--border);
-  background: var(--fill);
-  color: var(--text);
-  border-radius: 12px;
-  padding: 10px 12px;
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: center;
-  font-size: 13px;
-  min-height: 40px;
-}
-
-.dy-btn:hover {
-  background: var(--fill-hover);
-}
-
-.dy-btn-primary {
-  border-color: rgba(254, 44, 85, 0.5);
-  background: rgba(254, 44, 85, 0.16);
-}
-
-.dy-btn-primary:hover {
-  background: rgba(254, 44, 85, 0.24);
-}
-
-.dy-btn-ghost {
-  border-color: var(--border);
-  background: var(--fill);
-}
-
-.dy-main {
-  height: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
 .dy-topbar {
-  height: var(--topbar-h, 56px);
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--chrome);
-  backdrop-filter: blur(16px);
+  grid-column: 1 / -1;
+  grid-row: 1;
+  height: var(--topbar-h, 64px);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(200px, 480px) auto;
-  gap: 12px;
+  grid-template-columns: 220px minmax(200px, 1fr) auto;
   align-items: center;
-  padding: 0 14px;
+  padding: 0 20px 0 16px;
   padding-top: var(--safe-top, 0px);
-  box-sizing: content-box;
-  min-height: var(--topbar-h, 56px);
+  box-sizing: border-box;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--border);
   z-index: 30;
 }
 
-.dy-search {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
+.dy-brand {
+  display: inline-flex;
   align-items: center;
-  max-width: 680px;
-  width: 100%;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--text);
+  min-width: 0;
+}
+
+.dy-brand:hover {
+  text-decoration: none;
+}
+
+.dy-mark {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 32% 36%, #25f4ee 0 38%, transparent 40%),
+    radial-gradient(circle at 68% 64%, #fe2c55 0 38%, transparent 40%),
+    #161823;
+}
+
+.dy-brand-text {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.dy-search {
   justify-self: center;
+  width: min(560px, 100%);
+  height: 40px;
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  background: var(--fill);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.dy-search-icon {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
 }
 
 .dy-search-input {
   width: 100%;
-  background: var(--input-bg);
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  height: 100%;
+  border: 0;
+  background: transparent;
   color: var(--text);
-  padding: 10px 14px;
+  padding: 0 4px 0 0;
   outline: none;
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .dy-search-input:focus {
-  border-color: rgba(37, 244, 238, 0.42);
-  box-shadow: 0 0 0 3px rgba(37, 244, 238, 0.14);
+  border: 0;
+  box-shadow: none;
+}
+
+.dy-search-go {
+  height: 100%;
+  min-height: 0;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dy-search-go:hover {
+  color: var(--text);
+  background: transparent;
 }
 
 .dy-top-actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 
 .dy-head-act {
-  width: 52px;
-  height: 48px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
   text-decoration: none;
-  color: var(--muted);
+  color: var(--text);
   display: grid;
   place-items: center;
-  gap: 2px;
-  padding: 4px 2px;
   appearance: none;
   border: 0;
   background: transparent;
   cursor: pointer;
   font: inherit;
+  padding: 0;
 }
 
 .dy-head-act:hover,
 .dy-head-act.on {
-  color: var(--text);
   background: var(--fill);
 }
 
@@ -571,6 +622,30 @@ function headerActionTo(action: HeaderAction) {
   place-items: center;
   line-height: 1;
   position: relative;
+}
+
+.dy-upload {
+  height: 36px;
+  margin-left: 6px;
+  padding: 0 12px 0 10px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dy-upload:hover,
+.dy-upload.on {
+  background: var(--fill);
+  text-decoration: none;
+}
+
+.dy-upload :deep(.app-icon) {
+  color: #fe2c55;
 }
 
 .dy-notify-wrap {
@@ -586,10 +661,145 @@ function headerActionTo(action: HeaderAction) {
   z-index: 40;
 }
 
+.dy-aside {
+  grid-column: 1;
+  grid-row: 2;
+  min-height: 0;
+  padding: 12px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--chrome);
+  border-right: 1px solid var(--border);
+  overflow: visible;
+}
+
+.dy-aside-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.dy-nav {
+  display: grid;
+  gap: 2px;
+}
+
+.dy-nav + .dy-nav {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.dy-nav-link {
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 15px;
+}
+
+.dy-nav-link:hover {
+  background: var(--fill);
+  text-decoration: none;
+}
+
+.dy-nav-link.on {
+  background: var(--nav-active);
+  font-weight: 600;
+}
+
+.dy-aside-foot {
+  margin-top: auto;
+  display: grid;
+  gap: 12px;
+}
+
+.dy-login {
+  height: 40px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: #fe2c55;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dy-login:hover {
+  background: #ef2950;
+}
+
+.dy-aside-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dy-foot-link,
+.dy-foot-btn {
+  height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.dy-foot-link:hover,
+.dy-foot-btn:hover,
+.dy-foot-link.on {
+  color: var(--text);
+  background: var(--fill);
+  text-decoration: none;
+}
+
+.dy-aside-theme {
+  position: relative;
+}
+
+.dy-theme-fab {
+  position: fixed;
+  left: calc(16px + var(--safe-left, 0px));
+  bottom: calc(var(--bottom-nav-h, 56px) + 12px);
+  z-index: 85;
+}
+
+.dy-theme-btn {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.dy-theme-btn:hover {
+  background: var(--fill-hover);
+}
+
 .dy-theme-drop {
   position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  left: 0;
+  bottom: calc(100% + 8px);
   z-index: 40;
   min-width: 168px;
   padding: 6px;
@@ -597,6 +807,11 @@ function headerActionTo(action: HeaderAction) {
   border: 1px solid var(--border);
   background: var(--surface);
   box-shadow: var(--shadow);
+}
+
+.dy-theme-drop.aside {
+  left: auto;
+  right: 0;
 }
 
 .dy-badge {
@@ -625,14 +840,8 @@ function headerActionTo(action: HeaderAction) {
   right: 4px;
 }
 
-.dy-head-label {
-  font-size: 10px;
-  line-height: 1.1;
-  white-space: nowrap;
-}
-
 .dy-head-avatar {
-  margin-left: 6px;
+  margin-left: 8px;
   display: grid;
   place-items: center;
   text-decoration: none;
@@ -642,23 +851,13 @@ function headerActionTo(action: HeaderAction) {
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--fill);
+  border: 0;
+  background: transparent;
   color: var(--text);
-  font-size: 18px;
-  line-height: 1;
   cursor: pointer;
   display: inline-grid;
   place-items: center;
   padding: 0;
-}
-
-.dy-mobile-brand {
-  font-weight: 900;
-  font-size: 16px;
-  text-decoration: none;
-  color: var(--text);
-  letter-spacing: 0.2px;
 }
 
 .dy-mobile-search {
@@ -671,6 +870,24 @@ function headerActionTo(action: HeaderAction) {
   flex-shrink: 0;
 }
 
+.dy-mobile-search .dy-search-input {
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--fill);
+  padding: 0 14px;
+}
+
+.dy-main {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
 .dy-content {
   flex: 1;
   min-height: 0;
@@ -680,7 +897,6 @@ function headerActionTo(action: HeaderAction) {
 .dy-content.padded {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 0;
 }
 
 .dy-content.full {
@@ -701,7 +917,6 @@ function headerActionTo(action: HeaderAction) {
   align-items: stretch;
   border-top: 1px solid var(--border);
   background: var(--nav);
-  backdrop-filter: blur(16px);
 }
 
 .dy-tab {
@@ -724,23 +939,17 @@ function headerActionTo(action: HeaderAction) {
   color: var(--text);
 }
 
-.dy-tab-icon {
-  font-size: 16px;
-  line-height: 1;
-}
-
 .dy-tab-publish {
   width: 34px;
   height: 34px;
-  border-radius: 12px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
   font-size: 22px;
   font-weight: 700;
   line-height: 1;
   color: #fff;
-  background: linear-gradient(135deg, rgba(37, 244, 238, 0.95), rgba(254, 44, 85, 0.95));
-  box-shadow: 0 8px 18px rgba(254, 44, 85, 0.28);
+  background: linear-gradient(135deg, #25f4ee, #fe2c55);
 }
 
 .dy-tab.publish {
@@ -763,25 +972,22 @@ function headerActionTo(action: HeaderAction) {
   display: grid;
 }
 
-.dy-btn.desktop-only {
-  display: inline-flex;
-}
-
 .dy-head-act.desktop-only {
   display: grid;
+}
+
+.dy-upload.desktop-only {
+  display: inline-flex;
 }
 
 .dy-notify-wrap.desktop-only {
   display: block;
 }
 
-.dy-top-left.desktop-only {
-  display: block;
-}
-
 @media (max-width: 900px) {
   .dy-shell {
     grid-template-columns: 1fr;
+    grid-template-rows: var(--topbar-h, 52px) minmax(0, 1fr);
   }
 
   .desktop-only {
@@ -792,6 +998,15 @@ function headerActionTo(action: HeaderAction) {
     display: initial !important;
   }
 
+  .dy-topbar {
+    grid-template-columns: auto 1fr auto;
+    padding: 0 10px;
+  }
+
+  .dy-brand-text {
+    font-size: 16px;
+  }
+
   .dy-bottom-nav.mobile-only {
     display: grid !important;
   }
@@ -800,23 +1015,13 @@ function headerActionTo(action: HeaderAction) {
     display: grid !important;
   }
 
-  .dy-topbar {
-    grid-template-columns: auto 1fr auto;
-    padding: 0 10px;
-    gap: 8px;
+  .dy-theme-fab.mobile-only {
+    display: block !important;
   }
 
   .dy-main {
+    grid-column: 1;
     padding-bottom: var(--bottom-nav-h, 56px);
-  }
-
-  .dy-content.full {
-    /* bottom nav already reserved by main padding */
-  }
-
-  .dy-top-actions {
-    justify-content: flex-end;
   }
 }
 </style>
-

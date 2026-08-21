@@ -25,3 +25,16 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
+  - name: successful-wallet-events-are-recorded
+    description: A signed-in user completes a tip, a paid recharge, a check-in, and a lottery draw.
+    expected: wallet_tip, wallet_recharge, wallet_checkin, and wallet_lottery are reported only after those APIs succeed. Creating a recharge QR code does not emit wallet_recharge. Failed tip or claim requests do not record the event.
+    tags:
+      - frontend-e2e
+      - desktop
+  - name: successful-report-danmaku-and-dm-are-recorded
+    description: A signed-in user submits a report, sends a danmaku, and sends a private message.
+    expected: report_submit, danmaku_send, and dm_send are reported after those APIs succeed, without the report explanation or message text. A failed send does not record the event.
+    tags:
+      - frontend-e2e
+      - desktop
+      - mobile

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
 import AppShell from '../components/AppShell.vue'
 import { ApiError } from '../api/client'
 import * as walletApi from '../api/wallet'
@@ -53,6 +54,7 @@ async function onDraw() {
   busy.value = true
   try {
     const res = await walletApi.lottery()
+    track('wallet_lottery', { coins: res.coins, prize_index: res.prize_index })
     const idx = res.prize_index
     if (!Number.isInteger(idx) || idx < 0 || idx >= prizes.length) {
       throw new Error('抽奖结果无效')

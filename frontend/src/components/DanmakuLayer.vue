@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
 import { ApiError } from '../api/client'
 import * as danmakuApi from '../api/danmaku'
 import type { DanmakuItem } from '../api/types'
@@ -203,6 +204,7 @@ async function submit() {
   try {
     const saved = await danmakuApi.send(videoId, content, offsetMs)
     if (props.videoId !== videoId) return
+    track('danmaku_send', { video_id: videoId, offset_ms: offsetMs })
     spawned.add(saved.id)
     const next = [...items.value.filter((item) => item.id !== temp.id), saved].sort((a, b) => {
       if (a.offset_ms !== b.offset_ms) return a.offset_ms - b.offset_ms
@@ -386,9 +388,9 @@ onBeforeUnmount(() => {
 .composer {
   pointer-events: auto;
   position: absolute;
-  left: 16px;
-  right: 92px;
-  bottom: 12px;
+  left: 168px;
+  right: 88px;
+  bottom: 10px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -396,54 +398,61 @@ onBeforeUnmount(() => {
 
 .ctrl {
   flex: none;
-  height: 38px;
-  min-width: 38px;
-  padding: 0 10px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 0;
+  padding: 0 8px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(0, 0, 0, 0.42);
-  color: rgba(255, 255, 255, 0.82);
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .ctrl.wide {
-  min-width: 52px;
+  min-width: 44px;
 }
 
 .ctrl.on {
-  border-color: rgba(254, 44, 85, 0.5);
-  background: rgba(254, 44, 85, 0.88);
   color: #fff;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .box {
   flex: 1;
   min-width: 0;
-  height: 38px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.48);
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.92);
-  padding: 0 14px;
+  padding: 0 12px;
   outline: none;
   font-size: 13px;
 }
 
+.box:focus {
+  border: 0;
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.16);
+}
+
 .box::placeholder {
-  color: rgba(255, 255, 255, 0.52);
+  color: rgba(255, 255, 255, 0.48);
 }
 
 .send {
   flex: none;
-  height: 38px;
+  height: 34px;
+  min-height: 0;
   padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(254, 44, 85, 0.45);
-  background: rgba(254, 44, 85, 0.88);
+  border-radius: 8px;
+  border: 0;
+  background: #fe2c55;
   color: white;
   font-size: 13px;
   font-weight: 700;
@@ -467,23 +476,23 @@ onBeforeUnmount(() => {
   }
 
   .ctrl {
-    height: 34px;
-    min-width: 34px;
-    padding: 0 8px;
+    height: 30px;
+    min-width: 30px;
+    padding: 0 6px;
     font-size: 12px;
   }
 
   .ctrl.wide {
-    min-width: 44px;
+    min-width: 40px;
   }
 
   .box {
-    height: 34px;
+    height: 32px;
     font-size: 12px;
   }
 
   .send {
-    height: 34px;
+    height: 32px;
     padding: 0 12px;
   }
 }

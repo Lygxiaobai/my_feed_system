@@ -518,7 +518,8 @@ onBeforeUnmount(() => {
 
           <div class="meta">
             <RouterLink class="author-link" :to="`/u/${state.video.author_id}`" @click.stop>
-              <UserAvatar :username="state.video.username" :id="state.video.author_id" :size="34" />
+              <UserAvatar :username="state.video.username" :id="state.video.author_id" :size="40" />
+              <span class="author-name">@{{ state.video.username }}</span>
             </RouterLink>
             <div class="title">{{ state.video.title }}</div>
             <div v-if="state.video.description" class="desc">{{ state.video.description }}</div>
@@ -664,17 +665,17 @@ onBeforeUnmount(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  padding: 12px 20px 20px;
+  box-sizing: border-box;
 }
 
 .top {
-  height: 52px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(16px);
+  padding: 0 2px 10px;
+  background: transparent;
 }
 
 .top-right {
@@ -687,6 +688,9 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   display: grid;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #000;
 }
 
 .center-hint {
@@ -725,23 +729,25 @@ onBeforeUnmount(() => {
 
 .meta {
   position: absolute;
-  left: 16px;
+  left: 20px;
   bottom: 18px;
-  max-width: min(620px, calc(100% - 96px));
+  max-width: min(620px, calc(100% - 108px));
+  color: #fff;
 }
 
 .stage.has-composer .meta {
-  bottom: 88px;
+  bottom: 72px;
 }
 
 .author-link {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.2px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   text-decoration: none;
+  color: #fff;
 }
 
 .author-link:hover {
@@ -749,7 +755,8 @@ onBeforeUnmount(() => {
 }
 
 .author-name {
-  text-shadow: 0 14px 30px rgba(0, 0, 0, 0.55);
+  font-size: 15px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.65);
 }
 
 .title {
@@ -767,11 +774,15 @@ onBeforeUnmount(() => {
 
 .actions {
   position: absolute;
-  right: 10px;
+  right: 16px;
   bottom: 18px;
   z-index: 3;
   display: grid;
-  gap: 14px;
+  gap: 16px;
+}
+
+.stage.has-composer .actions {
+  bottom: 72px;
 }
 
 .act {
@@ -822,8 +833,8 @@ onBeforeUnmount(() => {
   padding: 7px 10px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.28);
-  color: rgba(255, 255, 255, 0.86);
+  background: rgba(0, 0, 0, 0.42);
+  color: rgba(255, 255, 255, 0.9);
   font-size: 12px;
   text-decoration: none;
 }
@@ -836,6 +847,24 @@ onBeforeUnmount(() => {
 .chip.danger {
   border-color: rgba(254, 44, 85, 0.55);
   background: rgba(254, 44, 85, 0.12);
+}
+
+.drawer .chip {
+  border-color: var(--border);
+  background: var(--fill);
+  color: var(--text);
+}
+
+.drawer .chip.primary {
+  border-color: transparent;
+  background: #fe2c55;
+  color: #fff;
+}
+
+.drawer .chip.danger {
+  border-color: rgba(254, 44, 85, 0.35);
+  background: rgba(254, 44, 85, 0.1);
+  color: #fe2c55;
 }
 
 .drawer-backdrop {
@@ -851,8 +880,10 @@ onBeforeUnmount(() => {
 .drawer {
   width: min(420px, calc(100vw - 18px));
   height: 100vh;
-  background: rgba(0, 0, 0, 0.65);
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--surface);
+  color: var(--text);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow);
   display: grid;
   grid-template-rows: auto 1fr auto;
 }
@@ -862,7 +893,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   padding: 14px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border);
 }
 
 .drawer-title {
@@ -873,10 +904,11 @@ onBeforeUnmount(() => {
 .drawer-x {
   width: 34px;
   height: 34px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.9);
+  min-height: 0;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--fill);
+  color: var(--text);
   cursor: pointer;
   font-size: 20px;
   line-height: 1;
@@ -890,7 +922,7 @@ onBeforeUnmount(() => {
 }
 
 .drawer-foot {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--border);
   padding: 12px 14px;
 }
 
@@ -898,16 +930,16 @@ onBeforeUnmount(() => {
   width: 100%;
   min-height: 82px;
   resize: none;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
   padding: 10px 12px;
   outline: none;
 }
 
 .drawer-hint {
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--muted);
   padding: 12px 0;
 }
 
@@ -916,9 +948,9 @@ onBeforeUnmount(() => {
 }
 
 .comment {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--fill);
+  border-radius: 12px;
   padding: 10px 10px;
 }
 
@@ -945,14 +977,14 @@ onBeforeUnmount(() => {
 
 .comment-meta {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--muted);
 }
 
 .comment-content {
   margin-top: 8px;
   font-size: 13px;
   line-height: 1.35;
-  color: rgba(255, 255, 255, 0.86);
+  color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -980,8 +1012,8 @@ onBeforeUnmount(() => {
   margin-bottom: 8px;
   padding: 8px 10px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.8);
+  background: var(--fill);
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -990,10 +1022,18 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 900px) {
+  .page {
+    padding: 0;
+  }
+
   .top {
     height: 48px;
     padding: 0 10px;
     gap: 8px;
+  }
+
+  .wrap {
+    border-radius: 0;
   }
 
   .meta {
@@ -1004,13 +1044,17 @@ onBeforeUnmount(() => {
   }
 
   .stage.has-composer .meta {
-    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
 
   .actions {
     right: 6px;
     bottom: calc(18px + env(safe-area-inset-bottom, 0px));
     gap: 12px;
+  }
+
+  .stage.has-composer .actions {
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
 
   .drawer-backdrop {

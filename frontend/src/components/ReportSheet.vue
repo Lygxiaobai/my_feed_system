@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
 import { ApiError } from '../api/client'
 import { REPORT_DETAIL_MAX, REPORT_REASONS, reportVideo, type ReportReason } from '../api/report'
 import { useAuthStore } from '../stores/auth'
@@ -46,6 +47,7 @@ async function submit() {
   busy.value = true
   try {
     await reportVideo({ video_id: videoId.value, reason: reason.value, detail: detail.value.trim() })
+    track('report_submit', { video_id: videoId.value, reason: reason.value })
     // 明确告知「已受理、会人工核实」：举报不会立即产生可见变化，
     // 不给回执的话用户会以为没提交成功而反复点击。
     toast.success('举报已提交，我们会尽快人工核实')

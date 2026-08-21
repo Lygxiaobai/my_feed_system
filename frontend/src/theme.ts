@@ -4,8 +4,8 @@ export type ThemePreference = 'system' | 'light' | 'dark'
 export type ResolvedTheme = 'light' | 'dark'
 
 const THEME_COLOR: Record<ResolvedTheme, string> = {
-  dark: '#0b0b0f',
-  light: '#f3f4f7',
+  dark: '#121212',
+  light: '#ffffff',
 }
 
 export function parsePreference(raw: string | null | undefined): ThemePreference {

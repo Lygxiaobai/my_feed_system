@@ -100,8 +100,8 @@ function pick(value: ThemePreference) {
 }
 
 .theme-opt.on {
-  border-color: rgba(254, 44, 85, 0.55);
-  background: rgba(254, 44, 85, 0.14);
+  border-color: var(--border);
+  background: var(--nav-active, var(--fill-hover));
 }
 
 .theme-hint {

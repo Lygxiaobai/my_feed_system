@@ -30,6 +30,7 @@ import Skeleton from './Skeleton.vue'
   position: relative;
   overflow: hidden;
   background: #000;
+  border-radius: inherit;
 }
 
 .fill {

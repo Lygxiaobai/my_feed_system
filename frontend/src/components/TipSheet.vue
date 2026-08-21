@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
 import { ApiError } from '../api/client'
 import * as walletApi from '../api/wallet'
 import type { TipRecord, WalletSummary } from '../api/wallet'
@@ -122,6 +123,7 @@ async function confirm() {
   busy.value = true
   try {
     await walletApi.tip(props.videoId, coins)
+    track('wallet_tip', { video_id: props.videoId, coins })
     toast.success(`已打赏 ${coins} 积分`)
     emit('tipped', coins)
     close()

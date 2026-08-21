@@ -8,7 +8,7 @@ scenarios:
       - desktop
       - mobile
   - name: theme-manual-override
-    description: A visitor picks 浅色 or 深色 from settings or the chrome control.
+    description: A visitor picks 浅色 or 深色 from settings, the desktop sidebar footer, or the compact bottom-left chrome control.
     expected: The chosen palette applies immediately and stays put when the operating system preference changes. Choosing 跟随系统 returns control to the operating system.
     tags:
       - frontend-e2e

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
 import AppShell from '../components/AppShell.vue'
 import { ApiError } from '../api/client'
 import * as walletApi from '../api/wallet'
@@ -100,6 +101,7 @@ async function onCheckin() {
   busy.value = true
   try {
     const res = await walletApi.checkin()
+    track('wallet_checkin', { coins: res.coins })
     todayCoins.value = res.coins
     result.value = `今日获得 ${res.coins} 积分`
     tone.value = 'ok'

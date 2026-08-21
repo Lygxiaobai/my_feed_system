@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
 import AppShell from '../components/AppShell.vue'
 import { ApiError } from '../api/client'
 import * as walletApi from '../api/wallet'
@@ -122,6 +123,7 @@ async function pollOrder(outTradeNo: string) {
       if (order.status === 'paid') {
         orderHint.text = `充值成功，到账 ${order.coins + order.bonus} 积分`
         orderHint.tone = 'ok'
+        track('wallet_recharge', { yuan: order.yuan, coins: order.coins, bonus: order.bonus })
         closePay()
         await loadWallet()
         return

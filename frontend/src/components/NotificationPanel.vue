@@ -277,10 +277,9 @@ onMounted(() => {
   width: min(420px, calc(100vw - 24px));
   max-height: min(560px, calc(100dvh - 80px));
   background: var(--surface);
-  border: 1px solid rgba(var(--fg), 0.12);
-  border-radius: 14px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 

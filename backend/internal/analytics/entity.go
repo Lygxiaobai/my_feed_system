@@ -25,11 +25,18 @@ var allowedEvents = map[string]struct{}{
 	"video_share":    {},
 	"comment_submit": {},
 	"follow":         {},
-	"unfollow":       {},
-	"video_publish":  {},
-	"login":          {},
-	"register":       {},
-	"logout":         {},
+	"unfollow":        {},
+	"video_publish":   {},
+	"login":           {},
+	"register":        {},
+	"logout":          {},
+	"wallet_recharge": {},
+	"wallet_tip":      {},
+	"wallet_checkin":  {},
+	"wallet_lottery":  {},
+	"report_submit":   {},
+	"danmaku_send":    {},
+	"dm_send":         {},
 }
 
 var sensitivePropKeys = []string{"password", "passwd", "secret", "token", "authorization", "cookie"}

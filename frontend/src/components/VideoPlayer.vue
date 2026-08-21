@@ -320,7 +320,15 @@ defineExpose<VideoPlayerHandle>({
       @click.stop
       @dblclick.stop.prevent
     >
-      <span class="clock">{{ formatClock(playhead) }} / {{ formatClock(total) }}</span>
+      <div class="transport">
+        <button class="play" type="button" :aria-label="status === 'playing' ? '暂停' : '播放'" @click="toggle">
+          <span v-if="status === 'playing'" class="pause-bars" aria-hidden="true" />
+          <svg v-else viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path fill="currentColor" d="M8.2 5.1a1 1 0 0 1 1.5-.8l9.2 6.1a1 1 0 0 1 0 1.7l-9.2 6.1a1 1 0 0 1-1.5-.9V5.1Z" />
+          </svg>
+        </button>
+        <span class="clock">{{ formatClock(playhead) }} / {{ formatClock(total) }}</span>
+      </div>
       <div
         ref="trackEl"
         class="track"
@@ -409,15 +417,45 @@ defineExpose<VideoPlayerHandle>({
 
 .chrome {
   position: absolute;
-  left: 16px;
-  right: 92px;
-  bottom: 56px;
+  inset: auto 0 0;
   z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 10px;
   pointer-events: none;
   user-select: none;
+}
+
+.transport {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.play {
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.play:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.pause-bars {
+  width: 10px;
+  height: 12px;
+  border-left: 3px solid #fff;
+  border-right: 3px solid #fff;
 }
 
 .clock {
@@ -431,11 +469,13 @@ defineExpose<VideoPlayerHandle>({
 }
 
 .track {
-  flex: 1;
-  min-width: 0;
-  height: 16px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 14px;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   pointer-events: auto;
   cursor: pointer;
   touch-action: none;
@@ -444,7 +484,7 @@ defineExpose<VideoPlayerHandle>({
 .track-line {
   width: 100%;
   height: 2px;
-  border-radius: 999px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.28);
   position: relative;
 }
@@ -480,10 +520,8 @@ defineExpose<VideoPlayerHandle>({
 }
 
 @media (max-width: 900px) {
-  .chrome {
-    left: 12px;
-    right: 80px;
-    bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+  .transport {
+    display: none;
   }
 }
 </style>

@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { track } from '../analytics/track'
 import { ApiError } from '../api/client'
 import * as dmApi from '../api/dm'
 import type { DMConversation, DMMessage, DMRelation, DMThread } from '../api/dm'
@@ -252,6 +253,7 @@ async function send() {
   sending.value = true
   try {
     const res = await dmApi.sendMessage(peerId.value, text)
+    track('dm_send', { peer_id: peerId.value })
     draft.value = ''
     thread.value = {
       ...thread.value,
@@ -480,10 +482,9 @@ onUnmounted(stopTimers)
   width: min(400px, calc(100vw - 24px));
   max-height: min(560px, calc(100dvh - 80px));
   background: var(--surface);
-  border: 1px solid rgba(var(--fg), 0.12);
-  border-radius: 14px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 

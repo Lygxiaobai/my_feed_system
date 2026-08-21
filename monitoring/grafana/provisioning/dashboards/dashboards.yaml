@@ -7,7 +7,9 @@ providers:
     type: file
     disableDeletion: false
     updateIntervalSeconds: 30
-    allowUiUpdates: true
+    # 仪表盘以仓库文件为准。为 true 时 Grafana 会把首次导入写入数据库，
+    # 之后改 JSON 不再覆盖，运维页会一直停在旧的日志墙。
+    allowUiUpdates: false
     options:
       path: /etc/grafana/provisioning/dashboards
       foldersFromFilesStructure: false

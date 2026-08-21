@@ -1,13 +1,14 @@
 {
   "title": "Feed 系统总览",
   "uid": "feed-overview",
-  "tags": ["feed", "red"],
+  "tags": ["feed", "red", "product"],
   "timezone": "browser",
   "schemaVersion": 39,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
   "panels": [
     {
+      "id": 1,
       "type": "stat",
       "title": "QPS",
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
@@ -15,7 +16,8 @@
       "targets": [
         {
           "expr": "sum(rate(http_requests_total[5m]))",
-          "legendFormat": "req/s"
+          "legendFormat": "req/s",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
@@ -24,6 +26,7 @@
       }
     },
     {
+      "id": 2,
       "type": "stat",
       "title": "错误率（5xx 占比）",
       "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
@@ -31,7 +34,8 @@
       "targets": [
         {
           "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total[5m])), 0.0001)",
-          "legendFormat": "5xx"
+          "legendFormat": "5xx",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
@@ -51,6 +55,7 @@
       }
     },
     {
+      "id": 3,
       "type": "stat",
       "title": "P99 延迟",
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
@@ -58,7 +63,8 @@
       "targets": [
         {
           "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "p99"
+          "legendFormat": "p99",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
@@ -67,11 +73,12 @@
       }
     },
     {
+      "id": 4,
       "type": "stat",
       "title": "API 存活",
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
-      "targets": [{ "expr": "up{job=\"feed-api\"}", "legendFormat": "up" }],
+      "targets": [{ "expr": "up{job=\"feed-api\"}", "legendFormat": "up", "refId": "A" }],
       "fieldConfig": {
         "defaults": {
           "mappings": [
@@ -88,6 +95,7 @@
       }
     },
     {
+      "id": 5,
       "type": "timeseries",
       "title": "各接口 QPS",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
@@ -95,12 +103,14 @@
       "targets": [
         {
           "expr": "sum by (route) (rate(http_requests_total[5m]))",
-          "legendFormat": "{{route}}"
+          "legendFormat": "{{route}}",
+          "refId": "A"
         }
       ],
       "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
     },
     {
+      "id": 6,
       "type": "timeseries",
       "title": "延迟分位（P50 / P95 / P99）",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
@@ -108,20 +118,24 @@
       "targets": [
         {
           "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "P50"
+          "legendFormat": "P50",
+          "refId": "A"
         },
         {
           "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "P95"
+          "legendFormat": "P95",
+          "refId": "B"
         },
         {
           "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "P99"
+          "legendFormat": "P99",
+          "refId": "C"
         }
       ],
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
     },
     {
+      "id": 7,
       "type": "timeseries",
       "title": "按状态码分布",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
@@ -129,12 +143,14 @@
       "targets": [
         {
           "expr": "sum by (status) (rate(http_requests_total[5m]))",
-          "legendFormat": "{{status}}"
+          "legendFormat": "{{status}}",
+          "refId": "A"
         }
       ],
       "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
     },
     {
+      "id": 8,
       "type": "timeseries",
       "title": "缓存命中率（L1 / L2）",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
@@ -142,11 +158,13 @@
       "targets": [
         {
           "expr": "sum by (cache) (rate(cache_l1_hit_total[5m])) / clamp_min(sum by (cache) (rate(cache_l1_hit_total[5m]) + rate(cache_l1_miss_total[5m])), 0.0001)",
-          "legendFormat": "L1 {{cache}}"
+          "legendFormat": "L1 {{cache}}",
+          "refId": "A"
         },
         {
           "expr": "sum by (cache) (rate(cache_l2_hit_total[5m])) / clamp_min(sum by (cache) (rate(cache_l2_hit_total[5m]) + rate(cache_l2_miss_total[5m])), 0.0001)",
-          "legendFormat": "L2 {{cache}}"
+          "legendFormat": "L2 {{cache}}",
+          "refId": "B"
         }
       ],
       "fieldConfig": {
@@ -155,30 +173,281 @@
       }
     },
     {
-      "type": "logs",
-      "title": "错误与警告日志（backend + worker）",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 20 },
+      "id": 10,
+      "type": "row",
+      "title": "产品埋点（page_view / search / play / watch / like / share / comment / follow / publish / login …）",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 20 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "区间内总次数",
+      "description": "当前时间范围内全部 product_event 条数。",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 21 },
       "datasource": { "type": "loki", "uid": "loki_uid" },
       "targets": [
         {
-          "expr": "{service=~\"backend|worker\", level=~\"ERROR|WARN\"}",
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki_uid" },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({service=\"backend\"} |= \"product_event\" | json msg | msg=\"product_event\" [$__range]))",
+          "legendFormat": "events",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0, "noValue": "0" },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "播放 / 观看",
+      "description": "video_play 与 video_watch。",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 21 },
+      "datasource": { "type": "loki", "uid": "loki_uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki_uid" },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({service=\"backend\"} |= \"product_event\" | json msg, event | msg=\"product_event\" | event=\"video_play\" [$__range]))",
+          "legendFormat": "play",
+          "queryType": "instant"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki_uid" },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({service=\"backend\"} |= \"product_event\" | json msg, event | msg=\"product_event\" | event=\"video_watch\" [$__range]))",
+          "legendFormat": "watch",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0, "noValue": "0" },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "平均观看时长",
+      "description": "video_watch.properties.watch_ms 的区间平均值。",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 21 },
+      "datasource": { "type": "loki", "uid": "loki_uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki_uid" },
+          "editorMode": "code",
+          "expr": "avg(avg_over_time({service=\"backend\"} |= \"product_event\" | json msg, event, watch_ms=\"properties.watch_ms\" | msg=\"product_event\" | event=\"video_watch\" | unwrap watch_ms [$__range]))",
+          "legendFormat": "watch_ms",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "decimals": 0, "noValue": "—" },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "互动（赞 / 评 / 关 / 享）",
+      "description": "video_like、comment_submit、follow、video_share。",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 21 },
+      "datasource": { "type": "loki", "uid": "loki_uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki_uid" },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({service=\"backend\"} |= \"product_event\" | json msg, event | msg=\"product_event\" | event=~\"video_like|comment_submit|follow|video_share\" [$__range]))",
+          "legendFormat": "interact",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0, "noValue": "0" },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "各事件次数（全部埋点）",
+      "description": "按 event 分组。允许的名字：page_view、search、video_play、video_watch、video_like、video_unlike、video_share、comment_submit、follow、unfollow、video_publish、login、register、logout、wallet_recharge、wallet_tip、wallet_checkin、wallet_lottery、report_submit、danmaku_send、dm_send。只抽取 event，避免 visitor_id 等高基数打爆 Loki。",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 25 },
+      "datasource": { "type": "loki", "uid": "loki_uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki_uid" },
+          "editorMode": "code",
+          "expr": "sum by (event) (count_over_time({service=\"backend\"} |= \"product_event\" | json msg, event | msg=\"product_event\" [5m]))",
+          "legendFormat": "{{event}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0, "custom": { "fillOpacity": 12, "spanNulls": true } },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 16,
+      "type": "bargauge",
+      "title": "各事件总量",
+      "description": "时间范围内每种埋点的条数。没发生过的事件不会出现。",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 34 },
+      "datasource": { "type": "loki", "uid": "loki_uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki_uid" },
+          "editorMode": "code",
+          "expr": "sum by (event) (count_over_time({service=\"backend\"} |= \"product_event\" | json msg, event | msg=\"product_event\" [$__range]))",
+          "legendFormat": "{{event}}",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "noValue": "0",
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "minVizHeight": 16,
+        "namePlacement": "auto",
+        "sizing": "auto"
+      }
+    },
+    {
+      "id": 17,
+      "type": "bargauge",
+      "title": "各视频播放次数",
+      "description": "video_play 按 properties.video_id 聚合。",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 34 },
+      "datasource": { "type": "loki", "uid": "loki_uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki_uid" },
+          "editorMode": "code",
+          "expr": "sum by (video_id) (count_over_time({service=\"backend\"} |= \"product_event\" | json msg, event, video_id=\"properties.video_id\" | msg=\"product_event\" | event=\"video_play\" [$__range]))",
+          "legendFormat": "视频 {{video_id}}",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "noValue": "0",
+          "color": { "mode": "continuous-GrYlRd" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "minVizHeight": 16,
+        "namePlacement": "auto",
+        "sizing": "auto"
+      }
+    },
+    {
+      "id": 18,
+      "type": "logs",
+      "title": "埋点明细",
+      "description": "同一批 product_event，格式化为 event + page + visitor + account + properties，便于核对单条。",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 44 },
+      "datasource": { "type": "loki", "uid": "loki_uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki_uid" },
+          "editorMode": "code",
+          "expr": "{service=\"backend\"} |= \"product_event\" | json msg, event, page, visitor_id, account_id, properties | msg=\"product_event\" | line_format \"{{.event}}  page={{.page}}  visitor={{.visitor_id}}  account={{.account_id}}  {{.properties}}\"",
           "queryType": "range"
         }
       ],
       "options": {
         "showTime": true,
+        "showLabels": false,
         "wrapLogMessage": true,
-        "sortOrder": "Descending"
+        "prettifyLogMessage": false,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
       }
     },
     {
+      "id": 9,
       "type": "logs",
-      "title": "产品埋点（page_view / play / like / follow …）",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 30 },
+      "title": "错误与警告日志（backend + worker）",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 54 },
       "datasource": { "type": "loki", "uid": "loki_uid" },
       "targets": [
         {
-          "expr": "{service=\"backend\"} |= \"product_event\"",
+          "refId": "A",
+          "expr": "{service=~\"backend|worker\", level=~\"ERROR|WARN\"}",
           "queryType": "range"
         }
       ],

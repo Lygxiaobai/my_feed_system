@@ -61,11 +61,11 @@ function formatPopularity(value?: number) {
 <style scoped>
 .feed-card {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 220px minmax(0, 1fr);
   gap: 14px;
   border: 1px solid var(--border);
   background: var(--panel);
-  border-radius: 16px;
+  border-radius: 12px;
   overflow: hidden;
 }
 

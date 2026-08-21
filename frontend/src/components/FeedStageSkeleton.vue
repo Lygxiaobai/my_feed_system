@@ -18,21 +18,18 @@ import Skeleton from './Skeleton.vue'
     </div>
 
     <div class="actions">
-      <Skeleton v-for="n in 4" :key="n" width="70px" height="62px" radius="16px" />
+      <Skeleton v-for="n in 4" :key="n" width="40px" height="40px" radius="999px" />
     </div>
   </div>
 </template>
 
 <style scoped>
 .stage {
-  width: min(980px, calc(100vw - 28px));
-  height: min(100%, calc(var(--app-height, 100dvh) - var(--topbar-h, 56px) - 52px - 36px - var(--bottom-nav-h, 0px)));
+  width: 100%;
+  height: 100%;
   position: relative;
-  border-radius: 18px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.35);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  background: #000;
 }
 
 .fill {
@@ -69,21 +66,19 @@ import Skeleton from './Skeleton.vue'
 
 .actions {
   position: absolute;
-  right: 12px;
+  right: 10px;
   bottom: 18px;
   display: grid;
-  gap: 12px;
+  gap: 14px;
+}
+
+.actions :deep(.sk) {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 999px !important;
 }
 
 @media (max-width: 900px) {
-  .stage {
-    width: 100%;
-    height: 100%;
-    border-radius: 0;
-    border: none;
-    box-shadow: none;
-  }
-
   .meta {
     left: 12px;
     right: 84px;
@@ -92,15 +87,9 @@ import Skeleton from './Skeleton.vue'
   }
 
   .actions {
-    right: 8px;
+    right: 6px;
     bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-    gap: 10px;
-  }
-
-  .actions :deep(.sk) {
-    width: 64px !important;
-    height: 56px !important;
-    border-radius: 14px !important;
+    gap: 12px;
   }
 }
 </style>

@@ -8,24 +8,25 @@ import * as videoApi from '../api/video'
 import { useAuthStore } from '../stores/auth'
 import { useSocialStore } from '../stores/social'
 import { useToastStore } from '../stores/toast'
+import AppIcon, { type AppIconName } from './AppIcon.vue'
 import Toaster from './Toaster.vue'
 import UserAvatar from './UserAvatar.vue'
 
 type HeaderAction = {
   key: string
   label: string
-  icon: string
+  icon: AppIconName
   to: string
   auth?: boolean
 }
 
 const headerActions: HeaderAction[] = [
-  { key: 'wallet', label: '充钻石', icon: '◇', to: '/wallet', auth: true },
-  { key: 'client', label: '客户端', icon: '↓', to: '/client' },
-  { key: 'wallpaper', label: '壁纸', icon: '☆', to: '/wallpaper' },
-  { key: 'notify', label: '通知', icon: '◉', to: '/notifications', auth: true },
-  { key: 'messages', label: '消息', icon: '✈', to: '/messages', auth: true },
-  { key: 'publish', label: '投稿', icon: '+', to: '/video', auth: true },
+  { key: 'wallet', label: '充积分', icon: 'coin', to: '/wallet', auth: true },
+  { key: 'client', label: '客户端', icon: 'download', to: '/client' },
+  { key: 'wallpaper', label: '壁纸', icon: 'sparkle', to: '/wallpaper' },
+  { key: 'notify', label: '通知', icon: 'bell', to: '/notifications', auth: true },
+  { key: 'messages', label: '消息', icon: 'chat', to: '/messages', auth: true },
+  { key: 'publish', label: '投稿', icon: 'plus-box', to: '/video', auth: true },
 ]
 
 const props = defineProps<{ full?: boolean }>()
@@ -157,7 +158,9 @@ function headerActionTo(action: HeaderAction) {
             :class="{ on: route.path === action.to }"
             :to="headerActionTo(action)"
           >
-            <span class="dy-head-icon" aria-hidden="true">{{ action.icon }}</span>
+            <span class="dy-head-icon" aria-hidden="true">
+              <AppIcon :name="action.icon" :size="18" />
+            </span>
             <span class="dy-head-label">{{ action.label }}</span>
           </RouterLink>
           <RouterLink class="dy-head-avatar" to="/account" :title="auth.isLoggedIn ? '账号' : '登录'">
@@ -393,7 +396,10 @@ function headerActionTo(action: HeaderAction) {
 }
 
 .dy-head-icon {
-  font-size: 16px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
   line-height: 1;
 }
 

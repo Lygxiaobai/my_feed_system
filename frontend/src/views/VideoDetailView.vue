@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { track } from '../analytics/track'
 import { createWatchSession } from '../analytics/watch'
+import AppIcon from '../components/AppIcon.vue'
 import AppShell from '../components/AppShell.vue'
 import CommentListSkeleton from '../components/CommentListSkeleton.vue'
 import DanmakuLayer from '../components/DanmakuLayer.vue'
@@ -500,12 +501,16 @@ onBeforeUnmount(() => {
 
           <div class="actions">
             <button class="act" type="button" :disabled="state.busy" @click.stop="toggleLike">
-              <span class="icon" :class="{ liked: !!state.isLiked }">♥</span>
+              <span class="icon" :class="{ liked: !!state.isLiked }">
+                <AppIcon :name="state.isLiked ? 'heart-fill' : 'heart'" :size="28" />
+              </span>
               <span class="count">{{ state.video.likes_count }}</span>
             </button>
 
             <button class="act" type="button" @click.stop="openComments">
-              <span class="icon">💬</span>
+              <span class="icon">
+                <AppIcon name="comment" :size="26" />
+              </span>
               <span class="count">{{ state.video.comment_count }}</span>
             </button>
 
@@ -516,26 +521,36 @@ onBeforeUnmount(() => {
               :disabled="state.busy || social.isPending(state.video.author_id)"
               @click.stop="toggleFollow"
             >
-              <span class="icon">＋</span>
+              <span class="icon">
+                <AppIcon name="plus" :size="26" />
+              </span>
               <span class="count">{{ social.isFollowing(state.video.author_id) ? '已关注' : '关注' }}</span>
             </button>
 
             <button class="act" type="button" @click.stop="share">
-              <span class="icon">↗</span>
+              <span class="icon">
+                <AppIcon name="share" :size="26" />
+              </span>
               <span class="count">分享</span>
             </button>
 
             <button v-if="canTip" class="act" type="button" :disabled="state.busy" @click.stop="openTip">
-              <span class="icon">赏</span>
+              <span class="icon">
+                <AppIcon name="coin" :size="26" />
+              </span>
               <span class="count">打赏</span>
             </button>
             <button v-if="auth.isLoggedIn" class="act" type="button" @click.stop="openTips">
-              <span class="icon">赏</span>
+              <span class="icon">
+                <AppIcon name="list" :size="24" />
+              </span>
               <span class="count">打赏记录</span>
             </button>
 
             <button v-if="!isOwnVideo" class="act" type="button" @click.stop="openReport">
-              <span class="icon">⚑</span>
+              <span class="icon">
+                <AppIcon name="flag" :size="24" />
+              </span>
               <span class="count">举报</span>
             </button>
           </div>
@@ -647,11 +662,10 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   display: grid;
-  place-items: center;
-  padding: 18px 14px;
 }
 
 .center-hint {
+  place-self: center;
   color: rgba(255, 255, 255, 0.78);
 }
 
@@ -660,14 +674,12 @@ onBeforeUnmount(() => {
 }
 
 .stage {
-  width: min(980px, calc(100vw - 28px));
-  height: min(100%, calc(var(--app-height, 100dvh) - var(--topbar-h, 56px) - 52px - 36px - var(--bottom-nav-h, 0px)));
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   position: relative;
-  border-radius: 18px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.35);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  background: #000;
 }
 
 .video {
@@ -719,6 +731,7 @@ onBeforeUnmount(() => {
   font-size: 16px;
   font-weight: 700;
   margin-bottom: 6px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.65);
 }
 
 .desc {
@@ -729,28 +742,28 @@ onBeforeUnmount(() => {
 
 .actions {
   position: absolute;
-  right: 12px;
+  right: 10px;
   bottom: 18px;
   z-index: 3;
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .act {
-  width: 70px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.32);
-  color: rgba(255, 255, 255, 0.92);
-  padding: 10px 10px;
+  appearance: none;
+  width: 52px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.96);
+  padding: 0;
   cursor: pointer;
   display: grid;
-  gap: 6px;
+  gap: 4px;
   justify-items: center;
 }
 
 .act:hover {
-  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .act:disabled {
@@ -759,19 +772,22 @@ onBeforeUnmount(() => {
 }
 
 .icon {
-  font-size: 20px;
-  line-height: 1;
-  opacity: 0.92;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.55));
 }
 
 .icon.liked {
   color: rgba(254, 44, 85, 1);
-  text-shadow: 0 10px 20px rgba(254, 44, 85, 0.25);
 }
 
 .count {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.75);
 }
 
 .chip {
@@ -955,18 +971,6 @@ onBeforeUnmount(() => {
     gap: 8px;
   }
 
-  .wrap {
-    padding: 0;
-  }
-
-  .stage {
-    width: 100%;
-    height: 100%;
-    border-radius: 0;
-    border: none;
-    box-shadow: none;
-  }
-
   .meta {
     left: 12px;
     right: 84px;
@@ -979,14 +983,9 @@ onBeforeUnmount(() => {
   }
 
   .actions {
-    right: 8px;
+    right: 6px;
     bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-    gap: 10px;
-  }
-
-  .act {
-    width: 64px;
-    padding: 8px 6px;
+    gap: 12px;
   }
 
   .drawer-backdrop {

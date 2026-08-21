@@ -19,6 +19,13 @@ scenarios:
       - frontend-e2e
       - desktop
       - mobile
+  - name: video-playback-time-and-progress
+    description: A user watches an active feed or detail video and uses the progress bar.
+    expected: The player shows current time and total duration as mm:ss / mm:ss. The bar follows playback, and tapping or dragging it seeks to that offset so overlays such as danmaku stay aligned.
+    tags:
+      - frontend-e2e
+      - desktop
+      - mobile
   - name: video-upload-processing
     description: A user selects one video and starts publishing while the server transcodes it asynchronously.
     expected: Upload reports real byte-level progress, processing and publishing are shown as distinct in-progress states in user terms, polling covers only the account-owned task, publishing happens only after ready URLs exist, and a processing failure is shown as recoverable.

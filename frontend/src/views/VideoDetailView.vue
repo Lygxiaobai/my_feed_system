@@ -731,7 +731,7 @@ onBeforeUnmount(() => {
 }
 
 .stage.has-composer .meta {
-  bottom: 68px;
+  bottom: 88px;
 }
 
 .author-link {
@@ -1004,7 +1004,7 @@ onBeforeUnmount(() => {
   }
 
   .stage.has-composer .meta {
-    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   }
 
   .actions {

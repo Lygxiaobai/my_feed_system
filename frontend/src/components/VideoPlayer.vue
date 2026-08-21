@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 export type PlaybackStatus = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error'
 
@@ -37,9 +37,34 @@ const props = withDefaults(
 )
 
 const videoEl = ref<HTMLVideoElement | null>(null)
+const trackEl = ref<HTMLDivElement | null>(null)
 const status = ref<PlaybackStatus>('idle')
 const errorMessage = ref('')
+const playhead = ref(0)
+const total = ref(0)
+const scrubbing = ref(false)
 let pendingSeek: number | null = null
+
+function formatClock(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '00:00'
+  const whole = Math.floor(seconds)
+  const hours = Math.floor(whole / 3600)
+  const minutes = Math.floor((whole % 3600) / 60)
+  const rest = whole % 60
+  const mm = String(minutes).padStart(2, '0')
+  const ss = String(rest).padStart(2, '0')
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`
+}
+
+const playedPercent = computed(() => {
+  if (total.value <= 0) return 0
+  return Math.min(100, Math.max(0, (playhead.value / total.value) * 100))
+})
+
+function syncClock() {
+  if (!scrubbing.value) playhead.value = currentTime()
+  total.value = duration()
+}
 
 function setStatus(nextStatus: PlaybackStatus) {
   status.value = nextStatus
@@ -109,17 +134,54 @@ function applyPendingSeek() {
   const durationValue = duration()
   const next = durationValue > 0 ? Math.min(pendingSeek, Math.max(0, durationValue - 0.05)) : pendingSeek
   video.currentTime = next
+  playhead.value = next
   pendingSeek = null
 }
 
 function seek(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return
+  // 进度条拖回开头是合法操作，0 必须能 seek。
+  if (!Number.isFinite(seconds) || seconds < 0) return
   pendingSeek = seconds
   applyPendingSeek()
 }
 
+function secondsFromPointer(event: PointerEvent) {
+  const el = trackEl.value
+  if (!el || total.value <= 0) return 0
+  const rect = el.getBoundingClientRect()
+  if (rect.width <= 0) return 0
+  const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+  return ratio * total.value
+}
+
+function onScrubStart(event: PointerEvent) {
+  if (total.value <= 0) return
+  event.preventDefault()
+  trackEl.value?.setPointerCapture(event.pointerId)
+  scrubbing.value = true
+  const next = secondsFromPointer(event)
+  playhead.value = next
+  seek(next)
+}
+
+function onScrubMove(event: PointerEvent) {
+  if (!scrubbing.value) return
+  const next = secondsFromPointer(event)
+  playhead.value = next
+  seek(next)
+}
+
+function onScrubEnd(event: PointerEvent) {
+  if (!scrubbing.value) return
+  scrubbing.value = false
+  if (trackEl.value?.hasPointerCapture(event.pointerId)) {
+    trackEl.value.releasePointerCapture(event.pointerId)
+  }
+}
+
 function onLoadedMetadata() {
   if (status.value !== 'playing') setStatus('ready')
+  syncClock()
   applyPendingSeek()
 }
 
@@ -147,6 +209,7 @@ function onPause() {
 }
 
 function onTimeUpdate() {
+  syncClock()
   emit('timeupdate', currentTime())
 }
 
@@ -167,6 +230,8 @@ async function syncSource() {
   video.muted = props.muted
   if (!props.enabled || !props.src) {
     pendingSeek = null
+    playhead.value = 0
+    total.value = 0
     video.pause()
     video.removeAttribute('src')
     video.load()
@@ -181,6 +246,8 @@ watch(
   [() => props.src, () => props.enabled],
   () => {
     pendingSeek = null
+    playhead.value = 0
+    total.value = 0
     void syncSource()
   },
   { immediate: true },
@@ -234,6 +301,7 @@ defineExpose<VideoPlayerHandle>({
       @playing="onPlaying"
       @pause="onPause"
       @timeupdate="onTimeUpdate"
+      @durationchange="syncClock"
       @waiting="onWaiting"
       @stalled="onWaiting"
       @error="onError"
@@ -244,6 +312,36 @@ defineExpose<VideoPlayerHandle>({
     </div>
     <div v-else-if="status === 'paused' && active" class="paused-indicator" aria-hidden="true">▶</div>
     <button v-if="status === 'error'" class="retry" type="button" @click.stop="retry">重试</button>
+
+    <!-- 点进度条不能冒泡到舞台，否则会误触暂停或双击点赞。 -->
+    <div
+      v-if="active && enabled && src"
+      class="chrome"
+      @click.stop
+      @dblclick.stop.prevent
+    >
+      <span class="clock">{{ formatClock(playhead) }} / {{ formatClock(total) }}</span>
+      <div
+        ref="trackEl"
+        class="track"
+        :class="{ dragging: scrubbing }"
+        role="slider"
+        aria-label="播放进度"
+        :aria-valuemin="0"
+        :aria-valuemax="Math.round(total)"
+        :aria-valuenow="Math.round(playhead)"
+        :aria-valuetext="`${formatClock(playhead)} / ${formatClock(total)}`"
+        @pointerdown="onScrubStart"
+        @pointermove="onScrubMove"
+        @pointerup="onScrubEnd"
+        @pointercancel="onScrubEnd"
+      >
+        <div class="track-line">
+          <div class="played" :style="{ width: `${playedPercent}%` }" />
+          <i class="knob" :style="{ left: `${playedPercent}%` }" aria-hidden="true" />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -307,5 +405,85 @@ defineExpose<VideoPlayerHandle>({
   background: rgba(0, 0, 0, 0.65);
   color: white;
   cursor: pointer;
+}
+
+.chrome {
+  position: absolute;
+  left: 16px;
+  right: 92px;
+  bottom: 56px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.clock {
+  flex: none;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.75);
+  white-space: nowrap;
+}
+
+.track {
+  flex: 1;
+  min-width: 0;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.track-line {
+  width: 100%;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  position: relative;
+}
+
+.track:hover .track-line,
+.track.dragging .track-line {
+  height: 4px;
+}
+
+.played {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.knob {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.track:hover .knob,
+.track.dragging .knob {
+  opacity: 1;
+}
+
+@media (max-width: 900px) {
+  .chrome {
+    left: 12px;
+    right: 80px;
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+  }
 }
 </style>

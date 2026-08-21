@@ -241,7 +241,7 @@ function headerActionTo(action: HeaderAction) {
   <div class="dy-shell" :class="{ full: props.full }">
     <header class="dy-topbar">
       <RouterLink class="dy-brand" to="/">
-        <span class="dy-mark" aria-hidden="true" />
+        <img class="dy-mark" src="/favicon.svg" alt="" width="22" height="22" />
         <span class="dy-brand-text">ShortVideo</span>
       </RouterLink>
 
@@ -522,10 +522,7 @@ function headerActionTo(action: HeaderAction) {
   height: 22px;
   flex: none;
   border-radius: 7px;
-  background:
-    radial-gradient(circle at 32% 36%, #25f4ee 0 38%, transparent 40%),
-    radial-gradient(circle at 68% 64%, #fe2c55 0 38%, transparent 40%),
-    #161823;
+  display: block;
 }
 
 .dy-brand-text {

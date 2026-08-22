@@ -110,11 +110,6 @@ const showProgress = computed(
   () => phase.value === 'uploading' || phase.value === 'processing' || phase.value === 'publishing',
 )
 
-function titleFromFilename(name: string) {
-  const base = name.replace(/\.[^./\\]+$/, '').replace(/\s+/g, ' ').trim()
-  return base.slice(0, titleMax)
-}
-
 function setPreviewVideo(file: File | null) {
   if (previewVideoUrl.value) URL.revokeObjectURL(previewVideoUrl.value)
   previewVideoUrl.value = file ? URL.createObjectURL(file) : ''
@@ -213,9 +208,6 @@ function acceptFile(file: File) {
 
   fileError.value = ''
   publishRequested.value = false
-  if (!publishForm.title.trim()) {
-    publishForm.title = titleFromFilename(file.name)
-  }
   publishForm.video = file
   void prepareMedia(file)
 }

@@ -21,10 +21,17 @@ scenarios:
       - mobile
   - name: stranger-composer-locks-after-one
     description: A signed-in user who does not mutually follow the peer sends one message.
-    expected: The message appears in the expanded thread; the composer then refuses further input and explains that mutual follow is required.
+    expected: The message appears in the expanded thread with the sender's avatar on the right; the composer then refuses further input and explains that mutual follow is required.
     tags:
       - frontend-e2e
       - desktop
+  - name: thread-bubbles-show-sender-avatar
+    description: A signed-in user views a thread that contains both their own and the peer's messages.
+    expected: Each bubble shows the sender's avatar. The peer's avatar sits on the left and the viewer's avatar sits on the right, using the same identity seed as the top-bar avatar.
+    tags:
+      - frontend-e2e
+      - desktop
+      - mobile
   - name: compact-messages-list-then-chat
     description: A signed-in user on the compact top bar opens 消息, picks a conversation, then closes it.
     expected: The list is shown first, the chosen chat replaces the list, and closing returns to the list without leaving `/messages`.

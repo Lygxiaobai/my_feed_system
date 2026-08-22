@@ -70,6 +70,8 @@ function routePeerId() {
 
 const peerId = computed(() => (props.variant === 'dropdown' ? dm.activePeerId : localPeerId.value))
 const chatOpen = computed(() => peerId.value > 0)
+const myAccountId = computed(() => auth.claims?.account_id ?? 0)
+const myUsername = computed(() => auth.claims?.username?.trim() || '我')
 const lastMineId = computed(() => {
   const mine = thread.value.messages.filter((item) => item.mine)
   const last = mine[mine.length - 1]
@@ -424,9 +426,9 @@ onUnmounted(stopTimers)
             <div v-if="showTimeDivider(index, msg)" class="m-when">{{ formatChatTime(msg.created_at) }}</div>
             <div class="m-bubble-row" :class="{ mine: msg.mine }">
               <UserAvatar
-                v-if="!msg.mine"
-                :username="thread.peer.username || '用户'"
-                :id="thread.peer.id"
+                compact
+                :username="msg.mine ? myUsername : thread.peer.username || '用户'"
+                :id="msg.mine ? myAccountId : thread.peer.id"
                 :size="28"
               />
               <div class="m-bubble-col">
@@ -710,6 +712,10 @@ onUnmounted(stopTimers)
   align-items: flex-end;
   gap: 8px;
   max-width: min(78%, 420px);
+}
+
+.m-bubble-row :deep(.avatar) {
+  flex-shrink: 0;
 }
 
 .m-bubble-row.mine {

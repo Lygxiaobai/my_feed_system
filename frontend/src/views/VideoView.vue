@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, onUnmounted, reactive, ref, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { onBeforeRouteLeave, RouterLink, useRouter } from 'vue-router'
 
 import { track } from '../analytics/track'
+import AppIcon from '../components/AppIcon.vue'
 import AppShell from '../components/AppShell.vue'
 import { AbortedError, ApiError } from '../api/client'
 import * as videoApi from '../api/video'
 import type { Video } from '../api/types'
+import type { VideoUploadTask } from '../api/video'
 import { useAuthStore } from '../stores/auth'
 import { useToastStore } from '../stores/toast'
 
@@ -14,17 +16,27 @@ const router = useRouter()
 const auth = useAuthStore()
 const toast = useToastStore()
 
-/** 发布流程的阶段，取代原先用自由文本描述进度的做法，也避免把后端术语暴露给用户。 */
-type PublishPhase = 'idle' | 'uploading' | 'processing' | 'publishing'
+/**
+ * idle：未选文件，或已取消/尚未重新开始。
+ * ready：转码完成，可以立刻发布，不必再传一遍。
+ * done：本条已发布，展示完成态而不是空表单。
+ */
+type PublishPhase = 'idle' | 'uploading' | 'processing' | 'ready' | 'publishing' | 'failed' | 'done'
 
 const phase = ref<PublishPhase>('idle')
 const uploadPercent = ref(0)
 const fileError = ref('')
+const lastError = ref('')
 const published = ref<Video | null>(null)
 const publishRequestKey = ref('')
+const publishRequested = ref(false)
 const videoInput = ref<HTMLInputElement | null>(null)
 const previewVideoUrl = ref('')
+const readyTask = ref<VideoUploadTask | null>(null)
+const dragOver = ref(false)
+
 let abortController: AbortController | null = null
+let prepareRunId = 0
 
 const publishForm = reactive({
   title: '',
@@ -34,21 +46,50 @@ const publishForm = reactive({
 
 const formatFileSize = videoApi.formatFileSize
 const maxSizeText = videoApi.formatFileSize(videoApi.MAX_VIDEO_BYTES)
+const titleMax = videoApi.MAX_TITLE_CHARS
+const descMax = videoApi.MAX_DESCRIPTION_CHARS
 
-const busy = computed(() => phase.value !== 'idle')
-const canSubmit = computed(
-  () => !busy.value && publishForm.title.trim().length > 0 && !!publishForm.video && !fileError.value,
+const locked = computed(() => phase.value === 'publishing' || phase.value === 'done')
+const preparing = computed(() => phase.value === 'uploading' || phase.value === 'processing')
+const canChangeFile = computed(() => !locked.value)
+const canSubmit = computed(() => {
+  if (locked.value || !auth.isLoggedIn) return false
+  if (!publishForm.title.trim() || !publishForm.video || fileError.value) return false
+  return true
+})
+
+const shouldWarnLeave = computed(() =>
+  phase.value === 'uploading' ||
+  phase.value === 'processing' ||
+  phase.value === 'ready' ||
+  phase.value === 'publishing',
 )
 
 const phaseText = computed(() => {
   if (phase.value === 'uploading') return `上传中 ${uploadPercent.value}%`
   if (phase.value === 'processing') return '处理中'
+  if (phase.value === 'ready') return '已就绪'
   if (phase.value === 'publishing') return '发布中'
+  if (phase.value === 'failed') return lastError.value || '处理失败'
   return ''
 })
 
-// 只有上传阶段能拿到真实百分比，处理和发布阶段用不确定态动画表示仍在进行。
+const submitLabel = computed(() => {
+  if (phase.value === 'publishing') return '发布中'
+  if (publishRequested.value && preparing.value) return '处理完成后发布'
+  if (phase.value === 'failed') return '重试并发布'
+  return '发布'
+})
+
 const indeterminate = computed(() => phase.value === 'processing' || phase.value === 'publishing')
+const showProgress = computed(
+  () => phase.value === 'uploading' || phase.value === 'processing' || phase.value === 'publishing',
+)
+
+function titleFromFilename(name: string) {
+  const base = name.replace(/\.[^./\\]+$/, '').replace(/\s+/g, ' ').trim()
+  return base.slice(0, titleMax)
+}
 
 function setPreviewVideo(file: File | null) {
   if (previewVideoUrl.value) URL.revokeObjectURL(previewVideoUrl.value)
@@ -63,98 +104,227 @@ watch(
 watch(
   () => [publishForm.title, publishForm.description, publishForm.video],
   () => {
-    if (!busy.value) publishRequestKey.value = ''
+    if (phase.value !== 'publishing') publishRequestKey.value = ''
   },
 )
 
-onUnmounted(() => {
+function abortInFlight() {
   abortController?.abort()
+  abortController = null
+}
+
+function resetMediaState() {
+  uploadPercent.value = 0
+  readyTask.value = null
+  lastError.value = ''
+  publishRequested.value = false
+}
+
+function onBeforeUnload(event: BeforeUnloadEvent) {
+  if (!shouldWarnLeave.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', onBeforeUnload)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', onBeforeUnload)
+  abortInFlight()
+  prepareRunId += 1
   setPreviewVideo(null)
 })
 
-function pickVideo(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0] ?? null
-  if (!file) {
-    clearVideo()
+onBeforeRouteLeave((_to, _from, next) => {
+  if (!shouldWarnLeave.value) {
+    next()
+    return
+  }
+  const ok = window.confirm('视频还在处理或尚未发布，离开将取消未完成的上传。确定离开？')
+  if (ok) {
+    abortInFlight()
+    next()
+    return
+  }
+  next(false)
+})
+
+async function requireLogin() {
+  toast.error('请先登录')
+  await router.push('/account')
+}
+
+function openPicker() {
+  if (!canChangeFile.value) return
+  if (!auth.isLoggedIn) {
+    void requireLogin()
+    return
+  }
+  if (videoInput.value) videoInput.value.value = ''
+  videoInput.value?.click()
+}
+
+function acceptFile(file: File) {
+  if (!canChangeFile.value) return
+  if (!auth.isLoggedIn) {
+    void requireLogin()
     return
   }
 
-  // 在发起任何网络请求之前校验，避免超限文件整份传完才被服务端拒绝。
   const message = videoApi.validateVideoFile(file)
   if (message) {
-    publishForm.video = null
     fileError.value = message
-    input.value = ''
     toast.error(message)
     return
   }
 
   fileError.value = ''
+  publishRequested.value = false
+  if (!publishForm.title.trim()) {
+    publishForm.title = titleFromFilename(file.name)
+  }
   publishForm.video = file
+  void prepareMedia(file)
+}
+
+function pickVideo(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0] ?? null
+  if (!file) return
+  acceptFile(file)
+}
+
+function onDragOver(event: DragEvent) {
+  event.preventDefault()
+  if (!canChangeFile.value || !auth.isLoggedIn) return
+  dragOver.value = true
+}
+
+function onDragLeave(event: DragEvent) {
+  const next = event.relatedTarget as Node | null
+  const current = event.currentTarget as Node
+  if (next && current.contains(next)) return
+  dragOver.value = false
+}
+
+function onDrop(event: DragEvent) {
+  event.preventDefault()
+  dragOver.value = false
+  if (!canChangeFile.value) return
+  if (!auth.isLoggedIn) {
+    void requireLogin()
+    return
+  }
+  const files = event.dataTransfer?.files
+  const file = files?.[0]
+  if (!file) return
+  if (files && files.length > 1) {
+    toast.info('一次只能发布一个视频，已使用第一个文件')
+  }
+  acceptFile(file)
 }
 
 function clearVideo() {
+  if (!canChangeFile.value) return
+  abortInFlight()
+  prepareRunId += 1
   publishForm.video = null
   fileError.value = ''
+  resetMediaState()
+  phase.value = 'idle'
   if (videoInput.value) videoInput.value.value = ''
 }
 
 function cancel() {
-  abortController?.abort()
+  if (!preparing.value) return
+  publishRequested.value = false
+  abortInFlight()
+  toast.info('已取消')
 }
 
 function awaitingReview(video: Video | null) {
   return video?.audit_status === 'pending' || video?.audit_status === 'reviewing'
 }
 
-async function onPublish() {
-  if (busy.value) return
-  if (!auth.isLoggedIn) {
-    toast.error('请先登录')
-    await router.push('/account')
-    return
-  }
-
-  const title = publishForm.title.trim()
-  const description = publishForm.description.trim()
-  const file = publishForm.video
-  if (!title) {
-    toast.error('请输入标题')
-    return
-  }
-  if (!file) {
-    toast.error('请选择视频文件')
-    return
-  }
-
+async function prepareMedia(file: File) {
+  const myRun = ++prepareRunId
+  abortInFlight()
   const controller = new AbortController()
   abortController = controller
-  published.value = null
+  readyTask.value = null
+  lastError.value = ''
   uploadPercent.value = 0
   phase.value = 'uploading'
 
   try {
     const task = await videoApi.uploadVideo(file, {
       onProgress: (percent) => {
-        uploadPercent.value = percent
+        if (myRun === prepareRunId) uploadPercent.value = percent
       },
       signal: controller.signal,
     })
+    if (myRun !== prepareRunId) return
 
-    phase.value = 'processing'
-    const isReady = task.status === 'ready' && !!task.play_url && !!task.cover_url
-    const readyTask = isReady ? task : await videoApi.waitForVideoUpload(task.id, { signal: controller.signal })
+    const alreadyReady = task.status === 'ready' && !!task.play_url && !!task.cover_url
+    if (!alreadyReady) phase.value = 'processing'
+    const ready = alreadyReady
+      ? task
+      : await videoApi.waitForVideoUpload(task.id, { signal: controller.signal })
+    if (myRun !== prepareRunId) return
 
-    phase.value = 'publishing'
-    if (!publishRequestKey.value) publishRequestKey.value = videoApi.createIdempotencyKey()
+    readyTask.value = ready
+    phase.value = 'ready'
+    if (publishRequested.value) {
+      await commitPublish(ready)
+    }
+  } catch (error) {
+    if (myRun !== prepareRunId) return
+    if (error instanceof AbortedError) {
+      phase.value = 'idle'
+      uploadPercent.value = 0
+      readyTask.value = null
+      return
+    }
+    lastError.value = error instanceof ApiError ? error.message : String(error)
+    phase.value = 'failed'
+    publishRequested.value = false
+    toast.error(lastError.value)
+  } finally {
+    if (myRun === prepareRunId) abortController = null
+  }
+}
+
+async function commitPublish(task: VideoUploadTask) {
+  if (phase.value === 'publishing' || phase.value === 'done') return
+
+  const title = publishForm.title.trim().slice(0, titleMax)
+  const description = publishForm.description.trim().slice(0, descMax)
+  if (!title) {
+    publishRequested.value = false
+    toast.error('请输入标题')
+    return
+  }
+  if (!task.play_url || !task.cover_url) {
+    publishRequested.value = false
+    phase.value = 'failed'
+    lastError.value = '视频还没准备好，请重试'
+    toast.error(lastError.value)
+    return
+  }
+
+  phase.value = 'publishing'
+  if (!publishRequestKey.value) publishRequestKey.value = videoApi.createIdempotencyKey()
+
+  try {
     // 封面由后端转码时自动取视频首帧生成，用户侧不再有封面这个概念。
     const res = await videoApi.publishVideo(
       {
         title,
         description,
-        play_url: readyTask.play_url!,
-        cover_url: readyTask.cover_url!,
+        play_url: task.play_url,
+        cover_url: task.cover_url,
       },
       { idempotencyKey: publishRequestKey.value },
     )
@@ -162,102 +332,196 @@ async function onPublish() {
     published.value = res
     track('video_publish', { video_id: res.id })
     publishRequestKey.value = ''
-    publishForm.title = ''
-    publishForm.description = ''
-    clearVideo()
-    // 审核开启时发布为待审，关闭时发布即公开。按返回状态提示，避免用户误以为失败。
+    publishRequested.value = false
+    phase.value = 'done'
     toast.success(awaitingReview(res) ? '已提交，审核通过后将出现在信息流中' : '发布成功')
   } catch (error) {
-    // 用户主动取消属于正常操作，不当作失败处理。
-    if (error instanceof AbortedError) {
-      toast.info('已取消')
-    } else {
-      toast.error(error instanceof ApiError ? error.message : String(error))
-    }
-  } finally {
-    abortController = null
-    phase.value = 'idle'
-    uploadPercent.value = 0
+    publishRequested.value = false
+    // 媒体已就绪，失败只影响这一次发布，不必重新上传。
+    phase.value = 'ready'
+    toast.error(error instanceof ApiError ? error.message : String(error))
   }
+}
+
+async function onPublish() {
+  if (!canSubmit.value) return
+  if (!auth.isLoggedIn) {
+    await requireLogin()
+    return
+  }
+
+  const file = publishForm.video
+  if (!file) {
+    toast.error('请选择视频文件')
+    return
+  }
+
+  publishRequested.value = true
+  published.value = null
+
+  if (phase.value === 'ready' && readyTask.value) {
+    await commitPublish(readyTask.value)
+    return
+  }
+  if (preparing.value) return
+  await prepareMedia(file)
+}
+
+function startAnother() {
+  abortInFlight()
+  prepareRunId += 1
+  published.value = null
+  publishForm.title = ''
+  publishForm.description = ''
+  publishForm.video = null
+  fileError.value = ''
+  resetMediaState()
+  phase.value = 'idle'
+  if (videoInput.value) videoInput.value.value = ''
+  setPreviewVideo(null)
 }
 </script>
 
 <template>
   <AppShell>
     <div class="publish-wrap">
-      <div class="card publish-card">
+      <div v-if="!auth.isLoggedIn" class="card publish-card">
         <p class="title" style="margin: 0">发布视频</p>
+        <p class="subtle" style="margin: 10px 0 16px">登录后即可投稿。选择视频后会立刻开始上传，你可以同时填写标题。</p>
+        <RouterLink class="pill" to="/account">去登录</RouterLink>
+      </div>
 
-        <div class="grid form-grid" style="margin-top: 16px">
-          <div>
-            <label>标题</label>
-            <input v-model.trim="publishForm.title" class="big-input" :disabled="busy" placeholder="给视频起个标题" />
-          </div>
+      <div v-else-if="phase === 'done' && published" class="card publish-card done-card">
+        <p class="title" style="margin: 0">{{ awaitingReview(published) ? '已提交审核' : '发布成功' }}</p>
+        <p class="done-title">{{ published.title }}</p>
+        <p class="audit-tip">
+          {{
+            awaitingReview(published)
+              ? '审核通过后才会出现在信息流中，你可以先在「我的」里查看'
+              : '已出现在信息流中'
+          }}
+        </p>
+        <div class="row done-actions">
+          <RouterLink class="pill" :to="`/video/${published.id}`">去播放</RouterLink>
+          <button type="button" @click="startAnother">再发一条</button>
+        </div>
+      </div>
 
-          <div>
-            <label>描述</label>
-            <textarea v-model.trim="publishForm.description" class="big-input" :disabled="busy" placeholder="选填" />
-          </div>
+      <div v-else class="card publish-card">
+        <p class="title" style="margin: 0">发布视频</p>
+        <p class="subtle" style="margin: 8px 0 0">选好视频后会立刻上传，填写标题时不用等。</p>
 
-          <div>
-            <label>视频文件</label>
-            <input
-              ref="videoInput"
-              class="file-native"
-              type="file"
-              accept="video/*"
-              :disabled="busy"
-              @change="pickVideo"
-            />
-            <div class="file-box">
-              <button type="button" :disabled="busy" @click="videoInput?.click()">选择视频</button>
-              <div class="file-name" :class="publishForm.video ? '' : 'muted'">
-                {{ publishForm.video ? publishForm.video.name : '未选择文件' }}
-              </div>
-              <button v-if="publishForm.video" type="button" :disabled="busy" @click="clearVideo">清除</button>
-            </div>
-            <div v-if="fileError" class="file-tip bad">{{ fileError }}</div>
-            <div v-else-if="publishForm.video" class="file-tip">
-              {{ formatFileSize(publishForm.video.size) }}，上限 {{ maxSizeText }}
-            </div>
-          </div>
+        <input
+          ref="videoInput"
+          class="file-native"
+          type="file"
+          accept="video/*"
+          :disabled="locked"
+          @change="pickVideo"
+        />
 
-          <div v-if="previewVideoUrl" class="preview-card">
-            <video class="video" :src="previewVideoUrl" controls playsinline preload="metadata" />
-          </div>
-
-          <div v-if="busy" class="progress">
-            <div class="progress-head">
-              <span>{{ phaseText }}</span>
-              <button class="cancel-btn" type="button" @click="cancel">取消</button>
-            </div>
-            <div class="progress-track">
-              <div
-                class="progress-bar"
-                :class="{ indeterminate }"
-                :style="indeterminate ? undefined : { width: `${uploadPercent}%` }"
-              />
-            </div>
-          </div>
-
-          <div class="row" style="justify-content: flex-end; margin-top: 8px">
-            <button class="primary big-btn" type="button" :disabled="!canSubmit" @click="onPublish">发布</button>
-          </div>
+        <div v-if="!publishForm.video" class="empty-block">
+          <button
+            class="dropzone"
+            :class="{ over: dragOver }"
+            type="button"
+            @click="openPicker"
+            @dragover="onDragOver"
+            @dragleave="onDragLeave"
+            @drop="onDrop"
+          >
+            <AppIcon name="plus-box" :size="28" />
+            <span class="dropzone-title">将视频拖到这里，或点击选择</span>
+            <span class="dropzone-hint">支持常见视频格式，最大 {{ maxSizeText }}</span>
+          </button>
+          <p v-if="fileError" class="file-tip bad">{{ fileError }}</p>
         </div>
 
-        <div v-if="published" class="card" style="margin-top: 14px">
-          <div class="row" style="justify-content: space-between; align-items: center">
-            <div>
-              <div class="title" style="margin: 0">{{ published.title }}</div>
-              <div class="audit-tip">
-                {{
-                  awaitingReview(published)
-                    ? '审核通过后才会出现在信息流中，你可以先在「我的」里查看'
-                    : '已出现在信息流中'
-                }}
+        <div
+          v-else
+          class="composer"
+          :class="{ over: dragOver }"
+          @dragover="onDragOver"
+          @dragleave="onDragLeave"
+          @drop="onDrop"
+        >
+          <div class="preview-col">
+            <div class="preview-card">
+              <video
+                v-if="previewVideoUrl"
+                class="video"
+                :src="previewVideoUrl"
+                controls
+                playsinline
+                preload="metadata"
+              />
+            </div>
+            <div class="file-meta">
+              <div class="file-name">{{ publishForm.video.name }}</div>
+              <div class="file-tip">{{ formatFileSize(publishForm.video.size) }}，上限 {{ maxSizeText }}</div>
+              <div v-if="phaseText" class="status-line" :class="{ bad: phase === 'failed', ok: phase === 'ready' }">
+                {{ phaseText }}
               </div>
             </div>
-            <RouterLink class="pill" :to="`/video/${published.id}`">去播放</RouterLink>
+            <div class="row file-actions">
+              <button type="button" :disabled="!canChangeFile" @click="openPicker">更换</button>
+              <button type="button" :disabled="!canChangeFile" @click="clearVideo">清除</button>
+            </div>
+          </div>
+
+          <div class="form-col">
+            <div>
+              <div class="field-head">
+                <label for="publish-title">标题</label>
+                <span class="count">{{ publishForm.title.length }} / {{ titleMax }}</span>
+              </div>
+              <input
+                id="publish-title"
+                v-model="publishForm.title"
+                class="big-input"
+                :disabled="locked"
+                :maxlength="titleMax"
+                placeholder="给视频起个标题"
+              />
+            </div>
+
+            <div>
+              <div class="field-head">
+                <label for="publish-desc">描述</label>
+                <span class="count">{{ publishForm.description.length }} / {{ descMax }}</span>
+              </div>
+              <textarea
+                id="publish-desc"
+                v-model="publishForm.description"
+                class="big-input desc-input"
+                :disabled="locked"
+                :maxlength="descMax"
+                placeholder="选填"
+              />
+            </div>
+
+            <div v-if="showProgress" class="progress">
+              <div class="progress-head">
+                <span>{{ phaseText }}</span>
+                <button v-if="preparing" class="cancel-btn" type="button" @click="cancel">取消</button>
+              </div>
+              <div class="progress-track">
+                <div
+                  class="progress-bar"
+                  :class="{ indeterminate }"
+                  :style="indeterminate ? undefined : { width: `${uploadPercent}%` }"
+                />
+              </div>
+            </div>
+
+            <p v-else-if="phase === 'failed'" class="file-tip bad">{{ lastError || '处理失败，可更换视频或重试' }}</p>
+            <p v-else-if="phase === 'ready'" class="file-tip ok">视频已准备好，填写标题后即可发布</p>
+
+            <div class="row submit-row">
+              <button class="primary big-btn" type="button" :disabled="!canSubmit" @click="onPublish">
+                {{ submitLabel }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -276,10 +540,6 @@ async function onPublish() {
   padding: 22px;
 }
 
-.form-grid {
-  gap: 16px;
-}
-
 .file-native {
   position: absolute;
   width: 1px;
@@ -292,25 +552,76 @@ async function onPublish() {
   border: 0;
 }
 
-.file-box {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid rgba(var(--fg), 0.12);
-  background: rgba(var(--fg), 0.06);
-  border-radius: 14px;
-  min-height: 46px;
+.empty-block {
+  margin-top: 18px;
 }
 
-.file-box button {
-  padding: 8px 10px;
-  border-radius: 12px;
+.dropzone {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 220px;
+  padding: 28px 16px;
+  border: 1px dashed rgba(var(--fg), 0.22);
+  background: rgba(var(--fg), 0.04);
+  border-radius: 16px;
+  color: rgba(var(--fg), 0.86);
+}
+
+.dropzone:hover,
+.dropzone.over {
+  border-color: rgba(254, 44, 85, 0.55);
+  background: rgba(254, 44, 85, 0.08);
+}
+
+.dropzone-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dropzone-hint {
+  font-size: 12px;
+  color: rgba(var(--fg), 0.55);
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 20px;
+  margin-top: 18px;
+  border-radius: 16px;
+}
+
+.composer.over {
+  outline: 1px dashed rgba(254, 44, 85, 0.55);
+  outline-offset: 6px;
+}
+
+.preview-col,
+.form-col {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.preview-card {
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.video {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  aspect-ratio: 16/9;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.35);
 }
 
 .file-name {
-  flex: 1;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -318,24 +629,42 @@ async function onPublish() {
   color: rgba(var(--fg), 0.88);
 }
 
-.muted {
-  color: rgba(var(--fg), 0.55);
-}
-
 .file-tip {
-  margin-top: 6px;
-  font-size: 12px;
-  color: rgba(var(--fg), 0.6);
-}
-
-.file-tip.bad {
-  color: rgba(254, 44, 85, 0.92);
-}
-
-.audit-tip {
   margin-top: 4px;
   font-size: 12px;
   color: rgba(var(--fg), 0.6);
+}
+
+.file-tip.bad,
+.status-line.bad {
+  color: rgba(254, 44, 85, 0.92);
+}
+
+.file-tip.ok,
+.status-line.ok {
+  color: rgba(34, 197, 94, 0.95);
+}
+
+.status-line {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(var(--fg), 0.7);
+}
+
+.file-actions {
+  margin-top: 2px;
+}
+
+.field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.count {
+  font-size: 12px;
+  color: rgba(var(--fg), 0.45);
 }
 
 .big-input {
@@ -347,27 +676,20 @@ async function onPublish() {
   border-radius: 14px;
 }
 
+.desc-input {
+  min-height: 120px;
+}
+
 .big-btn {
   padding: 12px 18px;
   font-size: 14px;
   border-radius: 14px;
+  min-width: 140px;
 }
 
-.preview-card {
-  border: 1px solid rgba(var(--fg), 0.12);
-  background: rgba(var(--fg), 0.05);
-  border-radius: 16px;
-  padding: 12px;
-}
-
-.video {
-  width: 100%;
-  max-height: 420px;
-  aspect-ratio: 16/9;
-  object-fit: contain;
-  border-radius: 14px;
-  border: 1px solid rgba(var(--fg), 0.1);
-  background: rgba(0, 0, 0, 0.35);
+.submit-row {
+  justify-content: flex-end;
+  margin-top: 4px;
 }
 
 .progress {
@@ -416,6 +738,45 @@ async function onPublish() {
   }
   100% {
     transform: translateX(250%);
+  }
+}
+
+.done-card {
+  display: grid;
+  gap: 8px;
+}
+
+.done-title {
+  margin: 8px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.audit-tip {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(var(--fg), 0.6);
+}
+
+.done-actions {
+  margin-top: 8px;
+}
+
+@media (max-width: 900px) {
+  .composer {
+    grid-template-columns: 1fr;
+  }
+
+  .video {
+    max-height: 280px;
+  }
+
+  .submit-row {
+    justify-content: stretch;
+  }
+
+  .big-btn {
+    width: 100%;
   }
 }
 

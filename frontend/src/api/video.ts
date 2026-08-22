@@ -4,6 +4,10 @@ import type { BackendVideoEnvelope, BackendVideosEnvelope, Video } from './types
 /** 与后端 media.defaultMaxVideoBytes（256 MiB）保持一致，超出前端直接拒绝。 */
 export const MAX_VIDEO_BYTES = 256 * 1024 * 1024
 
+/** 与 videos.title / description 列宽一致，输入框与提交前截断共用。 */
+export const MAX_TITLE_CHARS = 128
+export const MAX_DESCRIPTION_CHARS = 1000
+
 export function formatFileSize(bytes: number) {
   const mb = bytes / 1024 / 1024
   if (mb >= 1) return `${mb.toFixed(1)} MB`

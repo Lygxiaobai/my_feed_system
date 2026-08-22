@@ -27,22 +27,29 @@ scenarios:
       - desktop
       - mobile
   - name: video-upload-processing
-    description: A user selects one video and starts publishing while the server transcodes it asynchronously.
-    expected: Upload reports real byte-level progress, processing and publishing are shown as distinct in-progress states in user terms, polling covers only the account-owned task, publishing happens only after ready URLs exist, and a processing failure is shown as recoverable.
+    description: A signed-in user selects or drops one video. Upload starts immediately while they edit the title and description, then they publish after the server transcodes it.
+    expected: Upload starts on accept without waiting for the publish click, reports real byte-level progress, keeps title and description editable during upload and processing, shows processing and publishing as distinct in-progress states in user terms, polls only the account-owned task, publishes only after ready URLs exist, and shows a processing failure as recoverable without requiring a new file.
     tags:
       - frontend-e2e
       - desktop
       - mobile
   - name: video-upload-rejects-invalid-file
-    description: A user selects a non-video file or a video above the server size limit.
-    expected: The file is rejected at selection time with the reason shown, no upload request is issued, and the publish action stays unavailable until an acceptable file is chosen.
+    description: A user selects or drops a non-video file or a video above the server size limit.
+    expected: The file is rejected at selection or drop time with the reason shown, no upload request is issued, and the publish action stays unavailable until an acceptable file is chosen.
     tags:
       - frontend-e2e
       - desktop
       - mobile
   - name: video-upload-cancel
     description: A user cancels while the file is uploading or while the server is still processing it.
-    expected: The in-flight request and any polling stop immediately, the form returns to an editable idle state, and cancellation is not reported as a failure.
+    expected: The in-flight request and any polling stop immediately, the form stays editable with the file still selected, and cancellation is not reported as a failure.
+    tags:
+      - frontend-e2e
+      - desktop
+      - mobile
+  - name: video-publish-waits-for-ready
+    description: A user clicks publish before upload or processing has finished.
+    expected: The click does not start a second upload. The workflow waits for ready playable URLs, then publishes once using the title and description current at send time.
     tags:
       - frontend-e2e
       - desktop

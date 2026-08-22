@@ -41,6 +41,22 @@ func (r *Repo) FindByAuthorID(authorID uint64, viewerID uint64) ([]Video, error)
 	return videos, nil
 }
 
+// FindByAuthorIDAll 返回作者的全部作品，不过滤审核状态。
+// 只给管理面用：公开列表必须继续走 FindByAuthorID 的可见性规则。
+func (r *Repo) FindByAuthorIDAll(authorID uint64, limit int) ([]Video, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	var videos []Video
+	if err := r.db.Where("author_id = ?", authorID).
+		Order("created_at DESC, id DESC").
+		Limit(limit).
+		Find(&videos).Error; err != nil {
+		return nil, err
+	}
+	return videos, nil
+}
+
 // FindByID 按主键查询，不带审核过滤。
 // 调用方负责判断查看者是否有权看到未过审内容。
 func (r *Repo) FindByID(id uint64) (*Video, error) {

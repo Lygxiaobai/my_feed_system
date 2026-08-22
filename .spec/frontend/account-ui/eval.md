@@ -54,6 +54,12 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
+  - name: account-admin-entry
+    description: A signed-in reviewer looks at the account hub; a signed-in non-reviewer does the same.
+    expected: Only the reviewer sees an administration entry that opens the workbench owned by admin-ui, including operations. A test-email account without reviewer access sees neither administration nor a separate operations entry.
+    tags:
+      - frontend-e2e
+      - desktop
   - name: account-logout
     description: A logged-in user can log out and cannot continue using authenticated-only views.
     expected: Local authentication state is cleared and protected navigation requires login again.

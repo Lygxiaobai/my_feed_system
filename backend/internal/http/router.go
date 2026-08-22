@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"my_feed_system/internal/account"
+	"my_feed_system/internal/admin"
 	"my_feed_system/internal/analytics"
 	"my_feed_system/internal/audit"
 	"my_feed_system/internal/comment"
@@ -270,7 +271,7 @@ func NewRouterWithLocalCaches(
 	protectedAccountGroup.POST("/passkey/list", accountHandler.ListPasskeys)
 	protectedAccountGroup.POST("/passkey/delete", passkeyManageLimit, accountHandler.DeletePasskey)
 
-	opsHandler := ops.NewHandler(ops.NewService(accountService, opsCfg), db, tokenCache, jwtSecret)
+	opsHandler := ops.NewHandler(ops.NewService(opsCfg, auditCfg.ReviewerAccountIDs), db, tokenCache, jwtSecret)
 	opsGroup := r.Group("/ops")
 	opsGroup.GET("/gate", opsHandler.Gate)
 	opsProtected := opsGroup.Group("")
@@ -372,10 +373,30 @@ func NewRouterWithLocalCaches(
 	})
 	// 审核员白名单复用审核配置：这里只有「是/不是审核员」一个区分，
 	// 为它再引入一套配置或 RBAC 属于过度设计。
-	reportHandler := report.NewHandler(report.NewService(db, videoService, auditCfg.ReviewerAccountIDs))
+	reportService := report.NewService(db, videoService, auditCfg.ReviewerAccountIDs)
+	reportHandler := report.NewHandler(reportService)
 	reportGroup := r.Group("/report")
 	reportGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	reportHandler.RegisterProtectedRoutes(reportGroup, reportSubmitIPLimit, reportSubmitAccountLimit)
+
+	// 管理后台与运维台分开：这里只认审核员白名单，不认测试邮箱。
+	// 测试邮箱规则写在公开仓库里，不能当成内容处置权。
+	adminReadLimit := ratelimit.ByAccountID(rateLimiter, ratelimit.Policy{
+		Name:     "admin.read.account",
+		Limit:    60,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	adminWriteLimit := ratelimit.ByAccountID(rateLimiter, ratelimit.Policy{
+		Name:     "admin.write.account",
+		Limit:    20,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	adminHandler := admin.NewHandler(admin.NewService(reportService, videoService, accountService))
+	adminGroup := r.Group("/admin")
+	adminGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
+	adminHandler.RegisterProtectedRoutes(adminGroup, []gin.HandlerFunc{adminReadLimit}, []gin.HandlerFunc{adminWriteLimit})
 
 	recCfg := feedCfg.Recommend
 	recCfg.ApplyDefaults()

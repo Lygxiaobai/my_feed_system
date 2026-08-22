@@ -143,6 +143,33 @@ func (s *Service) ListMine(reporterID uint64, req ListMineRequest) ([]Report, er
 	return s.repo.ListByReporter(reporterID, normalizeLimit(req.Limit), req.OffsetID)
 }
 
+// CountPending 返回待处理举报条数，供管理后台概览使用。
+func (s *Service) CountPending(operatorID uint64) (int64, error) {
+	if !s.IsReviewer(operatorID) {
+		return 0, ErrNotReviewer
+	}
+	return s.repo.CountPending()
+}
+
+// CountPendingByTarget 返回某个对象当前待处理的举报条数。
+func (s *Service) CountPendingByTarget(operatorID uint64, targetID uint64) (int64, error) {
+	if !s.IsReviewer(operatorID) {
+		return 0, ErrNotReviewer
+	}
+	return s.repo.CountPendingByTarget(TargetVideo, targetID)
+}
+
+// ClosePendingAsAccepted 在内容已被下架后把待处理举报结案。
+//
+// 0 条待处理是合法的：审核员可能从内容页直接下架，当时并没有举报。
+// 结案放在下架成功之后，避免「单已关、内容还在」。
+func (s *Service) ClosePendingAsAccepted(operatorID uint64, videoID uint64, note string) (int64, error) {
+	if !s.IsReviewer(operatorID) {
+		return 0, ErrNotReviewer
+	}
+	return s.repo.ResolveTarget(nil, TargetVideo, videoID, StatusAccepted, operatorID, note, time.Now().UTC())
+}
+
 // ListPending 返回按被举报对象聚合的待处理队列。
 func (s *Service) ListPending(operatorID uint64, req ListPendingRequest) ([]PendingItem, error) {
 	if !s.IsReviewer(operatorID) {

@@ -60,6 +60,28 @@ export async function listMyReports(params?: { limit?: number; offset_id?: numbe
   return res.items ?? []
 }
 
+export type ReportAction = 'dismiss' | 'takedown'
+
+export type PendingReportItem = {
+  target_type: string
+  target_id: number
+  report_count: number
+  reason_counts: Partial<Record<ReportReason, number>>
+  firstly_at: string
+  latest_at: string
+  samples: string[]
+}
+
+export async function listPendingReports(limit = 20) {
+  const res = await postJson<{ items: PendingReportItem[] }>('/report/pending', { limit }, { authRequired: true })
+  return res.items ?? []
+}
+
+export async function handleReport(input: { video_id: number; action: ReportAction; note?: string }) {
+  const res = await postJson<{ resolved: number }>('/report/handle', input, { authRequired: true })
+  return res.resolved
+}
+
 export function reasonLabel(reason: ReportReason) {
   return REPORT_REASONS.find((r) => r.value === reason)?.label ?? reason
 }

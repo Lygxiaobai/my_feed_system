@@ -8,7 +8,12 @@ import AccountView from '../views/AccountView.vue'
 import ChangePasswordView from '../views/ChangePasswordView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import SettingsView from '../views/SettingsView.vue'
-import OpsView from '../views/OpsView.vue'
+import AdminShell from '../views/admin/AdminShell.vue'
+import AdminOverviewView from '../views/admin/AdminOverviewView.vue'
+import AdminReportsView from '../views/admin/AdminReportsView.vue'
+import AdminVideosView from '../views/admin/AdminVideosView.vue'
+import AdminUsersView from '../views/admin/AdminUsersView.vue'
+import AdminOpsView from '../views/admin/AdminOpsView.vue'
 import UserProfileView from '../views/UserProfileView.vue'
 import WalletView from '../views/WalletView.vue'
 import PasswordLoginView from '../views/PasswordLoginView.vue'
@@ -38,7 +43,18 @@ const router = createRouter({
     { path: '/account/register', name: 'account-register', component: RegisterView },
     { path: '/account/change-password', name: 'account-change-password', component: ChangePasswordView },
     { path: '/settings', name: 'settings', component: SettingsView },
-    { path: '/ops', name: 'ops', component: OpsView },
+    { path: '/ops', redirect: '/admin/ops' },
+    {
+      path: '/admin',
+      component: AdminShell,
+      children: [
+        { path: '', name: 'admin', component: AdminOverviewView },
+        { path: 'reports', name: 'admin-reports', component: AdminReportsView },
+        { path: 'videos', name: 'admin-videos', component: AdminVideosView },
+        { path: 'users', name: 'admin-users', component: AdminUsersView },
+        { path: 'ops', name: 'admin-ops', component: AdminOpsView },
+      ],
+    },
     { path: '/u/:id', name: 'user-profile', component: UserProfileView, props: true },
     {
       path: '/notifications',

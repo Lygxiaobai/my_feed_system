@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"my_feed_system/internal/account"
 	"my_feed_system/internal/config"
 )
 
@@ -30,15 +29,16 @@ const (
 	maxLogLimit          = 200
 )
 
-// Service 只给测试域邮箱提供只读观测，不转发 Grafana 账号密码。
+// Service 只给审核员提供只读观测，不转发 Grafana 账号密码。
+// 门禁复用审核员白名单，不再认测试邮箱：那条规则写在公开仓库里。
 type Service struct {
-	accounts *account.Service
-	lokiURL  string
-	promURL  string
-	client   *http.Client
+	reviewers map[uint64]struct{}
+	lokiURL   string
+	promURL   string
+	client    *http.Client
 }
 
-func NewService(accounts *account.Service, cfg config.OpsConfig) *Service {
+func NewService(cfg config.OpsConfig, reviewerIDs []uint64) *Service {
 	lokiURL := strings.TrimRight(strings.TrimSpace(cfg.LokiURL), "/")
 	if lokiURL == "" {
 		lokiURL = defaultLokiURL
@@ -47,16 +47,21 @@ func NewService(accounts *account.Service, cfg config.OpsConfig) *Service {
 	if promURL == "" {
 		promURL = defaultPrometheusURL
 	}
+	reviewers := make(map[uint64]struct{}, len(reviewerIDs))
+	for _, id := range reviewerIDs {
+		reviewers[id] = struct{}{}
+	}
 	return &Service{
-		accounts: accounts,
-		lokiURL:  lokiURL,
-		promURL:  promURL,
-		client:   &http.Client{Timeout: 8 * time.Second},
+		reviewers: reviewers,
+		lokiURL:   lokiURL,
+		promURL:   promURL,
+		client:    &http.Client{Timeout: 8 * time.Second},
 	}
 }
 
 func (s *Service) Allowed(accountID uint64) (bool, error) {
-	return s.accounts.HasTestEmailIdentity(accountID)
+	_, ok := s.reviewers[accountID]
+	return ok, nil
 }
 
 func (s *Service) require(accountID uint64) error {

@@ -133,6 +133,23 @@ func (s *Service) FindByID(req FindByIDRequest) (*Account, error) {
 	return account, nil
 }
 
+// FindEmailSubject 返回账号绑定的邮箱，未绑定则空字符串。
+func (s *Service) FindEmailSubject(accountID uint64) (string, error) {
+	return s.repo.FindEmailSubject(accountID)
+}
+
+// FindByIdentity 按登录方式查找账号。
+func (s *Service) FindByIdentity(provider string, subject string) (*Account, error) {
+	account, err := s.repo.FindByIdentity(provider, subject)
+	if err != nil {
+		return nil, err
+	}
+	if account == nil {
+		return nil, ErrAccountNotFound
+	}
+	return account, nil
+}
+
 // FindByUsername 按用户名查询账号。
 func (s *Service) FindByUsername(req FindByUsernameRequest) (*Account, error) {
 	account, err := s.repo.FindByUsername(req.Username)
@@ -357,7 +374,8 @@ func (s *Service) isTestEmail(email string) bool {
 	return isTestEmailDomain(email, s.emailCfg.TestDomain)
 }
 
-// HasTestEmailIdentity 判断账号是否绑定了测试域邮箱，用于开放运维台。
+// HasTestEmailIdentity 判断账号是否绑定了测试域邮箱。
+// 运维台已改走审核员白名单，这个方法不再授权任何观测接口。
 func (s *Service) HasTestEmailIdentity(accountID uint64) (bool, error) {
 	email, err := s.repo.FindEmailSubject(accountID)
 	if err != nil || email == "" {

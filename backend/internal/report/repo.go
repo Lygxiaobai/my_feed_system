@@ -60,7 +60,16 @@ func (r *Repo) ListPending(limit int) ([]Report, error) {
 	return rows, nil
 }
 
-// CountPendingByTarget 返回某个对象当前待处理的举报数。
+// CountPending 返回当前全部待处理举报条数（不是对象数）。
+func (r *Repo) CountPending() (int64, error) {
+	var count int64
+	if err := r.db.Model(&Report{}).Where("status = ?", StatusPending).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// CountPendingByTarget 返回某个对象当前待处理的举报条数。
 func (r *Repo) CountPendingByTarget(targetType TargetType, targetID uint64) (int64, error) {
 	var count int64
 	if err := r.db.Model(&Report{}).

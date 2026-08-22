@@ -10,7 +10,7 @@ import UserListSkeleton from '../components/UserListSkeleton.vue'
 import VideoGridSkeleton from '../components/VideoGridSkeleton.vue'
 import { ApiError } from '../api/client'
 import * as accountApi from '../api/account'
-import * as opsApi from '../api/ops'
+import * as adminApi from '../api/admin'
 import * as historyApi from '../api/history'
 import type { AuditStatus, HistoryItem, HistoryStatus, SocialRelation, Video } from '../api/types'
 import * as videoApi from '../api/video'
@@ -28,7 +28,7 @@ const toast = useToastStore()
 const busy = ref(false)
 const emailForm = reactive({ email: '', code: '' })
 const sendingCode = ref(false)
-const opsAllowed = ref(false)
+const adminAllowed = ref(false)
 const countdown = ref(0)
 let countdownTimer: number | undefined
 const passkeyReady = ref(false)
@@ -355,20 +355,20 @@ async function goWallet() {
   await router.push('/wallet')
 }
 
-async function goOps() {
-  await router.push('/ops')
+async function goAdmin() {
+  await router.push('/admin')
 }
 
-async function loadOpsAccess() {
+async function loadAdminAccess() {
   if (!auth.isLoggedIn) {
-    opsAllowed.value = false
+    adminAllowed.value = false
     return
   }
   try {
-    const access = await opsApi.opsAccess()
-    opsAllowed.value = access.allowed
+    const access = await adminApi.adminAccess()
+    adminAllowed.value = access.allowed
   } catch {
-    opsAllowed.value = false
+    adminAllowed.value = false
   }
 }
 
@@ -439,7 +439,7 @@ watch(
       historyStatus.value = 'unfinished'
 
       videoTab.value = 'works'
-      opsAllowed.value = false
+      adminAllowed.value = false
       if (passkeyReady.value) void startPasskeyAutofill()
     } else {
       stopPasskeyAutofill()
@@ -453,9 +453,9 @@ watch(
     if (auth.isLoggedIn && id) {
       void loadMyVideos()
       void loadLikedVideos()
-      void loadOpsAccess()
+      void loadAdminAccess()
     } else {
-      opsAllowed.value = false
+      adminAllowed.value = false
     }
   },
   { immediate: true },
@@ -522,7 +522,7 @@ watch(
             <button class="ghost" type="button" @click="router.push('/checkin')">签到</button>
             <button class="ghost" type="button" @click="router.push('/lottery')">抽奖</button>
             <button class="ghost" type="button" @click="goWallet">钱包</button>
-            <button v-if="opsAllowed" class="ghost" type="button" @click="goOps">运维</button>
+            <button v-if="adminAllowed" class="ghost" type="button" @click="goAdmin">管理后台</button>
             <button class="ghost" type="button" @click="goSettings">设置</button>
           </div>
         </div>

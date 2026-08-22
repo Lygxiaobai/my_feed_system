@@ -104,7 +104,7 @@ func (h *Handler) Metrics(c *gin.Context) {
 func writeOpsError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, ErrOpsDenied):
-		response.FailTip(c, http.StatusForbidden, response.AccessDenied, "仅测试邮箱可查看运维信息", err)
+		response.FailTip(c, http.StatusForbidden, response.AccessDenied, "没有查看运维信息的权限", err)
 	case errors.Is(err, ErrQueryInvalid):
 		response.FailTip(c, http.StatusBadRequest, response.ParamFormatError, "日志查询不合法", err)
 	case errors.Is(err, ErrObservability):

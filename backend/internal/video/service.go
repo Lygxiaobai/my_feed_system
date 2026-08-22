@@ -36,6 +36,8 @@ const (
 	maxIdempotencyKeyLength = 128
 	// takedownModerator 标记流水来源是举报处置，便于与机审、常规人工复审区分。
 	takedownModerator = "report"
+	// adminTakedownModerator 标记流水来自管理后台的直接下架（不一定先有举报）。
+	adminTakedownModerator = "admin"
 )
 
 // Service encapsulates video publish and query workflows.
@@ -372,11 +374,21 @@ func (s *Service) LoadForReport(viewerID uint64, targetID uint64) (uint64, bool,
 }
 
 // Takedown 依据人工结论下架视频，让 video 满足 report.ContentStore 的处置部分。
+func (s *Service) Takedown(ctx context.Context, videoID uint64, operatorID uint64, note string) error {
+	return s.takedown(ctx, videoID, operatorID, note, takedownModerator)
+}
+
+// AdminTakedown 是管理后台的直接下架。流水标记为 admin，与举报处置区分。
+func (s *Service) AdminTakedown(ctx context.Context, videoID uint64, operatorID uint64, note string) error {
+	return s.takedown(ctx, videoID, operatorID, note, adminTakedownModerator)
+}
+
+// takedown 把内容转为拒绝态并写流水。
 //
 // 状态变更与流水必须同事务：只改状态而流水丢失，事后就无法回答
 // 「这条内容是谁、依据什么下架的」，而处置记录的留存期是合规要求，
 // 远长于日志的轮转周期。
-func (s *Service) Takedown(ctx context.Context, videoID uint64, operatorID uint64, note string) error {
+func (s *Service) takedown(ctx context.Context, videoID uint64, operatorID uint64, note string, moderator string) error {
 	video, err := s.repo.FindByID(videoID)
 	if err != nil {
 		return err
@@ -397,9 +409,9 @@ func (s *Service) Takedown(ctx context.Context, videoID uint64, operatorID uint6
 			FromStatus: fromStatus,
 			ToStatus:   audit.StatusRejected,
 			Source:     audit.SourceManual,
-			Moderator:  takedownModerator,
+			Moderator:  moderator,
 			OperatorID: operatorID,
-			Label:      takedownModerator,
+			Label:      moderator,
 			Detail:     note,
 		})
 	}); err != nil {
@@ -410,12 +422,34 @@ func (s *Service) Takedown(ctx context.Context, videoID uint64, operatorID uint6
 	// 已下架的视频还会继续从 L1 返回，看起来像「下架没生效」。
 	s.invalidateDetailCache(videoID)
 
-	slog.InfoContext(ctx, "video taken down after report review",
+	slog.InfoContext(ctx, "video taken down",
 		slog.Uint64("video_id", videoID),
 		slog.Uint64("operator_id", operatorID),
-		slog.String("from_status", string(fromStatus)))
+		slog.String("from_status", string(fromStatus)),
+		slog.String("moderator", moderator))
 
 	return nil
+}
+
+// LookupForReview 给管理面读任意一条视频，绕过公开可见性。
+//
+// 故意不走 GetDetail：那条路径会把未过审内容伪装成「不存在」，
+// 审核员必须能看见被拒和待审的作品才能处置。也不回填公开缓存，
+// 避免把未过审详情写进面向公众的 L1/L2。
+func (s *Service) LookupForReview(videoID uint64) (*Video, error) {
+	video, err := s.repo.FindByID(videoID)
+	if err != nil {
+		return nil, err
+	}
+	if video == nil {
+		return nil, ErrVideoNotFound
+	}
+	return video, nil
+}
+
+// ListByAuthorForReview 给管理面列出某作者的作品，含未过审和下架。
+func (s *Service) ListByAuthorForReview(authorID uint64) ([]Video, error) {
+	return s.repo.FindByAuthorIDAll(authorID, 50)
 }
 
 // visibleTo 判断查看者能否看到该视频。

@@ -171,6 +171,26 @@ function parseResponseBody(text: string) {
   }
 }
 
+export type FormUploadStage = 'sending' | 'confirming' | 'done'
+
+export type FormUploadProgress = {
+  percent: number
+  loaded: number
+  total: number
+  stage: FormUploadStage
+}
+
+/**
+ * 浏览器把字节交给网卡，并不等于服务端已经收完、落盘并回了响应。
+ * 发送阶段最多报到这个值，100% 留给 xhr.onload。
+ */
+export const UPLOAD_SEND_PERCENT_CAP = 95
+
+export function mapUploadSendPercent(loaded: number, total: number): number {
+  if (total <= 0 || loaded <= 0) return 0
+  return Math.min(UPLOAD_SEND_PERCENT_CAP, Math.round((loaded / total) * UPLOAD_SEND_PERCENT_CAP))
+}
+
 /**
  * 带上传进度的表单提交。
  * 这里用 XMLHttpRequest 而不是 fetch，是因为 fetch 无法上报请求体的发送进度，
@@ -179,7 +199,11 @@ function parseResponseBody(text: string) {
 export function postFormWithProgress<T>(
   path: string,
   body: FormData,
-  options?: { authRequired?: boolean; onProgress?: (percent: number) => void; signal?: AbortSignal },
+  options?: {
+    authRequired?: boolean
+    onProgress?: (progress: FormUploadProgress) => void
+    signal?: AbortSignal
+  },
 ): Promise<T> {
   const auth = useAuthStore()
   const token = auth.token
@@ -197,10 +221,22 @@ export function postFormWithProgress<T>(
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
 
     const onProgress = options?.onProgress
+    let loaded = 0
+    let total = 0
+    const emitProgress = (stage: FormUploadStage, percent: number) => {
+      onProgress?.({ percent, loaded, total, stage })
+    }
+
     if (onProgress) {
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable || event.total <= 0) return
-        onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)))
+        loaded = event.loaded
+        total = event.total
+        emitProgress('sending', mapUploadSendPercent(loaded, total))
+      }
+      // 浏览器发完请求体之后，还要等网关转发和业务落盘。这时绝不能报 100%。
+      xhr.upload.onload = () => {
+        emitProgress('confirming', total > 0 ? UPLOAD_SEND_PERCENT_CAP : 90)
       }
     }
 
@@ -211,6 +247,7 @@ export function postFormWithProgress<T>(
 
     xhr.onload = () => {
       cleanup()
+      emitProgress('done', 100)
       const data = parseResponseBody(xhr.responseText)
       if (xhr.status === 401) auth.clearToken()
       try {

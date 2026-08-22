@@ -1,4 +1,4 @@
-import { AbortedError, postFormWithProgress, postJson, resolveAssetUrl } from './client'
+import { AbortedError, postFormWithProgress, postJson, resolveAssetUrl, type FormUploadProgress } from './client'
 import type { BackendVideoEnvelope, BackendVideosEnvelope, Video } from './types'
 
 /** 与后端 media.defaultMaxVideoBytes（256 MiB）保持一致，超出前端直接拒绝。 */
@@ -97,7 +97,7 @@ function normalizeUploadTask(task: VideoUploadTask): VideoUploadTask {
 
 export async function uploadVideo(
   file: File,
-  options?: { onProgress?: (percent: number) => void; signal?: AbortSignal },
+  options?: { onProgress?: (progress: FormUploadProgress) => void; signal?: AbortSignal },
 ) {
   const fd = new FormData()
   fd.append('file', file)

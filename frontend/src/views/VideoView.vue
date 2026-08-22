@@ -5,7 +5,7 @@ import { onBeforeRouteLeave, RouterLink, useRouter } from 'vue-router'
 import { track } from '../analytics/track'
 import AppIcon from '../components/AppIcon.vue'
 import AppShell from '../components/AppShell.vue'
-import { AbortedError, ApiError } from '../api/client'
+import { AbortedError, ApiError, type FormUploadProgress } from '../api/client'
 import * as videoApi from '../api/video'
 import type { Video } from '../api/types'
 import type { VideoUploadTask } from '../api/video'
@@ -25,6 +25,9 @@ type PublishPhase = 'idle' | 'uploading' | 'processing' | 'ready' | 'publishing'
 
 const phase = ref<PublishPhase>('idle')
 const uploadPercent = ref(0)
+const uploadLoaded = ref(0)
+const uploadTotal = ref(0)
+const uploadStage = ref<FormUploadProgress['stage']>('sending')
 const fileError = ref('')
 const lastError = ref('')
 const published = ref<Video | null>(null)
@@ -65,13 +68,34 @@ const shouldWarnLeave = computed(() =>
   phase.value === 'publishing',
 )
 
+const isConfirming = computed(() => phase.value === 'uploading' && uploadStage.value === 'confirming')
+const showUploadPercent = computed(() => phase.value === 'uploading' && uploadStage.value === 'sending')
+
 const phaseText = computed(() => {
-  if (phase.value === 'uploading') return `上传中 ${uploadPercent.value}%`
+  if (phase.value === 'uploading') {
+    if (uploadStage.value === 'confirming') return '正在完成上传'
+    return `上传中 ${uploadPercent.value}%`
+  }
   if (phase.value === 'processing') return '处理中'
   if (phase.value === 'ready') return '已就绪'
   if (phase.value === 'publishing') return '发布中'
   if (phase.value === 'failed') return lastError.value || '处理失败'
   return ''
+})
+
+const progressHint = computed(() => {
+  if (phase.value === 'processing') return '正在准备可播放的视频'
+  if (phase.value === 'publishing') return '马上就好'
+  if (isConfirming.value) return '文件已发出，正在确认接收'
+  if (uploadTotal.value > 0) {
+    return `${formatFileSize(uploadLoaded.value)} / ${formatFileSize(uploadTotal.value)}`
+  }
+  return ''
+})
+
+const progressBarWidth = computed(() => {
+  if (isConfirming.value) return Math.max(uploadPercent.value, 90)
+  return uploadPercent.value
 })
 
 const submitLabel = computed(() => {
@@ -113,8 +137,15 @@ function abortInFlight() {
   abortController = null
 }
 
-function resetMediaState() {
+function resetUploadProgress() {
   uploadPercent.value = 0
+  uploadLoaded.value = 0
+  uploadTotal.value = 0
+  uploadStage.value = 'sending'
+}
+
+function resetMediaState() {
+  resetUploadProgress()
   readyTask.value = null
   lastError.value = ''
   publishRequested.value = false
@@ -255,13 +286,19 @@ async function prepareMedia(file: File) {
   abortController = controller
   readyTask.value = null
   lastError.value = ''
-  uploadPercent.value = 0
+  resetUploadProgress()
   phase.value = 'uploading'
 
   try {
     const task = await videoApi.uploadVideo(file, {
-      onProgress: (percent) => {
-        if (myRun === prepareRunId) uploadPercent.value = percent
+      onProgress: (progress) => {
+        if (myRun !== prepareRunId) return
+        // 100% 只表示请求已结束，下一拍就会切到处理中；这里不再写入，避免闪一下 100%。
+        if (progress.stage === 'done') return
+        uploadPercent.value = progress.percent
+        uploadLoaded.value = progress.loaded
+        uploadTotal.value = progress.total
+        uploadStage.value = progress.stage
       },
       signal: controller.signal,
     })
@@ -283,7 +320,7 @@ async function prepareMedia(file: File) {
     if (myRun !== prepareRunId) return
     if (error instanceof AbortedError) {
       phase.value = 'idle'
-      uploadPercent.value = 0
+      resetUploadProgress()
       readyTask.value = null
       return
     }
@@ -500,16 +537,34 @@ function startAnother() {
               />
             </div>
 
-            <div v-if="showProgress" class="progress">
+            <div
+              v-if="showProgress"
+              class="progress"
+              :class="{ confirming: isConfirming, busy: indeterminate }"
+            >
               <div class="progress-head">
-                <span>{{ phaseText }}</span>
-                <button v-if="preparing" class="cancel-btn" type="button" @click="cancel">取消</button>
+                <div class="progress-copy">
+                  <span class="progress-title">{{ phaseText }}</span>
+                  <span v-if="progressHint" class="progress-hint">{{ progressHint }}</span>
+                </div>
+                <div class="progress-aside">
+                  <span v-if="showUploadPercent" class="progress-percent">{{ uploadPercent }}%</span>
+                  <button v-if="preparing" class="cancel-btn" type="button" @click="cancel">取消</button>
+                </div>
               </div>
-              <div class="progress-track">
+              <div
+                class="progress-track"
+                role="progressbar"
+                :aria-valuemin="0"
+                :aria-valuemax="100"
+                :aria-valuenow="indeterminate ? undefined : progressBarWidth"
+                :aria-valuetext="phaseText"
+                :aria-busy="indeterminate || isConfirming"
+              >
                 <div
                   class="progress-bar"
-                  :class="{ indeterminate }"
-                  :style="indeterminate ? undefined : { width: `${uploadPercent}%` }"
+                  :class="{ indeterminate, confirming: isConfirming }"
+                  :style="indeterminate ? undefined : { width: `${progressBarWidth}%` }"
                 />
               </div>
             </div>
@@ -694,50 +749,133 @@ function startAnother() {
 
 .progress {
   display: grid;
-  gap: 8px;
+  gap: 12px;
+  padding: 14px 14px 12px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(254, 44, 85, 0.08), rgba(37, 244, 238, 0.04));
+  border: 1px solid rgba(254, 44, 85, 0.16);
 }
 
 .progress-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+}
+
+.progress-copy {
+  min-width: 0;
+}
+
+.progress-title {
+  display: block;
   font-size: 13px;
-  color: rgba(var(--fg), 0.86);
+  font-weight: 600;
+  color: rgba(var(--fg), 0.92);
+}
+
+.progress-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: rgba(var(--fg), 0.52);
+}
+
+.progress-aside {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.progress-percent {
+  font-variant-numeric: tabular-nums;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  background: linear-gradient(90deg, #25f4ee, #fe2c55);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .cancel-btn {
-  padding: 6px 12px;
-  border-radius: 12px;
+  padding: 5px 12px;
+  border-radius: 999px;
   font-size: 12px;
   min-height: 0;
+  color: rgba(var(--fg), 0.72);
 }
 
 .progress-track {
-  height: 6px;
+  position: relative;
+  height: 10px;
   border-radius: 999px;
-  background: rgba(var(--fg), 0.1);
+  background: rgba(var(--fg), 0.08);
   overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
 }
 
 .progress-bar {
+  position: relative;
   height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(37, 244, 238, 0.9), rgba(254, 44, 85, 0.9));
-  transition: width 0.2s ease;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #25f4ee 0%, #7c5cff 48%, #fe2c55 100%);
+  box-shadow: 0 0 16px rgba(254, 44, 85, 0.28);
+  transition: width 0.28s ease-out;
 }
 
-/* 处理和发布阶段拿不到进度，用往复动画表示仍在进行。 */
+.progress-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.42), transparent);
+  transform: translateX(-120%);
+  animation: progress-shine 1.6s ease-in-out infinite;
+}
+
+.progress-bar.confirming {
+  animation: progress-breathe 1.5s ease-in-out infinite;
+}
+
+/* 处理和发布阶段拿不到进度，用流动渐变表示仍在进行。 */
 .progress-bar.indeterminate {
-  width: 40%;
-  animation: progress-slide 1.1s ease-in-out infinite;
+  width: 100%;
+  background-size: 220% 100%;
+  box-shadow: none;
+  animation: progress-flow 1.5s linear infinite;
 }
 
-@keyframes progress-slide {
+.progress-bar.indeterminate::after {
+  display: none;
+}
+
+@keyframes progress-shine {
   0% {
-    transform: translateX(-100%);
+    transform: translateX(-120%);
   }
   100% {
-    transform: translateX(250%);
+    transform: translateX(160%);
+  }
+}
+
+@keyframes progress-breathe {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.18);
+  }
+}
+
+@keyframes progress-flow {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
   }
 }
 
@@ -781,9 +919,15 @@ function startAnother() {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .progress-bar,
+  .progress-bar::after,
+  .progress-bar.confirming,
+  .progress-bar.indeterminate {
+    animation: none;
+  }
+
   .progress-bar.indeterminate {
     width: 100%;
-    animation: none;
   }
 }
 </style>

@@ -10,6 +10,9 @@ related:
   - frontend/src/components/ShareInbox.vue
   - frontend/src/components/ReportSheet.vue
   - frontend/src/components/DanmakuLayer.vue
+  - frontend/src/components/CommentAuthor.vue
+  - frontend/src/components/CommentListSkeleton.vue
+  - frontend/src/components/UserAvatar.vue
   - frontend/src/components/AppShell.vue
   - frontend/src/components/FeedVideoCard.vue
   - frontend/src/views/ShareLandingView.vue
@@ -34,7 +37,7 @@ The web application exposes like, comment, follow, unfollow, tipping, a signed-i
 ## expanded spec
 Inbox presentation of those actions is owned by `notification-ui`. Repeated actions remain understandable and do not produce contradictory local state. Loading, success, and failure feedback is visible at the action's surface, and a successful mutation updates the relevant video or profile view. The tip list on a video is available to every signed-in user: the author sees all tips, and a non-author sees only their own rows.
 
-Like mutations remain pending until the API's transactional response succeeds; the UI does not wait for asynchronous popularity projection. Comment requests are applied only when their response still belongs to the open video, and comment loading, refresh, submit, and delete states do not incorrectly block one another.
+Like mutations remain pending until the API's transactional response succeeds; the UI does not wait for asynchronous popularity projection. Comment requests are applied only when their response still belongs to the open video, and comment loading, refresh, submit, and delete states do not incorrectly block one another. Each comment and reply shows the same generated identity avatar used on profiles and notices, to the left of the name and body; the avatar and name open that author's public profile. Replies use a smaller avatar so the thread hierarchy stays readable. The loading placeholder keeps that same left-rail shape.
 
 Danmaku is a playback overlay, not the comment drawer. When it is on, stored items fly across the video at the playback offset they were sent, the animation pauses with the video, and looping the video replays them. Opening or seeking into the middle of a video shows only the items that would still be crossing the screen at that moment, including when the list arrives after playback has already started. A signed-in viewer sends from a short input on the playback surface; the text appears immediately and stays only if the send succeeds. The overlay preference persists on the device. Mute and the danmaku on/off control sit in that same composer bar, so turning the overlay off hides the flying text but leaves the bar. A control whose own label already shows on or off does not also raise a transient message.
 

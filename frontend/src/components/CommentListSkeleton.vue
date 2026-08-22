@@ -12,10 +12,13 @@ withDefaults(
 <template>
   <div class="list" aria-busy="true" aria-label="评论加载中">
     <div v-for="n in count" :key="n" class="comment">
-      <Skeleton width="86px" height="13px" />
-      <Skeleton block width="42%" height="12px" />
-      <Skeleton block width="92%" height="13px" />
-      <Skeleton block :width="n % 2 ? '68%' : '80%'" height="13px" />
+      <Skeleton circle width="36px" height="36px" />
+      <div class="main">
+        <Skeleton width="86px" height="13px" />
+        <Skeleton block width="42%" height="12px" />
+        <Skeleton block width="92%" height="13px" />
+        <Skeleton block :width="n % 2 ? '68%' : '80%'" height="13px" />
+      </div>
     </div>
   </div>
 </template>
@@ -32,6 +35,14 @@ withDefaults(
   border-radius: 14px;
   padding: 10px;
   display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.main {
+  display: grid;
   gap: 8px;
+  min-width: 0;
 }
 </style>

@@ -13,6 +13,7 @@ import {
 } from '../history/progress'
 import AppIcon from '../components/AppIcon.vue'
 import AppShell from '../components/AppShell.vue'
+import CommentAuthor from '../components/CommentAuthor.vue'
 import CommentListSkeleton from '../components/CommentListSkeleton.vue'
 import DanmakuLayer from '../components/DanmakuLayer.vue'
 import FeedStageSkeleton from '../components/FeedStageSkeleton.vue'
@@ -606,36 +607,32 @@ onBeforeUnmount(() => {
             <div v-else-if="drawer.comments.length === 0" class="drawer-hint">暂无评论</div>
 
             <div class="comment" v-for="c in drawer.comments" :key="c.id">
-              <div class="comment-top">
-                <div class="comment-user">{{ c.username }}</div>
-                <div class="comment-meta mono">{{ new Date(c.created_at).toLocaleString() }}</div>
-              </div>
-              <div class="comment-content">{{ c.content }}</div>
-              <div class="comment-actions comment-actions-left">
-                <button class="chip" type="button" :disabled="isDrawerBusy()" @click="startReply(c)">回复</button>
-                <button v-if="canDeleteComment(c)" class="chip danger" type="button" :disabled="isDrawerBusy()" @click="deleteComment(c.id)">
-                  删除
-                </button>
-                <button v-if="c.replies.length > 0" class="chip" type="button" @click="toggleReplies(c.id)">
-                  {{ isRepliesOpen(c.id) ? '收起' : `展开 ${c.replies.length} 条回复` }}
-                </button>
-              </div>
+              <CommentAuthor :username="c.username" :author-id="c.author_id" :created-at="c.created_at">
+                <div class="comment-content">{{ c.content }}</div>
+                <div class="comment-actions comment-actions-left">
+                  <button class="chip" type="button" :disabled="isDrawerBusy()" @click="startReply(c)">回复</button>
+                  <button v-if="canDeleteComment(c)" class="chip danger" type="button" :disabled="isDrawerBusy()" @click="deleteComment(c.id)">
+                    删除
+                  </button>
+                  <button v-if="c.replies.length > 0" class="chip" type="button" @click="toggleReplies(c.id)">
+                    {{ isRepliesOpen(c.id) ? '收起' : `展开 ${c.replies.length} 条回复` }}
+                  </button>
+                </div>
+              </CommentAuthor>
 
               <div v-if="c.replies.length > 0 && isRepliesOpen(c.id)" class="reply-list">
                 <div class="reply" v-for="reply in c.replies" :key="reply.id">
-                  <div class="comment-top">
-                    <div class="comment-user">{{ reply.username }}</div>
-                    <div class="comment-meta mono">{{ new Date(reply.created_at).toLocaleString() }}</div>
-                  </div>
-                  <div class="comment-content">
-                    <span v-if="reply.reply_to_username" class="reply-prefix">回复 @{{ reply.reply_to_username }}：</span>{{ reply.content }}
-                  </div>
-                  <div class="comment-actions comment-actions-left">
-                    <button class="chip" type="button" :disabled="isDrawerBusy()" @click="startReply(reply)">回复</button>
-                    <button v-if="canDeleteComment(reply)" class="chip danger" type="button" :disabled="isDrawerBusy()" @click="deleteComment(reply.id)">
-                      删除
-                    </button>
-                  </div>
+                  <CommentAuthor :username="reply.username" :author-id="reply.author_id" :created-at="reply.created_at" :size="28">
+                    <div class="comment-content">
+                      <span v-if="reply.reply_to_username" class="reply-prefix">回复 @{{ reply.reply_to_username }}：</span>{{ reply.content }}
+                    </div>
+                    <div class="comment-actions comment-actions-left">
+                      <button class="chip" type="button" :disabled="isDrawerBusy()" @click="startReply(reply)">回复</button>
+                      <button v-if="canDeleteComment(reply)" class="chip danger" type="button" :disabled="isDrawerBusy()" @click="deleteComment(reply.id)">
+                        删除
+                      </button>
+                    </div>
+                  </CommentAuthor>
                 </div>
               </div>
             </div>
@@ -963,21 +960,6 @@ onBeforeUnmount(() => {
 .reply {
   border-left: 2px solid rgba(254, 44, 85, 0.25);
   padding-left: 10px;
-}
-
-.comment-top {
-  display: grid;
-  gap: 3px;
-}
-
-.comment-user {
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.comment-meta {
-  font-size: 12px;
-  color: var(--muted);
 }
 
 .comment-content {

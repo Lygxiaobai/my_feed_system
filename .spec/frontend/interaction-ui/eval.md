@@ -6,6 +6,13 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
+  - name: comment-authors-show-identity-avatar
+    description: A user opens comments on a video that already has a root comment and a reply.
+    expected: Each row shows that author's identity avatar beside the name, replies use a smaller avatar, and opening the avatar or name lands on that author's public profile.
+    tags:
+      - frontend-e2e
+      - desktop
+      - mobile
   - name: interaction-refresh
     description: A successful interaction remains consistent after navigating away and returning to the video.
     expected: The returned view reflects the server state rather than stale local action state.

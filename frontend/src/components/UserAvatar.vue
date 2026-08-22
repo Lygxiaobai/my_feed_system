@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps<{
-  username: string
-  id?: number
-  size?: number
-}>()
+const props = withDefaults(
+  defineProps<{
+    username: string
+    id?: number
+    size?: number
+    compact?: boolean
+  }>(),
+  { size: 40, compact: false },
+)
 
 function hashToHue(input: string) {
   let h = 0
@@ -21,7 +25,8 @@ const initial = computed(() => {
   return s.slice(0, 1).toUpperCase()
 })
 
-const sizePx = computed(() => `${props.size ?? 40}px`)
+const sizePx = computed(() => `${props.size}px`)
+const fontPx = computed(() => (props.compact ? `${Math.max(11, Math.round(props.size * 0.42))}px` : undefined))
 
 const bg = computed(() => {
   const seed = typeof props.id === 'number' ? String(props.id) : props.username
@@ -33,7 +38,12 @@ const bg = computed(() => {
 </script>
 
 <template>
-  <div class="avatar" :style="{ width: sizePx, height: sizePx, backgroundImage: bg }" aria-hidden="true">
+  <div
+    class="avatar"
+    :class="{ compact }"
+    :style="{ width: sizePx, height: sizePx, fontSize: fontPx, backgroundImage: bg }"
+    aria-hidden="true"
+  >
     {{ initial }}
   </div>
 </template>
@@ -49,6 +59,10 @@ const bg = computed(() => {
   font-weight: 900;
   letter-spacing: 0.2px;
   user-select: none;
+}
+
+.avatar.compact {
+  box-shadow: none;
 }
 </style>
 

@@ -1,5 +1,6 @@
 import {
   AbortedError,
+  ApiError,
   mapUploadSendPercent,
   postFormWithProgress,
   postJson,
@@ -96,14 +97,24 @@ type UploadPartResponse = {
   task?: VideoUploadTask
 }
 
-/** 与后端 media.UploadPartBytes 一致。超过这个大小就按段传，避开 Cloudflare 约 100 秒的回源超时。 */
-export const UPLOAD_PART_BYTES = 4 * 1024 * 1024
+/** 与后端 media.UploadPartBytes 一致。单段必须能在 Cloudflare 约 100 秒回源窗口内走完。 */
+export const UPLOAD_PART_BYTES = 1024 * 1024
+export const UPLOAD_PART_CONCURRENCY = 2
+
+function userFacingMediaError(message?: string) {
+  const text = message?.trim() || ''
+  if (!text || /transcode|ffmpeg|signal:|libx264|killed/i.test(text)) {
+    return '视频处理失败，请重新上传'
+  }
+  return text
+}
 
 function normalizeUploadTask(task: VideoUploadTask): VideoUploadTask {
   return {
     ...task,
     play_url: task.play_url ? resolveAssetUrl(task.play_url) : undefined,
     cover_url: task.cover_url ? resolveAssetUrl(task.cover_url) : undefined,
+    error_message: task.error_message ? userFacingMediaError(task.error_message) : undefined,
   }
 }
 
@@ -118,42 +129,81 @@ async function uploadVideoByParts(
   file: File,
   options?: { onProgress?: (progress: FormUploadProgress) => void; signal?: AbortSignal },
 ) {
-  const init = await postJson<{ session_id: string; part_bytes: number }>(
-    '/video/uploadInit',
-    { total: file.size },
-    { authRequired: true },
-  )
+  const init = await postJson<{
+    session_id: string
+    part_bytes: number
+    part_concurrency: number
+    part_count: number
+    part_origin?: string
+  }>('/video/uploadInit', { total: file.size }, { authRequired: true })
   const partSize = init.part_bytes > 0 ? init.part_bytes : UPLOAD_PART_BYTES
   const sessionId = init.session_id
-  if (!sessionId) throw new Error('上传未开始，请重试')
+  const count = init.part_count > 0 ? init.part_count : Math.ceil(file.size / partSize)
+  const concurrency = Math.max(
+    1,
+    Math.min(init.part_concurrency || UPLOAD_PART_CONCURRENCY, count),
+  )
+  if (!sessionId || count <= 0) throw new Error('上传未开始，请重试')
 
-  for (let offset = 0; offset < file.size; offset += partSize) {
+  const loadedParts = new Array<number>(count).fill(0)
+  const emit = () => {
+    if (!options?.onProgress) return
+    const loaded = loadedParts.reduce((sum, n) => sum + n, 0)
+    options.onProgress({
+      percent: mapUploadSendPercent(loaded, file.size),
+      loaded,
+      total: file.size,
+      stage: loaded >= file.size ? 'confirming' : 'sending',
+    })
+  }
+
+  const putPart = async (index: number) => {
+    const offset = index * partSize
     const end = Math.min(offset + partSize, file.size)
-    const blob = file.slice(offset, end)
     const fd = new FormData()
-    fd.append('file', blob, file.name)
-
-    const res = await postFormWithProgress<UploadPartResponse>('/video/uploadPart', fd, {
+    fd.append('file', file.slice(offset, end), file.name)
+    return postFormWithProgress<UploadPartResponse>('/video/uploadPart', fd, {
       authRequired: true,
-      headers: { 'X-Upload-Session': sessionId },
+      baseUrl: init.part_origin ? `${init.part_origin.replace(/\/$/, '')}/api` : undefined,
+      headers: {
+        'X-Upload-Session': sessionId,
+        'X-Upload-Index': String(index),
+        'X-Upload-Count': String(count),
+      },
       signal: options?.signal,
       onProgress: (progress) => {
-        if (!options?.onProgress || progress.stage === 'done') return
-        const loaded = Math.min(file.size, offset + progress.loaded)
-        const confirming = progress.stage === 'confirming'
-        options.onProgress({
-          percent: confirming
-            ? mapUploadSendPercent(end, file.size)
-            : mapUploadSendPercent(loaded, file.size),
-          loaded: confirming ? end : loaded,
-          total: file.size,
-          stage: confirming ? 'confirming' : 'sending',
-        })
+        if (progress.stage === 'done') return
+        loadedParts[index] = progress.stage === 'confirming' ? end - offset : progress.loaded
+        emit()
       },
     })
-    if (res.task) return normalizeUploadTask(res.task)
   }
-  throw new Error('上传未完成，请重试')
+
+  const runPart = async (index: number) => {
+    try {
+      return await putPart(index)
+    } catch (error) {
+      if (error instanceof AbortedError) throw error
+      // 超时或空 4xx 立刻重试会再开一套连接，把 Cloudflare 窗口挤得更死。
+      if (error instanceof ApiError) throw error
+      return await putPart(index)
+    }
+  }
+
+  let cursor = 0
+  let task: VideoUploadTask | undefined
+  const workers = Array.from({ length: concurrency }, async () => {
+    while (true) {
+      const index = cursor
+      cursor += 1
+      if (index >= count) return
+      const res = await runPart(index)
+      if (res.task) task = res.task
+    }
+  })
+  await Promise.all(workers)
+  if (!task) throw new Error('上传未完成，请重试')
+  return normalizeUploadTask(task)
 }
 
 export function getVideoUploadTask(taskId: number) {
@@ -198,7 +248,7 @@ export async function waitForVideoUpload(
     const task = await getVideoUploadTask(taskId)
     if (task.status === 'ready' && task.play_url && task.cover_url) return task
     if (task.status === 'failed') {
-      throw new Error(task.error_message || '视频处理失败，请重新上传')
+      throw new Error(userFacingMediaError(task.error_message))
     }
     await waitFor(intervalMs, signal)
   }

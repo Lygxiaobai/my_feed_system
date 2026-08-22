@@ -96,12 +96,29 @@ func (h *Handler) UploadInit(c *gin.Context) {
 	if !h.enforceUploadQuota(c) {
 		return
 	}
-	sessionID, err := h.media.BeginUpload(c.GetUint64("account_id"), req.Total)
+	partBytes := media.UploadPartBytes
+	concurrency := media.UploadPartConcurrency
+	// 直连源站时不再绕 Cloudflare，可以用大段多路。地址只来自进程环境，避免 overlay YAML 盖掉。
+	origin := strings.TrimRight(strings.TrimSpace(os.Getenv("VIDEO_UPLOAD_ORIGIN")), "/")
+	if origin != "" {
+		partBytes = media.UploadPartMaxBytes
+		concurrency = media.UploadPartDirectConcurrency
+	}
+	sessionID, count, err := h.media.BeginUpload(c.GetUint64("account_id"), req.Total, partBytes)
 	if err != nil {
 		h.replyUploadErr(c, err)
 		return
 	}
-	response.OK(c, gin.H{"session_id": sessionID, "part_bytes": media.UploadPartBytes})
+	payload := gin.H{
+		"session_id":       sessionID,
+		"part_bytes":       partBytes,
+		"part_concurrency": concurrency,
+		"part_count":       count,
+	}
+	if origin != "" {
+		payload["part_origin"] = origin
+	}
+	response.OK(c, payload)
 }
 
 func (h *Handler) UploadPart(c *gin.Context) {
@@ -112,12 +129,14 @@ func (h *Handler) UploadPart(c *gin.Context) {
 
 	// 会话放请求头：不依赖 multipart 里排在文件后面的字段。
 	sessionID := strings.TrimSpace(c.GetHeader("X-Upload-Session"))
-	if sessionID == "" {
+	index, indexErr := strconv.Atoi(strings.TrimSpace(c.GetHeader("X-Upload-Index")))
+	count, countErr := strconv.Atoi(strings.TrimSpace(c.GetHeader("X-Upload-Count")))
+	if sessionID == "" || indexErr != nil || countErr != nil {
 		response.FailTip(c, http.StatusBadRequest, response.ParamMissing, "上传已失效，请重新选择视频", nil)
 		return
 	}
 
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, media.UploadPartBytes+2<<20)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, media.UploadPartMaxBytes+2<<20)
 	file, err := c.FormFile("file")
 	if err != nil {
 		if strings.Contains(err.Error(), "request body too large") {
@@ -135,7 +154,7 @@ func (h *Handler) UploadPart(c *gin.Context) {
 	}
 	defer src.Close()
 
-	sessionID, received, task, err := h.media.AppendUploadPart(c.GetUint64("account_id"), sessionID, src, file.Size)
+	received, task, err := h.media.PutUploadPart(c.GetUint64("account_id"), sessionID, index, count, src, file.Size)
 	if err != nil {
 		h.replyUploadErr(c, err)
 		return

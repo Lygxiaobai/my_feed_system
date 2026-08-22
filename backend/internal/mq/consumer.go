@@ -12,12 +12,15 @@ import (
 
 type HandlerFunc func(ctx context.Context, event Envelope) error
 
+const defaultHandleTimeout = 10 * time.Second
+
 type Consumer struct {
-	conn        *amqp.Connection
-	queue       string
-	consumerTag string
-	prefetch    int
-	handle      HandlerFunc
+	conn          *amqp.Connection
+	queue         string
+	consumerTag   string
+	prefetch      int
+	handle        HandlerFunc
+	handleTimeout time.Duration
 }
 
 func NewConsumer(conn *amqp.Connection, queue string, consumerTag string, prefetchCount int, handle HandlerFunc) *Consumer {
@@ -25,12 +28,22 @@ func NewConsumer(conn *amqp.Connection, queue string, consumerTag string, prefet
 		prefetchCount = 10
 	}
 	return &Consumer{
-		conn:        conn,
-		queue:       queue,
-		consumerTag: consumerTag,
-		prefetch:    prefetchCount,
-		handle:      handle,
+		conn:          conn,
+		queue:         queue,
+		consumerTag:   consumerTag,
+		prefetch:      prefetchCount,
+		handle:        handle,
+		handleTimeout: defaultHandleTimeout,
 	}
+}
+
+// SetHandleTimeout 覆盖单条消息的处理时限。转码这类慢活必须长于默认的 10 秒，
+// 否则 CommandContext 会 SIGKILL 掉还在跑的 ffmpeg。
+func (c *Consumer) SetHandleTimeout(d time.Duration) *Consumer {
+	if d > 0 {
+		c.handleTimeout = d
+	}
+	return c
 }
 
 func (c *Consumer) Run(ctx context.Context) error {
@@ -66,7 +79,7 @@ func (c *Consumer) Run(ctx context.Context) error {
 				return fmt.Errorf("consumer channel closed: %s", c.queue)
 			}
 
-			if err := c.handleDelivery(ctx, d); err != nil {
+			if err := c.handleDelivery(ctx, d, c.handleTimeout); err != nil {
 				// nack(requeue=false) 会按队列策略进入死信队列。
 				slog.ErrorContext(ctx, "handle message failed, sending to dlq",
 					slog.String("queue", c.queue), slog.String("error", err.Error()))
@@ -86,8 +99,8 @@ func (c *Consumer) Run(ctx context.Context) error {
 	}
 }
 
-func (c *Consumer) handleDelivery(parent context.Context, d amqp.Delivery) error {
-	return handleDelivery(parent, d, c.handle)
+func (c *Consumer) handleDelivery(parent context.Context, d amqp.Delivery, timeout time.Duration) error {
+	return handleDelivery(parent, d, c.handle, timeout)
 }
 
 func ConsumeEphemeralFanout(ctx context.Context, conn *amqp.Connection, exchange string, consumerTag string, prefetchCount int, handle HandlerFunc) error {
@@ -150,7 +163,7 @@ func ConsumeEphemeralFanout(ctx context.Context, conn *amqp.Connection, exchange
 				return fmt.Errorf("consumer channel closed: %s", queue.Name)
 			}
 
-			if err := handleDelivery(ctx, d, handle); err != nil {
+			if err := handleDelivery(ctx, d, handle, defaultHandleTimeout); err != nil {
 				slog.ErrorContext(ctx, "handle message failed, dropping fanout message",
 					slog.String("exchange", exchange), slog.String("error", err.Error()))
 				if nackErr := d.Nack(false, false); nackErr != nil {
@@ -168,13 +181,16 @@ func ConsumeEphemeralFanout(ctx context.Context, conn *amqp.Connection, exchange
 	}
 }
 
-func handleDelivery(parent context.Context, d amqp.Delivery, handle HandlerFunc) error {
+func handleDelivery(parent context.Context, d amqp.Delivery, handle HandlerFunc, timeout time.Duration) error {
 	var env Envelope
 	if err := json.Unmarshal(d.Body, &env); err != nil {
 		return fmt.Errorf("unmarshal envelope: %w", err)
 	}
+	if timeout <= 0 {
+		timeout = defaultHandleTimeout
+	}
 
-	handleCtx, cancel := context.WithTimeout(parent, 10*time.Second)
+	handleCtx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
 	return handle(handleCtx, env)

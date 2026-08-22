@@ -15,8 +15,10 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM nginx:1.27-alpine
+RUN mkdir -p /etc/nginx/snippets /var/www/certbot
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/nginx-upload-api.conf /etc/nginx/snippets/upload-api.conf
 COPY --from=build /src/dist /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 80 443 8443
 CMD ["nginx", "-g", "daemon off;"]
 

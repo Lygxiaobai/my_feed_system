@@ -22,7 +22,7 @@ scenarios:
       - worker
   - name: media-transcode-consumer
     description: The Worker receives a media.transcode.requested event for an uploaded video.
-    expected: The task is acknowledged only after it reaches ready or failed durably; redelivery does not publish a second media result.
+    expected: The task is acknowledged only after it reaches ready or failed durably; a valid uploaded file is not failed because the short write-projection handle budget expired; redelivery does not publish a second media result.
     tags:
       - worker
       - media

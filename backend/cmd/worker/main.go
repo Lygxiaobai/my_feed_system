@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 
@@ -145,13 +146,16 @@ func main() {
 	var wg sync.WaitGroup
 	errCh := make(chan error, 16)
 
-	start := func(queue string, suffix string, handler mq.HandlerFunc) {
+	start := func(queue string, suffix string, handler mq.HandlerFunc, handleTimeout time.Duration) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
 			tag := fmt.Sprintf("%s-%s", consumerTagPrefix, suffix)
 			consumer := mq.NewConsumer(rabbitConn, queue, tag, cfg.RabbitMQ.PrefetchCount, handler)
+			if handleTimeout > 0 {
+				consumer.SetHandleTimeout(handleTimeout)
+			}
 			slog.Info("consumer started", slog.String("queue", queue), slog.String("tag", tag))
 			if err := consumer.Run(ctx); err != nil && ctx.Err() == nil {
 				errCh <- fmt.Errorf("run consumer queue=%s: %w", queue, err)
@@ -159,23 +163,24 @@ func main() {
 		}()
 	}
 
-	start(mq.QueueLikeWrite, "like", likeWorker.Handle)
-	start(mq.QueueCommentWrite, "comment", commentWorker.Handle)
-	start(mq.QueueSocialWrite, "social", socialWorker.Handle)
-	start(mq.QueuePopularityUpdate, "popularity", popularityWorker.Handle)
-	start(mq.QueueTimelineUpdate, "timeline", timelineConsumer.Handle)
+	start(mq.QueueLikeWrite, "like", likeWorker.Handle, 0)
+	start(mq.QueueCommentWrite, "comment", commentWorker.Handle, 0)
+	start(mq.QueueSocialWrite, "social", socialWorker.Handle, 0)
+	start(mq.QueuePopularityUpdate, "popularity", popularityWorker.Handle, 0)
+	start(mq.QueueTimelineUpdate, "timeline", timelineConsumer.Handle, 0)
 	if redisClient != nil {
-		start(mq.QueueTimelineFanout, "fanout", fanoutWorker.Handle)
+		start(mq.QueueTimelineFanout, "fanout", fanoutWorker.Handle, 0)
 	} else {
 		// 收件箱与发件箱都在 Redis 上，没有 Redis 时启动这个消费者只会把消息全打进死信队列。
 		// 关注流此时由 API 侧自动退回 MySQL 读扩散，功能不受影响。
 		slog.Warn("redis unavailable, following fanout consumer will not start")
 	}
-	start(mq.QueueMediaTranscode, "media", mediaWorker.Handle)
-	start(mq.QueueVideoEmbed, "embed", embedWorker.Handle)
+	// 转码要跑完整条视频，不能套写扩散那条 10 秒预算。
+	start(mq.QueueMediaTranscode, "media", mediaWorker.Handle, 15*time.Minute)
+	start(mq.QueueVideoEmbed, "embed", embedWorker.Handle, 0)
 	go embedWorker.Backfill(ctx)
 	if auditWorker != nil {
-		start(mq.QueueAuditModerate, "audit", auditWorker.Handle)
+		start(mq.QueueAuditModerate, "audit", auditWorker.Handle, 0)
 	}
 
 	for _, spec := range mq.QueueSpecs() {

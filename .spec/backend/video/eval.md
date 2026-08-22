@@ -2,7 +2,17 @@
 scenarios:
   - name: publish-video
     description: An authenticated user uploads a video, waits for media processing, and publishes one video.
-    expected: The upload task reaches ready with a playable MP4 and generated poster before publish; the file is accepted after an upload session plus sequential parts and only creates one media task after the last part; the publish response identifies the video and the operation is not duplicated by a repeated idempotency key.
+    expected: The upload task reaches ready with a playable MP4 and generated poster before publish; a source that is already browser-playable H.264/AAC is remuxed rather than re-encoded; the file is accepted after an upload session plus independently numbered parts that may arrive in parallel and only creates one media task after all parts are stored; the publish response identifies the video and the operation is not duplicated by a repeated idempotency key.
+    tags:
+      - backend-api
+  - name: upload-parts-use-dedicated-origin
+    description: An authenticated user starts an upload while a dedicated upload origin is configured.
+    expected: The session names that origin and the larger direct part size so subsequent part bytes go there instead of the site CDN proxy. When the origin is unset, parts stay on the page origin with the Cloudflare-safe part size.
+    tags:
+      - backend-api
+  - name: upload-retry-replaces-abandoned-session
+    description: An authenticated user starts an upload, the transfer is abandoned, and they start another upload.
+    expected: The new session is created instead of being rejected as an unfinished upload, and the abandoned parts are discarded.
     tags:
       - backend-api
   - name: video-writes-are-rate-limited

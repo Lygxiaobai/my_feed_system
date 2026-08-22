@@ -86,6 +86,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      VIDEO_UPLOAD_ORIGIN: ${VIDEO_UPLOAD_ORIGIN:-}
       AUDIT_ENABLED: ${AUDIT_ENABLED:-false}
       # 关注流推拉分级阈值。API 侧只用到 pull_threshold 与 max_pull_authors，
       # 但两个进程读同一份配置文件，缺变量会让占位符落到不同默认值上，因此保持一致。
@@ -199,7 +200,15 @@ services:
       backend:
         condition: service_healthy
     ports:
+      # Tunnel 回源是 http://127.0.0.1:5173，这里必须继续发明文。
       - "${FRONTEND_PORT:-5173}:80"
+      - "80:80"
+      - "443:443"
+      # 灰云上传备用口：未备案会拦 443，需在安全组放行 8443 后才能用。
+      - "8443:8443"
+    volumes:
+      - /srv/my_feed_sytem-deploy/certbot/www:/var/www/certbot:ro
+      - /srv/my_feed_sytem-deploy/certbot/live:/etc/nginx/certs:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
       interval: 10s

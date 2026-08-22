@@ -50,17 +50,7 @@ func (p *Processor) Transcode(ctx context.Context, task *Task) (string, string, 
 		_ = os.Remove(posterTemp)
 	}()
 
-	if err := runFFmpeg(ctx, task.SourcePath, videoTemp,
-		"-map", "0:v:0",
-		"-map", "0:a?",
-		"-c:v", "libx264",
-		"-preset", "veryfast",
-		"-crf", "23",
-		"-pix_fmt", "yuv420p",
-		"-c:a", "aac",
-		"-b:a", "128k",
-		"-movflags", "+faststart",
-	); err != nil {
+	if err := normalizeVideo(ctx, task.SourcePath, videoTemp); err != nil {
 		return "", "", fmt.Errorf("transcode video: %w", err)
 	}
 	if err := ensureNonEmptyFile(videoTemp); err != nil {
@@ -87,6 +77,34 @@ func (p *Processor) Transcode(ctx context.Context, task *Task) (string, string, 
 	}
 
 	return "/static/videos/" + videoName, "/static/covers/" + posterName, nil
+}
+
+func normalizeVideo(ctx context.Context, input string, output string) error {
+	probe, err := probeMedia(ctx, input)
+	if err == nil && canRemux(probe) {
+		// 已经是 H.264/AAC/yuv420p 时只重封装。整段重编码在这台 4G 机器上要数分钟。
+		remuxErr := runFFmpeg(ctx, input, output,
+			"-map", "0:v:0",
+			"-map", "0:a?",
+			"-c", "copy",
+			"-movflags", "+faststart",
+		)
+		if remuxErr == nil {
+			return nil
+		}
+	}
+	return runFFmpeg(ctx, input, output,
+		"-map", "0:v:0",
+		"-map", "0:a?",
+		"-c:v", "libx264",
+		"-preset", "veryfast",
+		"-crf", "23",
+		"-pix_fmt", "yuv420p",
+		"-threads", "2",
+		"-c:a", "aac",
+		"-b:a", "128k",
+		"-movflags", "+faststart",
+	)
 }
 
 func runFFmpeg(ctx context.Context, input string, output string, options ...string) error {

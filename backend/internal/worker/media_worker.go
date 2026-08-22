@@ -53,7 +53,7 @@ func (w *MediaWorker) Handle(ctx context.Context, event mq.Envelope) error {
 
 	playURL, posterURL, processErr := w.processor.Transcode(ctx, task)
 	if processErr != nil {
-		if err := w.markFailed(event, task.ID, processErr.Error()); err != nil {
+		if err := w.markFailed(event, task.ID, userFacingTranscodeError()); err != nil {
 			return err
 		}
 		// 任务已经进入 failed，源文件不再用于重试，避免坏文件长期占用共享卷。
@@ -88,6 +88,11 @@ func (w *MediaWorker) markFailed(event mq.Envelope, taskID uint64, message strin
 		}
 		return w.repo.MarkFailed(tx, taskID, message)
 	})
+}
+
+// userFacingTranscodeError 只给前端看结果，ffmpeg / signal 细节留在日志里。
+func userFacingTranscodeError() string {
+	return "视频处理失败，请重新上传"
 }
 
 func removeSource(path string) {

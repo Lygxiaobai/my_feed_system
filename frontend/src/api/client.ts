@@ -202,6 +202,7 @@ export function postFormWithProgress<T>(
   options?: {
     authRequired?: boolean
     headers?: Record<string, string>
+    baseUrl?: string
     onProgress?: (progress: FormUploadProgress) => void
     signal?: AbortSignal
   },
@@ -218,7 +219,8 @@ export function postFormWithProgress<T>(
 
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${API_BASE}${path}`)
+    const baseUrl = options?.baseUrl?.replace(/\/$/, '') || API_BASE
+    xhr.open('POST', `${baseUrl}${path}`)
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     if (options?.headers) {
       for (const [name, value] of Object.entries(options.headers)) {
@@ -231,6 +233,8 @@ export function postFormWithProgress<T>(
     let total = 0
     let stalled = false
     let lastActive = Date.now()
+    // 浏览器发完之后还要等 Cloudflare 回源。这段没有 onprogress，不能再用 90 秒发送停顿去杀请求。
+    let awaitingAck = false
     const emitProgress = (stage: FormUploadStage, percent: number) => {
       onProgress?.({ percent, loaded, total, stage })
     }
@@ -248,15 +252,17 @@ export function postFormWithProgress<T>(
     // 浏览器发完请求体之后，还要等网关转发和业务落盘。这时绝不能报 100%。
     xhr.upload.onload = () => {
       touch()
+      awaitingAck = true
       if (onProgress) emitProgress('confirming', total > 0 ? UPLOAD_SEND_PERCENT_CAP : 90)
     }
 
     const signal = options?.signal
     const abort = () => xhr.abort()
     signal?.addEventListener('abort', abort)
-    // 进度长时间不动时主动结束，避免 Cloudflare 掐断后 XHR 一直挂着显示卡在某一格。
+    // 发送阶段 90 秒完全没进度才中止；确认阶段放到 Cloudflare 回源窗口之后。
     const stallTimer = window.setInterval(() => {
-      if (Date.now() - lastActive < 90_000) return
+      const limit = awaitingAck ? 120_000 : 90_000
+      if (Date.now() - lastActive < limit) return
       stalled = true
       xhr.abort()
     }, 5_000)

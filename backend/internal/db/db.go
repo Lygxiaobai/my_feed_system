@@ -64,6 +64,7 @@ func NewMySQL(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	if err := db.AutoMigrate(
 		&account.Account{},
 		&account.Identity{},
+		&account.PasskeyCredential{},
 		&video.Video{},
 		&like.VideoLike{},
 		&media.Task{},

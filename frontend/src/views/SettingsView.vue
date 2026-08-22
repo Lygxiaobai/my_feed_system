@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { track } from '../analytics/track'
@@ -10,12 +10,20 @@ import { ApiError } from '../api/client'
 import * as accountApi from '../api/account'
 import { useAuthStore } from '../stores/auth'
 import { useToastStore } from '../stores/toast'
+import type { PasskeyItem } from '../api/types'
+import * as webauthn from '../webauthn'
 
 const router = useRouter()
 const auth = useAuthStore()
 const toast = useToastStore()
 
 const busy = ref(false)
+const passkeyReady = ref(false)
+const passkeys = reactive({
+  loading: false,
+  name: '',
+  items: [] as PasskeyItem[],
+})
 
 const me = computed(() => ({
   id: auth.claims?.account_id ?? 0,
@@ -64,6 +72,82 @@ async function goLogin() {
 async function goChangePassword() {
   await router.push('/account/change-password')
 }
+
+async function loadPasskeys() {
+  if (!auth.isLoggedIn) {
+    passkeys.items = []
+    return
+  }
+  passkeys.loading = true
+  try {
+    passkeys.items = (await accountApi.listPasskeys()).items ?? []
+  } catch (e) {
+    toast.error(e instanceof ApiError ? e.message : String(e))
+    passkeys.items = []
+  } finally {
+    passkeys.loading = false
+  }
+}
+
+function formatPasskeyTime(value?: string | null) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString()
+}
+
+async function addPasskey() {
+  if (!auth.isLoggedIn || busy.value) return
+  if (!passkeyReady.value) {
+    toast.error(webauthn.passkeyUnavailableTip)
+    return
+  }
+  busy.value = true
+  try {
+    const began = await accountApi.beginPasskeyRegister(passkeys.name.trim())
+    const cred = await webauthn.createPasskey(began.options)
+    await accountApi.finishPasskeyRegister(began.session_id, webauthn.encodeCredential(cred))
+    passkeys.name = ''
+    toast.success('已添加通行密钥')
+    await loadPasskeys()
+  } catch (e) {
+    if (webauthn.isPasskeyCanceled(e)) {
+      toast.info('已取消')
+      return
+    }
+    toast.error(e instanceof ApiError ? e.message : String(e))
+  } finally {
+    busy.value = false
+  }
+}
+
+async function removePasskey(item: PasskeyItem) {
+  if (!auth.isLoggedIn || busy.value) return
+  if (!window.confirm(`删除通行密钥「${item.name}」？`)) return
+  busy.value = true
+  try {
+    await accountApi.deletePasskey(item.id)
+    toast.success('已删除通行密钥')
+    await loadPasskeys()
+  } catch (e) {
+    toast.error(e instanceof ApiError ? e.message : String(e))
+  } finally {
+    busy.value = false
+  }
+}
+
+onMounted(() => {
+  passkeyReady.value = webauthn.passkeySupported()
+})
+
+watch(
+  () => auth.isLoggedIn,
+  (ok) => {
+    if (ok) void loadPasskeys()
+    else passkeys.items = []
+  },
+  { immediate: true },
+)
 
 async function onLogout() {
   if (!auth.isLoggedIn) return
@@ -141,6 +225,34 @@ async function onLogout() {
         </div>
 
         <div class="card" style="margin-top: 14px">
+          <p class="title">通行密钥</p>
+          <p class="subtle">登记后可在支持的设备上直接登录，不必再输入验证码。邮箱验证码仍可用来找回账号。</p>
+          <div class="grid" style="margin-top: 12px">
+            <div>
+              <label>名称（可选）</label>
+              <input v-model.trim="passkeys.name" maxlength="32" placeholder="例如：这台电脑" @keydown.enter="addPasskey" />
+            </div>
+            <div class="row" style="justify-content: flex-end">
+              <button class="ghost" type="button" :disabled="busy || passkeys.loading" @click="addPasskey">添加通行密钥</button>
+            </div>
+          </div>
+          <div v-if="passkeys.loading" class="subtle" style="margin-top: 12px">正在加载…</div>
+          <div v-else-if="passkeys.items.length === 0" class="subtle" style="margin-top: 12px">还没有通行密钥</div>
+          <div v-else class="passkey-list">
+            <div v-for="item in passkeys.items" :key="item.id" class="passkey-row">
+              <div>
+                <div class="passkey-name">{{ item.name }}</div>
+                <div class="subtle">
+                  添加于 {{ formatPasskeyTime(item.created_at) }}
+                  <template v-if="item.last_used_at"> · 最近使用 {{ formatPasskeyTime(item.last_used_at) }}</template>
+                </div>
+              </div>
+              <button class="ghost" type="button" :disabled="busy" @click="removePasskey(item)">删除</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 14px">
           <p class="title">账号安全</p>
           <div class="row">
             <button class="ghost" type="button" :disabled="busy" @click="goChangePassword">修改密码</button>
@@ -164,5 +276,25 @@ async function onLogout() {
 
 .ghost:hover {
   background: var(--fill-hover);
+}
+
+.passkey-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.passkey-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.passkey-name {
+  font-weight: 800;
 }
 </style>

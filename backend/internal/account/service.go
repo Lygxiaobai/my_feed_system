@@ -37,6 +37,7 @@ type Service struct {
 	otp        *OTPStore
 	mailer     Mailer
 	emailCfg   config.EmailAuthConfig
+	passkeys   *PasskeySessionStore
 }
 
 // NewService 创建账号服务。

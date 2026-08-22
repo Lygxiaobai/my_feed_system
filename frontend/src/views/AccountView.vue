@@ -1,5 +1,5 @@
-﻿<script setup lang="ts">
-import { computed, onUnmounted, reactive, ref, watch } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { track } from '../analytics/track'
@@ -18,6 +18,7 @@ import { formatWatchClock } from '../history/rules'
 import { useAuthStore } from '../stores/auth'
 import { useSocialStore } from '../stores/social'
 import { useToastStore } from '../stores/toast'
+import * as webauthn from '../webauthn'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -30,6 +31,9 @@ const sendingCode = ref(false)
 const opsAllowed = ref(false)
 const countdown = ref(0)
 let countdownTimer: number | undefined
+const passkeyReady = ref(false)
+const passkeyBusy = ref(false)
+let passkeyAbort: AbortController | undefined
 
 const me = computed(() => ({
   id: auth.claims?.account_id ?? 0,
@@ -208,7 +212,75 @@ function historyProgressPercent(item: HistoryItem) {
   return Math.min(100, Math.round((item.position_ms / item.duration_ms) * 100))
 }
 
+function stopPasskeyAutofill() {
+  passkeyAbort?.abort()
+  passkeyAbort = undefined
+}
+
+async function completePasskeyLogin(sessionId: string, cred: PublicKeyCredential) {
+  if (busy.value) return
+  busy.value = true
+  try {
+    const res = await accountApi.finishPasskeyLogin(sessionId, webauthn.encodeCredential(cred))
+    auth.setToken(res.token)
+    track('login')
+    toast.success('登录成功')
+    await social.refreshMine()
+    await Promise.all([loadMyVideos(), loadLikedVideos(), loadHistory(true)])
+  } finally {
+    busy.value = false
+  }
+}
+
+async function startPasskeyAutofill() {
+  stopPasskeyAutofill()
+  if (!passkeyReady.value || auth.isLoggedIn) return
+  if (!(await webauthn.conditionalMediationAvailable())) return
+  const controller = new AbortController()
+  passkeyAbort = controller
+  try {
+    const began = await accountApi.beginPasskeyLogin()
+    if (passkeyAbort !== controller) return
+    const cred = await webauthn.getPasskey(began.options, { conditional: true, signal: controller.signal })
+    if (passkeyAbort !== controller) return
+    await completePasskeyLogin(began.session_id, cred)
+  } catch (e) {
+    if (passkeyAbort !== controller || webauthn.isPasskeyCanceled(e)) return
+    toast.error(e instanceof ApiError ? e.message : '通行密钥登录失败')
+  }
+}
+
+async function onPasskeyLogin() {
+  if (busy.value || passkeyBusy.value) return
+  if (!passkeyReady.value) {
+    toast.error(webauthn.passkeyUnavailableTip)
+    return
+  }
+  stopPasskeyAutofill()
+  passkeyBusy.value = true
+  try {
+    const began = await accountApi.beginPasskeyLogin()
+    const cred = await webauthn.getPasskey(began.options)
+    await completePasskeyLogin(began.session_id, cred)
+  } catch (e) {
+    if (webauthn.isPasskeyCanceled(e)) {
+      toast.info('已取消')
+      return
+    }
+    toast.error(e instanceof ApiError ? e.message : '通行密钥登录失败')
+  } finally {
+    passkeyBusy.value = false
+    if (!auth.isLoggedIn) void startPasskeyAutofill()
+  }
+}
+
+onMounted(() => {
+  passkeyReady.value = webauthn.passkeySupported()
+  if (!auth.isLoggedIn && passkeyReady.value) void startPasskeyAutofill()
+})
+
 onUnmounted(() => {
+  stopPasskeyAutofill()
   if (countdownTimer !== undefined) window.clearInterval(countdownTimer)
 })
 
@@ -246,6 +318,7 @@ async function onSendCode() {
 
 async function onEmailLogin() {
   if (busy.value) return
+  stopPasskeyAutofill()
   const email = emailForm.email.trim()
   const code = emailForm.code.trim()
   if (!email || !code) {
@@ -367,6 +440,9 @@ watch(
 
       videoTab.value = 'works'
       opsAllowed.value = false
+      if (passkeyReady.value) void startPasskeyAutofill()
+    } else {
+      stopPasskeyAutofill()
     }
   },
 )
@@ -394,7 +470,7 @@ watch(
         <div class="grid" style="margin-top: 10px">
           <div>
             <label>邮箱</label>
-            <input v-model.trim="emailForm.email" type="email" autocomplete="email" />
+            <input v-model.trim="emailForm.email" type="email" autocomplete="username webauthn" />
           </div>
           <div>
             <label>验证码</label>
@@ -413,6 +489,15 @@ watch(
           </div>
           <button class="primary" type="button" :disabled="busy" @click="onEmailLogin">登录 / 注册</button>
         </div>
+
+        <button
+          class="ghost passkey-btn"
+          type="button"
+          :disabled="busy || passkeyBusy"
+          @click="onPasskeyLogin"
+        >
+          使用通行密钥登录
+        </button>
 
         <div class="oauth-row">
           <button class="ghost oauth" type="button" @click="onOauthSoon">微信登录</button>
@@ -608,6 +693,12 @@ watch(
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
+}
+
+.passkey-btn {
+  margin-top: 14px;
+  width: 100%;
+  text-align: center;
 }
 
 .oauth-row {

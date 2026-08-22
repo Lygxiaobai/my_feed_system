@@ -18,6 +18,18 @@ scenarios:
     tags:
       - frontend-e2e
       - desktop
+  - name: account-passkey-login
+    description: A visitor with an enrolled passkey signs in from the unsigned account surface.
+    expected: A successful assertion stores the session and shows the authenticated account surface; a cancelled or failed ceremony stays signed out.
+    tags:
+      - frontend-e2e
+      - desktop
+  - name: account-passkey-settings
+    description: A signed-in user adds a passkey on the settings page and later removes it.
+    expected: The new passkey appears in the list after enrollment and disappears after deletion; a page that is not a secure context does not start the authenticator prompt.
+    tags:
+      - frontend-e2e
+      - desktop
   - name: account-password-login-page
     description: A visitor opens password login from the unsigned account surface.
     expected: The password form is on its own page and is not mixed with the email code fields; a successful login returns to the authenticated hub.

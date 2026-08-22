@@ -1,5 +1,21 @@
 ﻿export type TokenResponse = { token: string; created?: boolean }
 
+export type PasskeyBeginResponse = {
+  session_id: string
+  options: unknown
+}
+
+export type PasskeyItem = {
+  id: number
+  name: string
+  created_at: string
+  last_used_at?: string | null
+}
+
+export type PasskeyListResponse = {
+  items: PasskeyItem[]
+}
+
 export type Account = {
   id: number
   username: string

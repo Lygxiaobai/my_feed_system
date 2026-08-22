@@ -244,10 +244,31 @@ func NewRouterWithLocalCaches(
 	accountGroup.POST("/email/verify", emailVerifyIPLimit, accountHandler.VerifyEmail)
 	accountGroup.POST("/findByID", accountLookupIPLimit, accountHandler.FindByID)
 	accountGroup.POST("/findByUsername", accountLookupIPLimit, accountHandler.FindByUsername)
+	passkeyLoginIPLimit := ratelimit.ByIP(rateLimiter, ratelimit.Policy{
+		Name:     "account.passkey.login.ip",
+		Limit:    30,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	if redisClient != nil {
+		accountService.SetPasskeyStore(account.NewPasskeySessionStore(redisClient))
+	}
+	accountGroup.POST("/passkey/login/begin", passkeyLoginIPLimit, accountHandler.BeginPasskeyLogin)
+	accountGroup.POST("/passkey/login/finish", loginIPLimit, accountHandler.FinishPasskeyLogin)
 
 	protectedAccountGroup := accountGroup.Group("")
 	protectedAccountGroup.Use(jwtmiddleware.JWTAuthWithTokenCache(db, tokenCache, jwtSecret))
 	accountHandler.RegisterProtectedRoutes(protectedAccountGroup)
+	passkeyManageLimit := ratelimit.ByAccountID(rateLimiter, ratelimit.Policy{
+		Name:     "account.passkey.manage.account",
+		Limit:    20,
+		Window:   time.Minute,
+		FailOpen: true,
+	})
+	protectedAccountGroup.POST("/passkey/register/begin", passkeyManageLimit, accountHandler.BeginPasskeyRegister)
+	protectedAccountGroup.POST("/passkey/register/finish", passkeyManageLimit, accountHandler.FinishPasskeyRegister)
+	protectedAccountGroup.POST("/passkey/list", accountHandler.ListPasskeys)
+	protectedAccountGroup.POST("/passkey/delete", passkeyManageLimit, accountHandler.DeletePasskey)
 
 	opsHandler := ops.NewHandler(ops.NewService(accountService, opsCfg), db, tokenCache, jwtSecret)
 	opsGroup := r.Group("/ops")

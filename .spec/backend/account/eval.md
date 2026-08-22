@@ -40,3 +40,23 @@ scenarios:
     expected: Later lookups are rejected with the rate-limited outcome and do not reveal whether the remaining names exist.
     tags:
       - backend-api
+  - name: passkey-enroll-requires-session
+    description: A signed-in user starts and finishes a passkey registration, while a signed-out caller tries the same begin endpoint.
+    expected: The authenticated ceremony stores one discoverable credential on that account; the signed-out caller is rejected without creating a credential.
+    tags:
+      - backend-api
+  - name: passkey-login-opens-existing-account
+    description: An account that already has a passkey completes a usernameless assertion.
+    expected: The service issues a session for that same account and does not create a second account.
+    tags:
+      - backend-api
+  - name: passkey-failure-is-not-distinguished
+    description: A caller finishes a passkey login with a missing session, an expired session, or a malformed assertion.
+    expected: Each case returns the same caller-facing verification-failed outcome.
+    tags:
+      - backend-api
+  - name: passkey-can-be-revoked
+    description: A signed-in user lists passkeys and deletes one of their own, then another account tries to delete it.
+    expected: The owner no longer sees the revoked credential; the other account cannot revoke it.
+    tags:
+      - backend-api

@@ -570,7 +570,7 @@ func (s *Service) ListByPopularity(req ListByPopularityRequest) (*ListByPopulari
 
 	startedAt := time.Now()
 
-	if s.popularity == nil {
+	if s.shouldUsePersistedPopularity(ctx, req) {
 		return s.listByPersistedPopularity(ctx, req)
 	}
 
@@ -633,9 +633,44 @@ func (s *Service) ListByPopularity(req ListByPopularityRequest) (*ListByPopulari
 	}
 	result.NextOffset += int64(len(pageVideoIDs))
 
+	// 快照成员够数但可播放的不够一页时，窗口热度仍然撑不起首屏，整页改走库存热度。
+	if req.AsOf == 0 && req.Offset == 0 && int64(len(result.Videos)) < req.Limit {
+		slog.Info("popularity first page could not fill after playable filter, falling back to MySQL",
+			slog.Int("redis_page", len(result.Videos)),
+			slog.Int64("limit", req.Limit))
+		return s.listByPersistedPopularity(ctx, req)
+	}
+
 	s.setHotCaches(ctx, req, result)
 	observability.ObserveCacheLoadSeconds(observability.CacheFeedHot, time.Since(startedAt).Seconds())
 	return result, nil
+}
+
+// shouldUsePersistedPopularity 判断这次热榜请求是否应整页走 MySQL。
+//
+// 不把 Redis 窗口分和 videos.popularity 拼进同一页：两者量纲不同，offset 分页也无法混排。
+// 上一页已经回源时 as_of 为 0，翻页必须粘住，避免窗口刚好凑满后中途换排序。
+func (s *Service) shouldUsePersistedPopularity(ctx context.Context, req ListByPopularityRequest) bool {
+	if s.popularity == nil {
+		return true
+	}
+	if req.AsOf == 0 && req.Offset > 0 {
+		return true
+	}
+	if req.AsOf != 0 {
+		return false
+	}
+
+	usable, err := s.popularity.HasUsableSnapshot(ctx, time.Time{})
+	if err != nil {
+		slog.Warn("read popularity snapshot size failed, falling back to MySQL", slog.String("error", err.Error()))
+		return true
+	}
+	if !usable {
+		slog.Info("popularity snapshot below usable threshold, falling back to MySQL")
+		return true
+	}
+	return false
 }
 
 // listByPersistedPopularity 在 Redis 热度不可用或当前没有可用热度数据时提供稳定兜底。

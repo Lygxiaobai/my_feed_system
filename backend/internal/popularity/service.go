@@ -14,7 +14,11 @@ const (
 	defaultWindowMinutes = 60
 	defaultBucketTTL     = 2 * time.Hour
 	defaultSnapshotTTL   = 2 * time.Minute
+	thinSnapshotTTL      = 5 * time.Second
 	defaultEventTTL      = 3 * time.Hour
+	// MinUsableSnapshot 是滚动窗口热度被视为「可用榜单」的最少条数。
+	// 少于一页默认条数时，窗口分和库存分不能混排，读路径应整页回源 MySQL。
+	MinUsableSnapshot = 10
 )
 
 const (
@@ -189,6 +193,27 @@ func (s *Service) ListHot(ctx context.Context, asOf time.Time, limit int64, offs
 	return videoIDs, scores, snapshotTime.UnixMilli(), nil
 }
 
+// SnapshotSize 返回当前热度快照的成员数。服务不可用时视为 0，由调用方决定是否回源。
+func (s *Service) SnapshotSize(ctx context.Context, asOf time.Time) (int64, error) {
+	if !s.Enabled() {
+		return 0, nil
+	}
+	snapshotKey, err := s.ensureSnapshot(ctx, asOf)
+	if err != nil {
+		return 0, err
+	}
+	return s.client.ZCard(ctx, snapshotKey).Result()
+}
+
+// HasUsableSnapshot 判断滚动窗口是否已经能撑起一页默认热榜。
+func (s *Service) HasUsableSnapshot(ctx context.Context, asOf time.Time) (bool, error) {
+	size, err := s.SnapshotSize(ctx, asOf)
+	if err != nil {
+		return false, err
+	}
+	return size >= MinUsableSnapshot, nil
+}
+
 // ensureSnapshot 生成或复用某个时间点对应的热榜快照。
 func (s *Service) ensureSnapshot(ctx context.Context, asOf time.Time) (string, error) {
 	snapshotTime := s.snapshotTime(asOf)
@@ -216,7 +241,22 @@ func (s *Service) ensureSnapshot(ctx context.Context, asOf time.Time) (string, e
 	if err := s.client.ZUnionStore(ctx, snapshotKey, store).Err(); err != nil {
 		return "", err
 	}
-	if err := s.client.Expire(ctx, snapshotKey, s.snapshotTTL).Err(); err != nil {
+	card, err := s.client.ZCard(ctx, snapshotKey).Result()
+	if err != nil {
+		return "", err
+	}
+	if card == 0 {
+		// 空快照若按正常 TTL 留下，随后写入的分钟桶在过期前都会被误判为没有榜。
+		if err := s.client.Del(ctx, snapshotKey).Err(); err != nil {
+			return "", err
+		}
+		return snapshotKey, nil
+	}
+	ttl := s.snapshotTTL
+	if card < MinUsableSnapshot {
+		ttl = thinSnapshotTTL
+	}
+	if err := s.client.Expire(ctx, snapshotKey, ttl).Err(); err != nil {
 		return "", err
 	}
 

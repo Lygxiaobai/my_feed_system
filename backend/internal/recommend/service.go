@@ -143,6 +143,11 @@ func (s *Service) attachHotScores(ctx context.Context, cands []candidate) {
 	if s.popularity == nil || !s.popularity.Enabled() || len(cands) == 0 {
 		return
 	}
+	// 窗口热度不足一页时继续用 videos.popularity，避免少数近期事件和库存分混在同一尺度上。
+	usable, err := s.popularity.HasUsableSnapshot(ctx, time.Time{})
+	if err != nil || !usable {
+		return
+	}
 	ids := make([]uint64, 0, len(cands))
 	for _, c := range cands {
 		ids = append(ids, c.Video.ID)

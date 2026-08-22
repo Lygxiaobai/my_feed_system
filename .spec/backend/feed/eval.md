@@ -36,8 +36,11 @@ scenarios:
     tags:
       - backend-api
   - name: popularity-mysql-fallback
-    description: When Redis has no usable popularity entries or cannot be read, the popularity feed returns playable videos ordered by persisted MySQL popularity.
+    description: When Redis has fewer than 10 popularity entries, cannot be read, or a first page cannot fill after playable filtering, the popularity feed returns playable videos ordered by persisted MySQL popularity.
     expected: The response is non-empty when MySQL has playable videos, returned popularity values match MySQL, and as_of is zero.
+  - name: popularity-mysql-fallback-sticky-page
+    description: The first popularity page fell back to MySQL and the client requests the next page with as_of zero.
+    expected: The second page stays on persisted MySQL popularity even if Redis later grows past 10 entries, so adjacent pages do not switch ranking sources.
     tags:
       - backend-api
   - name: recommend-small-creator-quota
@@ -53,6 +56,9 @@ scenarios:
   - name: recommend-anonymous-cold-start
     description: An unauthenticated client reads the recommendation feed.
     expected: The response is a mixed page of approved videos rather than an empty success, and no unapproved video appears.
+  - name: recommend-thin-hot-window
+    description: Redis has fewer than 10 recent popularity entries while MySQL still has approved playable videos.
+    expected: Recommendation still returns a mixed page from MySQL candidates, and hot-queue scores stay on persisted popularity instead of the thin window.
     tags:
       - backend-api
   - name: recommend-excludes-unapproved

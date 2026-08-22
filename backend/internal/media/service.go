@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -31,6 +32,8 @@ type Service struct {
 	outboxRepo    *outbox.Repo
 	uploadDir     string
 	maxVideoBytes int64
+	partsMu       sync.Mutex
+	parts         map[string]*partSession
 }
 
 func NewService(db *gorm.DB, uploadDir string, maxVideoBytes int64) *Service {
@@ -43,6 +46,7 @@ func NewService(db *gorm.DB, uploadDir string, maxVideoBytes int64) *Service {
 		outboxRepo:    outbox.NewRepo(db),
 		uploadDir:     uploadDir,
 		maxVideoBytes: maxVideoBytes,
+		parts:         make(map[string]*partSession),
 	}
 }
 
@@ -65,6 +69,10 @@ func (s *Service) CreateVideoTask(accountID uint64, file *multipart.FileHeader) 
 		return nil, err
 	}
 
+	return s.enqueueVideoTask(accountID, sourcePath)
+}
+
+func (s *Service) enqueueVideoTask(accountID uint64, sourcePath string) (*Task, error) {
 	task := &Task{
 		AccountID:   accountID,
 		SourcePath:  sourcePath,

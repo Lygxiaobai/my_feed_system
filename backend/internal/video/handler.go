@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"my_feed_system/internal/media"
+	"my_feed_system/internal/middleware/ratelimit"
 	"my_feed_system/internal/response"
 )
 
@@ -19,10 +21,11 @@ type Handler struct {
 	service   *Service
 	uploadDir string
 	media     *media.Service
+	limiter   ratelimit.Checker
 }
 
-func NewHandler(service *Service, uploadDir string, mediaService *media.Service) *Handler {
-	return &Handler{service: service, uploadDir: uploadDir, media: mediaService}
+func NewHandler(service *Service, uploadDir string, mediaService *media.Service, limiter ratelimit.Checker) *Handler {
+	return &Handler{service: service, uploadDir: uploadDir, media: mediaService, limiter: limiter}
 }
 
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
@@ -34,6 +37,8 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 
 func (h *Handler) RegisterProtectedRoutes(rg *gin.RouterGroup, uploadMW []gin.HandlerFunc, publishMW []gin.HandlerFunc) {
 	rg.POST("/uploadVideo", append(append([]gin.HandlerFunc{}, uploadMW...), h.UploadVideo)...)
+	// 分段不走投稿次数限流：一段不是一条视频。配额在第一段用同一把 Redis 钥匙扣。
+	rg.POST("/uploadPart", h.UploadPart)
 	rg.POST("/uploadCover", h.UploadCover)
 	rg.POST("/mediaTaskStatus", h.MediaTaskStatus)
 	rg.POST("/publish", append(append([]gin.HandlerFunc{}, publishMW...), h.Publish)...)
@@ -73,6 +78,109 @@ func (h *Handler) UploadVideo(c *gin.Context) {
 
 	// 转码是异步的，用 202 表达「已接收，仍在处理」。
 	response.OKWithStatus(c, http.StatusAccepted, gin.H{"task": task})
+}
+
+func (h *Handler) UploadPart(c *gin.Context) {
+	if h.media == nil {
+		response.Fail(c, http.StatusServiceUnavailable, response.MiddlewareError, nil)
+		return
+	}
+
+	// 必须先限体再解析表单，否则 PostForm/FormFile 会先把整段读进内存。
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, media.UploadPartBytes+2<<20)
+
+	sessionID := strings.TrimSpace(c.PostForm("session_id"))
+	if sessionID == "" && !h.enforceUploadQuota(c) {
+		return
+	}
+
+	totalSize, err := strconv.ParseInt(strings.TrimSpace(c.PostForm("total")), 10, 64)
+	if err != nil || totalSize <= 0 {
+		response.FailTip(c, http.StatusBadRequest, response.ParamError, "上传参数无效", err)
+		return
+	}
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		if strings.Contains(err.Error(), "request body too large") {
+			response.Fail(c, http.StatusRequestEntityTooLarge, response.UploadTooLarge, err)
+			return
+		}
+		response.FailTip(c, http.StatusBadRequest, response.ParamMissing, "请选择要上传的视频文件", err)
+		return
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, response.ParamError, err)
+		return
+	}
+	defer src.Close()
+
+	sessionID, received, task, err := h.media.AppendUploadPart(c.GetUint64("account_id"), sessionID, totalSize, src, file.Size)
+	if err != nil {
+		if errors.Is(err, media.ErrVideoUploadTooLarge) {
+			response.Fail(c, http.StatusBadRequest, response.UploadTooLarge, err)
+			return
+		}
+		if errors.Is(err, media.ErrVideoUploadEmpty) {
+			response.FailTip(c, http.StatusBadRequest, response.UploadTypeInvalid, "视频文件内容为空", err)
+			return
+		}
+		if errors.Is(err, media.ErrUploadSessionNotFound) {
+			response.FailTip(c, http.StatusBadRequest, response.ParamError, "上传已失效，请重新选择视频", err)
+			return
+		}
+		if errors.Is(err, media.ErrUploadSessionConflict) {
+			response.FailTip(c, http.StatusBadRequest, response.ParamError, "上传进度不一致，请重新选择视频", err)
+			return
+		}
+		if errors.Is(err, media.ErrTooManyUploadSessions) {
+			response.FailTip(c, http.StatusTooManyRequests, response.RateLimited, "还有未完成的上传，请先取消或稍后再试", err)
+			return
+		}
+		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
+		return
+	}
+
+	payload := gin.H{"session_id": sessionID, "received": received}
+	if task != nil {
+		payload["task"] = task
+		response.OKWithStatus(c, http.StatusAccepted, payload)
+		return
+	}
+	response.OK(c, payload)
+}
+
+// enforceUploadQuota 与路由上 video.upload.* 使用同一把 Redis 钥匙，
+// 这样整文件上传和分段上传的第一段共享「12 次 / 10 分钟」的投稿上限。
+func (h *Handler) enforceUploadQuota(c *gin.Context) bool {
+	if h.limiter == nil {
+		return true
+	}
+	if !h.allowUploadSubject(c, "video.upload.ip", c.ClientIP(), 20) {
+		return false
+	}
+	accountID := c.GetUint64("account_id")
+	if accountID == 0 {
+		return true
+	}
+	return h.allowUploadSubject(c, "video.upload.account", strconv.FormatUint(accountID, 10), 12)
+}
+
+func (h *Handler) allowUploadSubject(c *gin.Context, scope, subject string, limit int64) bool {
+	if subject == "" {
+		return true
+	}
+	result, err := h.limiter.Allow(c.Request.Context(), scope, subject, limit, 10*time.Minute)
+	if err != nil {
+		return true
+	}
+	if result.Allowed {
+		return true
+	}
+	response.FailTip(c, http.StatusTooManyRequests, response.RateLimited, "操作过于频繁，请稍后再试", nil)
+	return false
 }
 
 func (h *Handler) UploadCover(c *gin.Context) {

@@ -16,6 +16,7 @@ related:
   - backend/internal/media/entity.go
   - backend/internal/media/repo.go
   - backend/internal/media/service.go
+  - backend/internal/media/parts.go
   - backend/internal/media/processor.go
   - backend/internal/worker/media_worker.go
   - backend/internal/audit/moderator.go
@@ -30,7 +31,7 @@ related:
 The video subsystem validates uploads, publishes videos, serves details, exposes author and liked-video views, and issues shareable codes that resolve back to a video. Content review is optional and off by default; when enabled, published content is reviewed before it becomes publicly discoverable.
 
 ## expanded spec
-Video publishing is authenticated and idempotent. Upload and publish are rate-limited by client IP and by account so a single session cannot flood the media worker; public detail and share reads share a separate IP ceiling. A video upload creates an account-owned `processing` media task and returns no playable URL until the Worker has produced a standard MP4 and JPEG poster. Tasks finish as `ready` with `/static/videos/*.mp4` and `/static/covers/*.jpg` URLs or as `failed` with a bounded error message.
+Video publishing is authenticated and idempotent. Upload and publish are rate-limited by client IP and by account so a single session cannot flood the media worker; public detail and share reads share a separate IP ceiling. A video larger than one upload part is accepted as sequential parts and only becomes a media task after the last part is stored; the write ceiling counts the start of an upload, not each part. A video upload creates an account-owned `processing` media task and returns no playable URL until the Worker has produced a standard MP4 and JPEG poster. Tasks finish as `ready` with `/static/videos/*.mp4` and `/static/covers/*.jpg` URLs or as `failed` with a bounded error message.
 
 The Worker uses ffmpeg to normalize video codec/container and MIME-by-extension, enables MP4 fast start, and generates the poster. Raw source files remain private to the shared upload volume and are not exposed by the static resource surface. Media paths returned by the API remain usable through the static resource surface. Detail reads may use cache but must preserve the persisted video's visible fields. Publishing accepts only ready, playable media.
 

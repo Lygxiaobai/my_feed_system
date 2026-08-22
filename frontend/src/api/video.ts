@@ -1,4 +1,12 @@
-import { AbortedError, postFormWithProgress, postJson, resolveAssetUrl, type FormUploadProgress } from './client'
+import {
+  AbortedError,
+  mapUploadSendPercent,
+  postFormWithProgress,
+  postJson,
+  resolveAssetUrl,
+  UPLOAD_SEND_PERCENT_CAP,
+  type FormUploadProgress,
+} from './client'
 import type { BackendVideoEnvelope, BackendVideosEnvelope, Video } from './types'
 
 /** 与后端 media.defaultMaxVideoBytes（256 MiB）保持一致，超出前端直接拒绝。 */
@@ -87,6 +95,15 @@ type UploadVideoResponse = {
   task: VideoUploadTask
 }
 
+type UploadPartResponse = {
+  session_id: string
+  received: number
+  task?: VideoUploadTask
+}
+
+/** 与后端 media.UploadPartBytes 一致。超过这个大小就按段传，避开 Cloudflare 约 100 秒的回源超时。 */
+export const UPLOAD_PART_BYTES = 4 * 1024 * 1024
+
 function normalizeUploadTask(task: VideoUploadTask): VideoUploadTask {
   return {
     ...task,
@@ -99,6 +116,9 @@ export async function uploadVideo(
   file: File,
   options?: { onProgress?: (progress: FormUploadProgress) => void; signal?: AbortSignal },
 ) {
+  if (file.size > UPLOAD_PART_BYTES) {
+    return uploadVideoByParts(file, options)
+  }
   const fd = new FormData()
   fd.append('file', file)
   const res = await postFormWithProgress<UploadVideoResponse>('/video/uploadVideo', fd, {
@@ -107,6 +127,42 @@ export async function uploadVideo(
     signal: options?.signal,
   })
   return normalizeUploadTask(res.task)
+}
+
+async function uploadVideoByParts(
+  file: File,
+  options?: { onProgress?: (progress: FormUploadProgress) => void; signal?: AbortSignal },
+) {
+  let sessionId = ''
+  for (let offset = 0; offset < file.size; offset += UPLOAD_PART_BYTES) {
+    const end = Math.min(offset + UPLOAD_PART_BYTES, file.size)
+    const blob = file.slice(offset, end)
+    const last = end >= file.size
+    const fd = new FormData()
+    fd.append('file', blob, file.name)
+    fd.append('total', String(file.size))
+    if (sessionId) fd.append('session_id', sessionId)
+
+    const res = await postFormWithProgress<UploadPartResponse>('/video/uploadPart', fd, {
+      authRequired: true,
+      signal: options?.signal,
+      onProgress: (progress) => {
+        if (!options?.onProgress) return
+        const loaded = Math.min(file.size, offset + progress.loaded)
+        const confirming = last && progress.stage === 'confirming'
+        if (progress.stage === 'done') return
+        options.onProgress({
+          percent: confirming ? UPLOAD_SEND_PERCENT_CAP : mapUploadSendPercent(loaded, file.size),
+          loaded,
+          total: file.size,
+          stage: confirming ? 'confirming' : 'sending',
+        })
+      },
+    })
+    sessionId = res.session_id
+    if (res.task) return normalizeUploadTask(res.task)
+  }
+  throw new Error('上传未完成，请重试')
 }
 
 export function getVideoUploadTask(taskId: number) {

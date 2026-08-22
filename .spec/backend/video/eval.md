@@ -2,7 +2,7 @@
 scenarios:
   - name: publish-video
     description: An authenticated user uploads a video, waits for media processing, and publishes one video.
-    expected: The upload task reaches ready with a playable MP4 and generated poster before publish; the publish response identifies the video and the operation is not duplicated by a repeated idempotency key.
+    expected: The upload task reaches ready with a playable MP4 and generated poster before publish; a file larger than one part is accepted as sequential parts and only creates one media task after the last part; the publish response identifies the video and the operation is not duplicated by a repeated idempotency key.
     tags:
       - backend-api
   - name: video-writes-are-rate-limited

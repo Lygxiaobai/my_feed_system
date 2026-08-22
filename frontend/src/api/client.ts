@@ -223,31 +223,49 @@ export function postFormWithProgress<T>(
     const onProgress = options?.onProgress
     let loaded = 0
     let total = 0
+    let stalled = false
+    let lastActive = Date.now()
     const emitProgress = (stage: FormUploadStage, percent: number) => {
       onProgress?.({ percent, loaded, total, stage })
     }
+    const touch = () => {
+      lastActive = Date.now()
+    }
 
-    if (onProgress) {
-      xhr.upload.onprogress = (event) => {
-        if (!event.lengthComputable || event.total <= 0) return
-        loaded = event.loaded
-        total = event.total
-        emitProgress('sending', mapUploadSendPercent(loaded, total))
-      }
-      // 浏览器发完请求体之后，还要等网关转发和业务落盘。这时绝不能报 100%。
-      xhr.upload.onload = () => {
-        emitProgress('confirming', total > 0 ? UPLOAD_SEND_PERCENT_CAP : 90)
-      }
+    xhr.upload.onprogress = (event) => {
+      touch()
+      if (!onProgress || !event.lengthComputable || event.total <= 0) return
+      loaded = event.loaded
+      total = event.total
+      emitProgress('sending', mapUploadSendPercent(loaded, total))
+    }
+    // 浏览器发完请求体之后，还要等网关转发和业务落盘。这时绝不能报 100%。
+    xhr.upload.onload = () => {
+      touch()
+      if (onProgress) emitProgress('confirming', total > 0 ? UPLOAD_SEND_PERCENT_CAP : 90)
     }
 
     const signal = options?.signal
     const abort = () => xhr.abort()
     signal?.addEventListener('abort', abort)
-    const cleanup = () => signal?.removeEventListener('abort', abort)
+    // 进度长时间不动时主动结束，避免 Cloudflare 掐断后 XHR 一直挂着显示卡在某一格。
+    const stallTimer = window.setInterval(() => {
+      if (Date.now() - lastActive < 90_000) return
+      stalled = true
+      xhr.abort()
+    }, 5_000)
+    const cleanup = () => {
+      window.clearInterval(stallTimer)
+      signal?.removeEventListener('abort', abort)
+    }
 
     xhr.onload = () => {
       cleanup()
       emitProgress('done', 100)
+      if (!xhr.responseText && xhr.status >= 400) {
+        reject(new ApiError('上传中断，请重试', xhr.status))
+        return
+      }
       const data = parseResponseBody(xhr.responseText)
       if (xhr.status === 401) auth.clearToken()
       try {
@@ -269,6 +287,10 @@ export function postFormWithProgress<T>(
 
     xhr.onabort = () => {
       cleanup()
+      if (stalled) {
+        reject(new ApiError('上传超时，请检查网络后重试', 0))
+        return
+      }
       reject(new AbortedError())
     }
 

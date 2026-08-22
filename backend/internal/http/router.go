@@ -295,7 +295,7 @@ func NewRouterWithLocalCaches(
 		uploadDir,
 		auditCfg.Enabled,
 	)
-	videoHandler := video.NewHandler(videoService, uploadDir, media.NewService(db, uploadDir, maxVideoBytes))
+	videoHandler := video.NewHandler(videoService, uploadDir, media.NewService(db, uploadDir, maxVideoBytes), rateLimiter)
 	videoGroup := r.Group("/video")
 	// 公开路由挂可选鉴权：作者本人需要能看到自己尚未过审的内容，
 	// 匿名访问则只看得到已过审的。

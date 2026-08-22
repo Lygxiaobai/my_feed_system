@@ -37,7 +37,8 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 
 func (h *Handler) RegisterProtectedRoutes(rg *gin.RouterGroup, uploadMW []gin.HandlerFunc, publishMW []gin.HandlerFunc) {
 	rg.POST("/uploadVideo", append(append([]gin.HandlerFunc{}, uploadMW...), h.UploadVideo)...)
-	// 分段不走投稿次数限流：一段不是一条视频。配额在第一段用同一把 Redis 钥匙扣。
+	// 建会话和分段都不走「一条视频」限流；配额只在 uploadInit 扣一次。
+	rg.POST("/uploadInit", h.UploadInit)
 	rg.POST("/uploadPart", h.UploadPart)
 	rg.POST("/uploadCover", h.UploadCover)
 	rg.POST("/mediaTaskStatus", h.MediaTaskStatus)
@@ -80,26 +81,43 @@ func (h *Handler) UploadVideo(c *gin.Context) {
 	response.OKWithStatus(c, http.StatusAccepted, gin.H{"task": task})
 }
 
+func (h *Handler) UploadInit(c *gin.Context) {
+	if h.media == nil {
+		response.Fail(c, http.StatusServiceUnavailable, response.MiddlewareError, nil)
+		return
+	}
+	var req struct {
+		Total int64 `json:"total"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Total <= 0 {
+		response.FailTip(c, http.StatusBadRequest, response.ParamError, "上传参数无效", err)
+		return
+	}
+	if !h.enforceUploadQuota(c) {
+		return
+	}
+	sessionID, err := h.media.BeginUpload(c.GetUint64("account_id"), req.Total)
+	if err != nil {
+		h.replyUploadErr(c, err)
+		return
+	}
+	response.OK(c, gin.H{"session_id": sessionID, "part_bytes": media.UploadPartBytes})
+}
+
 func (h *Handler) UploadPart(c *gin.Context) {
 	if h.media == nil {
 		response.Fail(c, http.StatusServiceUnavailable, response.MiddlewareError, nil)
 		return
 	}
 
-	// 必须先限体再解析表单，否则 PostForm/FormFile 会先把整段读进内存。
+	// 会话放请求头：不依赖 multipart 里排在文件后面的字段。
+	sessionID := strings.TrimSpace(c.GetHeader("X-Upload-Session"))
+	if sessionID == "" {
+		response.FailTip(c, http.StatusBadRequest, response.ParamMissing, "上传已失效，请重新选择视频", nil)
+		return
+	}
+
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, media.UploadPartBytes+2<<20)
-
-	sessionID := strings.TrimSpace(c.PostForm("session_id"))
-	if sessionID == "" && !h.enforceUploadQuota(c) {
-		return
-	}
-
-	totalSize, err := strconv.ParseInt(strings.TrimSpace(c.PostForm("total")), 10, 64)
-	if err != nil || totalSize <= 0 {
-		response.FailTip(c, http.StatusBadRequest, response.ParamError, "上传参数无效", err)
-		return
-	}
-
 	file, err := c.FormFile("file")
 	if err != nil {
 		if strings.Contains(err.Error(), "request body too large") {
@@ -117,29 +135,9 @@ func (h *Handler) UploadPart(c *gin.Context) {
 	}
 	defer src.Close()
 
-	sessionID, received, task, err := h.media.AppendUploadPart(c.GetUint64("account_id"), sessionID, totalSize, src, file.Size)
+	sessionID, received, task, err := h.media.AppendUploadPart(c.GetUint64("account_id"), sessionID, src, file.Size)
 	if err != nil {
-		if errors.Is(err, media.ErrVideoUploadTooLarge) {
-			response.Fail(c, http.StatusBadRequest, response.UploadTooLarge, err)
-			return
-		}
-		if errors.Is(err, media.ErrVideoUploadEmpty) {
-			response.FailTip(c, http.StatusBadRequest, response.UploadTypeInvalid, "视频文件内容为空", err)
-			return
-		}
-		if errors.Is(err, media.ErrUploadSessionNotFound) {
-			response.FailTip(c, http.StatusBadRequest, response.ParamError, "上传已失效，请重新选择视频", err)
-			return
-		}
-		if errors.Is(err, media.ErrUploadSessionConflict) {
-			response.FailTip(c, http.StatusBadRequest, response.ParamError, "上传进度不一致，请重新选择视频", err)
-			return
-		}
-		if errors.Is(err, media.ErrTooManyUploadSessions) {
-			response.FailTip(c, http.StatusTooManyRequests, response.RateLimited, "还有未完成的上传，请先取消或稍后再试", err)
-			return
-		}
-		response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
+		h.replyUploadErr(c, err)
 		return
 	}
 
@@ -181,6 +179,30 @@ func (h *Handler) allowUploadSubject(c *gin.Context, scope, subject string, limi
 	}
 	response.FailTip(c, http.StatusTooManyRequests, response.RateLimited, "操作过于频繁，请稍后再试", nil)
 	return false
+}
+
+func (h *Handler) replyUploadErr(c *gin.Context, err error) {
+	if errors.Is(err, media.ErrVideoUploadTooLarge) {
+		response.Fail(c, http.StatusBadRequest, response.UploadTooLarge, err)
+		return
+	}
+	if errors.Is(err, media.ErrVideoUploadEmpty) {
+		response.FailTip(c, http.StatusBadRequest, response.UploadTypeInvalid, "视频文件内容为空", err)
+		return
+	}
+	if errors.Is(err, media.ErrUploadSessionNotFound) {
+		response.FailTip(c, http.StatusBadRequest, response.ParamError, "上传已失效，请重新选择视频", err)
+		return
+	}
+	if errors.Is(err, media.ErrUploadSessionConflict) {
+		response.FailTip(c, http.StatusBadRequest, response.ParamError, "上传进度不一致，请重新选择视频", err)
+		return
+	}
+	if errors.Is(err, media.ErrTooManyUploadSessions) {
+		response.FailTip(c, http.StatusTooManyRequests, response.RateLimited, "还有未完成的上传，请先取消或稍后再试", err)
+		return
+	}
+	response.Fail(c, http.StatusInternalServerError, response.SystemError, err)
 }
 
 func (h *Handler) UploadCover(c *gin.Context) {

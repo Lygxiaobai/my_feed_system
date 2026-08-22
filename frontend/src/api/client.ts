@@ -201,6 +201,7 @@ export function postFormWithProgress<T>(
   body: FormData,
   options?: {
     authRequired?: boolean
+    headers?: Record<string, string>
     onProgress?: (progress: FormUploadProgress) => void
     signal?: AbortSignal
   },
@@ -219,6 +220,11 @@ export function postFormWithProgress<T>(
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `${API_BASE}${path}`)
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    if (options?.headers) {
+      for (const [name, value] of Object.entries(options.headers)) {
+        if (value) xhr.setRequestHeader(name, value)
+      }
+    }
 
     const onProgress = options?.onProgress
     let loaded = 0

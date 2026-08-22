@@ -86,17 +86,17 @@ const phaseText = computed(() => {
 const progressHint = computed(() => {
   if (phase.value === 'processing') return '正在准备可播放的视频'
   if (phase.value === 'publishing') return '马上就好'
-  if (isConfirming.value) return '文件已发出，正在确认接收'
+  if (isConfirming.value && uploadTotal.value > 0) {
+    return `已发送 ${formatFileSize(uploadLoaded.value)} / ${formatFileSize(uploadTotal.value)}，正在确认`
+  }
+  if (isConfirming.value) return '已发出，正在确认接收'
   if (uploadTotal.value > 0) {
     return `${formatFileSize(uploadLoaded.value)} / ${formatFileSize(uploadTotal.value)}`
   }
   return ''
 })
 
-const progressBarWidth = computed(() => {
-  if (isConfirming.value) return Math.max(uploadPercent.value, 90)
-  return uploadPercent.value
-})
+const progressBarWidth = computed(() => uploadPercent.value)
 
 const submitLabel = computed(() => {
   if (phase.value === 'publishing') return '发布中'

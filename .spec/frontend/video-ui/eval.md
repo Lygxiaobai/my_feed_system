@@ -28,7 +28,7 @@ scenarios:
       - mobile
   - name: video-upload-processing
     description: A signed-in user selects or drops one video. Upload starts immediately while they edit the title and description, then they publish after the server transcodes it.
-    expected: Upload starts on accept without waiting for the publish click, does not copy the file name into the title, reports real byte-level progress across the whole file that stays below 100% until the server accepts the complete file, shows a confirming state after the last bytes leave the browser, times out instead of staying on a frozen percentage, keeps title and description editable during upload and processing, shows processing and publishing as distinct in-progress states in user terms, polls only the account-owned task, publishes only after ready URLs exist, and shows a processing failure as recoverable without requiring a new file.
+    expected: Upload starts on accept without waiting for the publish click, does not copy the file name into the title, reports real byte-level progress across the whole file that stays below 100% until the server accepts the complete file, shows a confirming state after each part leaves the browser, times out instead of staying on a frozen percentage, keeps title and description editable during upload and processing, shows processing and publishing as distinct in-progress states in user terms, polls only the account-owned task, publishes only after ready URLs exist, and shows a processing failure as recoverable without requiring a new file.
     tags:
       - frontend-e2e
       - desktop

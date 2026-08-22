@@ -36,11 +36,50 @@ type partSession struct {
 	CreatedAt time.Time
 }
 
-// AppendUploadPart 按顺序把一段字节追加到账号自己的临时文件。
-// 收齐后才创建转码任务，中间段不占「投稿次数」配额。
-func (s *Service) AppendUploadPart(accountID uint64, sessionID string, totalSize int64, data io.Reader, dataLen int64) (string, int64, *Task, error) {
+// BeginUpload 先用一个小 JSON 建会话。会话 id 走请求头，避免再塞进 multipart
+// 被截断（文件字段在前时，Cloudflare 超时后 total 往往是空的）。
+func (s *Service) BeginUpload(accountID uint64, totalSize int64) (string, error) {
 	if totalSize <= 0 || totalSize > s.maxVideoBytes {
-		return "", 0, nil, ErrVideoUploadTooLarge
+		return "", ErrVideoUploadTooLarge
+	}
+
+	s.partsMu.Lock()
+	defer s.partsMu.Unlock()
+	s.expirePartsLocked(time.Now())
+	if s.countAccountPartsLocked(accountID) >= maxPartSessionsPerAccount {
+		return "", ErrTooManyUploadSessions
+	}
+
+	id := randomSuffix() + randomSuffix()
+	partDir := filepath.Join(s.uploadDir, "parts")
+	if err := os.MkdirAll(partDir, 0o755); err != nil {
+		return "", fmt.Errorf("create upload part directory: %w", err)
+	}
+	path := filepath.Join(partDir, id+".part")
+	dst, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o640)
+	if err != nil {
+		return "", fmt.Errorf("create upload session file: %w", err)
+	}
+	if err := dst.Close(); err != nil {
+		_ = os.Remove(path)
+		return "", fmt.Errorf("close upload session file: %w", err)
+	}
+
+	s.parts[id] = &partSession{
+		ID:        id,
+		AccountID: accountID,
+		Total:     totalSize,
+		Path:      path,
+		CreatedAt: time.Now(),
+	}
+	return id, nil
+}
+
+// AppendUploadPart 按顺序把一段字节追加到已有会话。
+// 收齐后才创建转码任务，中间段不占「投稿次数」配额。
+func (s *Service) AppendUploadPart(accountID uint64, sessionID string, data io.Reader, dataLen int64) (string, int64, *Task, error) {
+	if sessionID == "" {
+		return "", 0, nil, ErrUploadSessionNotFound
 	}
 	if dataLen <= 0 || dataLen > UploadPartBytes+partMaxSlack {
 		return "", 0, nil, ErrUploadSessionConflict
@@ -48,37 +87,10 @@ func (s *Service) AppendUploadPart(accountID uint64, sessionID string, totalSize
 
 	s.partsMu.Lock()
 	s.expirePartsLocked(time.Now())
-
-	var sess *partSession
-	if sessionID == "" {
-		if s.countAccountPartsLocked(accountID) >= maxPartSessionsPerAccount {
-			s.partsMu.Unlock()
-			return "", 0, nil, ErrTooManyUploadSessions
-		}
-		id := randomSuffix() + randomSuffix()
-		partDir := filepath.Join(s.uploadDir, "parts")
-		if err := os.MkdirAll(partDir, 0o755); err != nil {
-			s.partsMu.Unlock()
-			return "", 0, nil, fmt.Errorf("create upload part directory: %w", err)
-		}
-		sess = &partSession{
-			ID:        id,
-			AccountID: accountID,
-			Total:     totalSize,
-			Path:      filepath.Join(partDir, id+".part"),
-			CreatedAt: time.Now(),
-		}
-		s.parts[id] = sess
-	} else {
-		sess = s.parts[sessionID]
-		if sess == nil || sess.AccountID != accountID {
-			s.partsMu.Unlock()
-			return "", 0, nil, ErrUploadSessionNotFound
-		}
-		if sess.Total != totalSize {
-			s.partsMu.Unlock()
-			return "", 0, nil, ErrUploadSessionConflict
-		}
+	sess := s.parts[sessionID]
+	if sess == nil || sess.AccountID != accountID {
+		s.partsMu.Unlock()
+		return "", 0, nil, ErrUploadSessionNotFound
 	}
 
 	sess.mu.Lock()

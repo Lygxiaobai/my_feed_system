@@ -4,7 +4,6 @@ import {
   postFormWithProgress,
   postJson,
   resolveAssetUrl,
-  UPLOAD_SEND_PERCENT_CAP,
   type FormUploadProgress,
 } from './client'
 import type { BackendVideoEnvelope, BackendVideosEnvelope, Video } from './types'
@@ -91,10 +90,6 @@ export type VideoUploadTask = {
   updated_at: string
 }
 
-type UploadVideoResponse = {
-  task: VideoUploadTask
-}
-
 type UploadPartResponse = {
   session_id: string
   received: number
@@ -116,50 +111,46 @@ export async function uploadVideo(
   file: File,
   options?: { onProgress?: (progress: FormUploadProgress) => void; signal?: AbortSignal },
 ) {
-  if (file.size > UPLOAD_PART_BYTES) {
-    return uploadVideoByParts(file, options)
-  }
-  const fd = new FormData()
-  fd.append('file', file)
-  const res = await postFormWithProgress<UploadVideoResponse>('/video/uploadVideo', fd, {
-    authRequired: true,
-    onProgress: options?.onProgress,
-    signal: options?.signal,
-  })
-  return normalizeUploadTask(res.task)
+  return uploadVideoByParts(file, options)
 }
 
 async function uploadVideoByParts(
   file: File,
   options?: { onProgress?: (progress: FormUploadProgress) => void; signal?: AbortSignal },
 ) {
-  let sessionId = ''
-  for (let offset = 0; offset < file.size; offset += UPLOAD_PART_BYTES) {
-    const end = Math.min(offset + UPLOAD_PART_BYTES, file.size)
+  const init = await postJson<{ session_id: string; part_bytes: number }>(
+    '/video/uploadInit',
+    { total: file.size },
+    { authRequired: true },
+  )
+  const partSize = init.part_bytes > 0 ? init.part_bytes : UPLOAD_PART_BYTES
+  const sessionId = init.session_id
+  if (!sessionId) throw new Error('上传未开始，请重试')
+
+  for (let offset = 0; offset < file.size; offset += partSize) {
+    const end = Math.min(offset + partSize, file.size)
     const blob = file.slice(offset, end)
-    const last = end >= file.size
     const fd = new FormData()
     fd.append('file', blob, file.name)
-    fd.append('total', String(file.size))
-    if (sessionId) fd.append('session_id', sessionId)
 
     const res = await postFormWithProgress<UploadPartResponse>('/video/uploadPart', fd, {
       authRequired: true,
+      headers: { 'X-Upload-Session': sessionId },
       signal: options?.signal,
       onProgress: (progress) => {
-        if (!options?.onProgress) return
+        if (!options?.onProgress || progress.stage === 'done') return
         const loaded = Math.min(file.size, offset + progress.loaded)
-        const confirming = last && progress.stage === 'confirming'
-        if (progress.stage === 'done') return
+        const confirming = progress.stage === 'confirming'
         options.onProgress({
-          percent: confirming ? UPLOAD_SEND_PERCENT_CAP : mapUploadSendPercent(loaded, file.size),
-          loaded,
+          percent: confirming
+            ? mapUploadSendPercent(end, file.size)
+            : mapUploadSendPercent(loaded, file.size),
+          loaded: confirming ? end : loaded,
           total: file.size,
           stage: confirming ? 'confirming' : 'sending',
         })
       },
     })
-    sessionId = res.session_id
     if (res.task) return normalizeUploadTask(res.task)
   }
   throw new Error('上传未完成，请重试')

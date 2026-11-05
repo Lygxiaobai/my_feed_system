@@ -74,6 +74,8 @@ const router = createRouter({
       name: 'messages',
       component: MessagesView,
     },
+    // 未知地址（如旧链接 /publish）回到首页，避免渲染空白页（QA BUG-003）。
+    { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
 

@@ -12,8 +12,7 @@ Thumbs.db
 !README.md
 !my_feed_system系统设计说明.md
 
-# Go test files and coverage artifacts
-*_test.go
+# Go coverage artifacts
 *.cover
 coverage.out
 

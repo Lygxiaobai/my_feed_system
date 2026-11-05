@@ -99,11 +99,26 @@ func (r *Repo) UpdatePasswordAndToken(id uint64, password string, token string) 
 }
 
 // UpdateUsernameAndToken 同时更新用户名和 token，保持 JWT 载荷与数据库一致。
+//
+// 作品、评论、弹幕为了列表免联表冗余存了作者名，这里在同一事务里一起改，
+// 否则改名后 Feed 卡片和评论区会一直显示旧名。钱包流水的 from_username
+// 是交易当时的快照，刻意不改。读缓存（Feed 秒级、详情 5 分钟）按 TTL 自然收敛。
+// 这里按表名直接更新而不引用 video/comment/danmaku 包，避免 account 反向依赖它们。
 func (r *Repo) UpdateUsernameAndToken(id uint64, username string, token string) error {
-	return r.db.Model(&Account{}).Where("id = ?", id).Updates(map[string]any{
-		"username": username,
-		"token":    token,
-	}).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&Account{}).Where("id = ?", id).Updates(map[string]any{
+			"username": username,
+			"token":    token,
+		}).Error; err != nil {
+			return err
+		}
+		for _, table := range []string{"videos", "video_comments", "video_danmaku"} {
+			if err := tx.Table(table).Where("author_id = ?", id).Update("username", username).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Table("video_comments").Where("reply_to_user_id = ?", id).Update("reply_to_username", username).Error
+	})
 }
 
 // FindEmailSubject 返回账号绑定的邮箱。未绑定则空字符串。

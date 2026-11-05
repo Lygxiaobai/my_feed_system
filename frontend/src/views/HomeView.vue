@@ -305,7 +305,7 @@ async function loadRecommend(reset: boolean) {
     recommend.items = reset ? res.video_list : recommend.items.concat(res.video_list)
     await syncLikedState(res.video_list)
   } catch (e) {
-    recommend.error = e instanceof ApiError ? e.message : String(e)
+    recommend.error = feedErrorMessage(e)
   } finally {
     recommend.loading = false
   }
@@ -327,7 +327,7 @@ async function loadHot(reset: boolean) {
     hot.items = reset ? res.video_list : hot.items.concat(res.video_list)
     await syncLikedState(res.video_list)
   } catch (e) {
-    hot.error = e instanceof ApiError ? e.message : String(e)
+    hot.error = feedErrorMessage(e)
   } finally {
     hot.loading = false
   }
@@ -353,10 +353,16 @@ async function loadFollowing(reset: boolean) {
     following.items = reset ? res.video_list : following.items.concat(res.video_list)
     await syncLikedState(res.video_list)
   } catch (e) {
-    following.error = e instanceof ApiError ? e.message : String(e)
+    following.error = feedErrorMessage(e)
   } finally {
     following.loading = false
   }
+}
+
+// 业务错误直接展示后端文案；网络层异常（如 TypeError: Failed to fetch）不把原始报错露给用户。
+function feedErrorMessage(e: unknown): string {
+  if (e instanceof ApiError) return e.message
+  return '网络异常，加载失败'
 }
 
 async function ensureTabLoaded() {
@@ -767,7 +773,10 @@ onBeforeUnmount(() => {
           <FeedStageSkeleton />
         </section>
         <div v-else-if="currentState.error && currentState.items.length === 0" class="center-hint bad">
-          {{ currentState.error }}
+          <div class="feed-error">
+            <span>{{ currentState.error }}</span>
+            <button v-if="tab !== 'following' || auth.isLoggedIn" class="compact" type="button" @click="ensureTabLoaded">重试</button>
+          </div>
         </div>
         <div v-else-if="filteredItems.length === 0" class="center-hint">没有匹配内容</div>
 
@@ -1014,6 +1023,12 @@ onBeforeUnmount(() => {
 
 .center-hint.bad {
   color: rgba(254, 44, 85, 0.92);
+}
+
+.feed-error {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
 }
 
 .slide {

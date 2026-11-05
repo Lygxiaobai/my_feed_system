@@ -829,5 +829,15 @@ func (s *Service) loadScores(ctx context.Context, videos []video.Video, asOf tim
 		videoIDs = append(videoIDs, item.ID)
 	}
 
-	return s.popularity.Scores(ctx, videoIDs, asOf)
+	redisScores, err := s.popularity.Scores(ctx, videoIDs, asOf)
+	if err != nil {
+		// 热度只是卡片上的展示分，不影响列表本身是否正确。Redis 不可用时退回
+		// MySQL 持久化热度（略旧），保证 Feed 仍能出数，而不是整页 500。
+		slog.Warn("read popularity scores failed, falling back to persisted popularity", slog.String("error", err.Error()))
+		for _, item := range videos {
+			scores[item.ID] = item.Popularity
+		}
+		return scores, nil
+	}
+	return redisScores, nil
 }

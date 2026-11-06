@@ -263,12 +263,14 @@ func (s *Service) ensureSnapshot(ctx context.Context, asOf time.Time) (string, e
 	return snapshotKey, nil
 }
 
-// snapshotTime 统一热榜快照的时间基准，默认取当前 UTC 时间。
+// snapshotTime 统一热榜快照的时间基准。
+// 对齐到 10 秒边界，使同一窗口内的请求共享同一个快照 key，
+// 避免每次页缓存未命中都重跑 ZUNIONSTORE。
 func (s *Service) snapshotTime(asOf time.Time) time.Time {
 	if asOf.IsZero() {
 		asOf = time.Now().UTC()
 	}
-	return asOf.UTC()
+	return asOf.UTC().Truncate(10 * time.Second)
 }
 
 // bucketAnchor 返回热度桶的分钟级对齐时间。
